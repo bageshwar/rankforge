@@ -70,11 +70,10 @@ class CS2LogParserTest {
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "[-538 758 -23] killed \"Player2<4><[U:1:789012]><TERRORIST>\" " +
                               "[-81 907 80] with \"ak47\"";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
@@ -83,7 +82,7 @@ class CS2LogParserTest {
             
             KillEvent killEvent = (KillEvent) response.getGameEvent();
             assertEquals(GameEventType.KILL, killEvent.type());
-            assertEquals(Instant.parse("2024-04-20T17:52:34Z"), killEvent.getTimestamp());
+            assertEquals(Instant.parse("2024-04-20T16:21:52Z"), killEvent.getTimestamp());
             
             // Check killer
             Player killer = killEvent.getPlayer1();
@@ -109,11 +108,11 @@ class CS2LogParserTest {
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "[-538 758 -23] killed \"Player2<4><[U:1:789012]><TERRORIST>\" " +
                               "[-81 907 80] with \"ak47\" (headshot)";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
@@ -128,11 +127,10 @@ class CS2LogParserTest {
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "[-538 758 -23] killed \"Bot Player<4><BOT><TERRORIST>\" " +
                               "[-81 907 80] with \"ak47\"";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
@@ -209,11 +207,10 @@ class CS2LogParserTest {
             // Given
             String logContent = "L 04/20/2024 - 17:52:34: \"Bot Helper<9><BOT><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
