@@ -26,5 +26,5 @@ import com.rankforge.core.models.PlayerStats;
  * Date 26/10/24
  */
 public interface RankingAlgorithm {
-    double calculateRank(PlayerStats stats);
+    int calculateRank(PlayerStats stats);
 }

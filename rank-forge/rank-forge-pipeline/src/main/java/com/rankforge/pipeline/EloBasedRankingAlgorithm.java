@@ -34,7 +34,7 @@ public class EloBasedRankingAlgorithm implements RankingAlgorithm {
     private static final double HEADSHOT_BONUS = 0.1;
 
     @Override
-    public double calculateRank(PlayerStats stats) {
+    public int calculateRank(PlayerStats stats) {
         double kdr = calculateKDR(stats);
         double headshotRatio = calculateHeadshotRatio(stats);
         double clutchFactor = calculateClutchFactor(stats);
@@ -48,8 +48,9 @@ public class EloBasedRankingAlgorithm implements RankingAlgorithm {
         // Alt formula
         //rating = (kdr * K_FACTOR) + (headshotRatio * HEADSHOT_BONUS) * 1000;
 
-        //logger.debug("Calculated rank for player: {} = {}", stats.getPlayerId(), rating);
-        return rating;
+        int intRating = (int) rating;
+        logger.debug("Calculated rank for player: {} = {}", stats.getPlayerId(), intRating);
+        return intRating;
     }
 
     private double calculateClutchFactor(PlayerStats stats) {

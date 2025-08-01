@@ -35,7 +35,7 @@ public class PlayerStats {
     public int clutchesWon;
     public double damageDealt;
     public Instant lastUpdated;
-    public double rank;
+    public int rank;
 
     // Getters, setters, and methods to update stats
 
