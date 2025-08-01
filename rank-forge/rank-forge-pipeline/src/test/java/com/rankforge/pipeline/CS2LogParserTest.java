@@ -293,16 +293,38 @@ class CS2LogParserTest {
         @Test
         @DisplayName("Should parse attack event with different hitgroup")
         void shouldParseAttackEventWithBodyShot() {
-            // Given
+
+            // force match start
+            String roundStartContent = "L 04/20/2024 - 17:00:00 : World triggered \"Round_Start\"";
+            String jsonLine = createJsonLogLine(roundStartContent, "2024-04-20T17:00:00Z");
+            mockLines.add(jsonLine);
+            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            assertFalse(result.isPresent());
+
+
+            // Sample action in the middle
             String logContent = "L 04/20/2024 - 16:21:52: \"Player1<1><[U:1:123456]><CT>\" " +
                               "[-538 758 -23] attacked \"Player2<5><[U:1:789012]><TERRORIST>\" [81 907 80] " +
                               "with \"m4a1\" (damage \"35\") (damage_armor \"8\") (health \"65\") " +
                               "(armor \"92\") (hitgroup \"chest\")";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T16:21:52Z");
+            jsonLine = createJsonLogLine(logContent, "2024-04-20T16:21:52Z");
+            mockLines.add(jsonLine);
+            result = parser.parseLine(jsonLine, mockLines, 0);
+            assertFalse(result.isPresent());
+
+            // Force game over
+            String gameOverLogContent = "L 04/20/2024 - 18:30:45: Game Over: competitive mg_active de_dust2 score 1:0 after 45 min";
+            jsonLine = createJsonLogLine(gameOverLogContent, "2024-04-20T18:30:45Z");
             mockLines.add(jsonLine);
 
+            result = parser.parseLine(jsonLine, mockLines, 2);
+            assertTrue(result.isPresent());
+            ParseLineResponse response = result.get();
+            assertTrue(response.getGameEvent() instanceof GameOverEvent);
+
+            // parse the game event now
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
