@@ -153,14 +153,15 @@ class CS2LogParserTest {
         @Test
         @DisplayName("Should parse regular assist event correctly")
         void shouldParseRegularAssistEvent() {
+
+
             // Given
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
@@ -169,7 +170,7 @@ class CS2LogParserTest {
             
             AssistEvent assistEvent = (AssistEvent) response.getGameEvent();
             assertEquals(GameEventType.ASSIST, assistEvent.type());
-            assertEquals(Instant.parse("2024-04-20T17:52:34Z"), assistEvent.getTimestamp());
+            assertEquals(Instant.parse("2024-04-20T16:21:52Z"), assistEvent.getTimestamp());
             
             // Check assisting player
             Player assister = assistEvent.getPlayer1();
@@ -191,11 +192,10 @@ class CS2LogParserTest {
             // Given
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "flash-assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
-            String jsonLine = createJsonLogLine(logContent, "2024-04-20T17:52:34Z");
-            mockLines.add(jsonLine);
+            initiateGameEventParsing(logContent);
 
             // When
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
@@ -226,6 +226,34 @@ class CS2LogParserTest {
         }
     }
 
+    private void initiateGameEventParsing (String gameEventLog) {
+        // force match start
+        String roundStartContent = "L 04/20/2024 - 17:00:00 : World triggered \"Round_Start\"";
+        String jsonLine = createJsonLogLine(roundStartContent, "2024-04-20T17:00:00Z");
+        mockLines.add(jsonLine);
+        // trigger a parse so that round start gets accounted for
+        Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
+        assertFalse(result.isPresent());
+
+
+        // Given
+        jsonLine = createJsonLogLine(gameEventLog, "2024-04-20T16:21:52Z");
+        mockLines.add(jsonLine);
+
+        result = parser.parseLine(jsonLine, mockLines, 1);
+        assertFalse(result.isPresent());
+
+
+        String gameOverLogContent = "L 04/20/2024 - 18:30:45: Game Over: competitive mg_active de_dust2 score 1:0 after 45 min";
+        jsonLine = createJsonLogLine(gameOverLogContent, "2024-04-20T18:30:45Z");
+        mockLines.add(jsonLine);
+
+        result = parser.parseLine(jsonLine, mockLines, 2);
+        assertTrue(result.isPresent());
+        ParseLineResponse response = result.get();
+        assertTrue(response.getGameEvent() instanceof GameOverEvent);
+    }
+
     @Nested
     @DisplayName("Attack Event Parsing Tests")
     class AttackEventTests {
@@ -233,38 +261,14 @@ class CS2LogParserTest {
         @Test
         @DisplayName("Should parse attack event correctly")
         void shouldParseAttackEvent() {
-
-            // force match start
-            String roundStartContent = "L 04/20/2024 - 17:00:00 : World triggered \"Round_Start\"";
-            String jsonLine = createJsonLogLine(roundStartContent, "2024-04-20T17:00:00Z");
-            mockLines.add(jsonLine);
-            // trigger a parse so that round start gets accounted for
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
-            assertFalse(result.isPresent());
-
-            // Given
-            String logContent = "L 04/20/2024 - 16:21:52: \"theWhiteNinja<1><[U:1:1135799416]><TERRORIST>\" [-538 758 -23] attacked \"Buckshot<5><BOT><CT>\" [81 907 80] with \"ak47\" (damage \"109\") (damage_armor \"15\") (health \"0\") (armor \"76\") (hitgroup \"head\")";
-            jsonLine = createJsonLogLine(logContent, "2024-04-20T16:21:52Z");
-            mockLines.add(jsonLine);
-
-            result = parser.parseLine(jsonLine, mockLines, 1);
-            assertFalse(result.isPresent());
-
-            String gameOverLogContent = "L 04/20/2024 - 18:30:45: Game Over: competitive mg_active de_dust2 score 1:0 after 45 min";
-            jsonLine = createJsonLogLine(gameOverLogContent, "2024-04-20T18:30:45Z");
-            mockLines.add(jsonLine);
-
-            result = parser.parseLine(jsonLine, mockLines, 2);
-            assertTrue(result.isPresent());
-            ParseLineResponse response = result.get();
-            assertTrue(response.getGameEvent() instanceof GameOverEvent);
+            initiateGameEventParsing("L 04/20/2024 - 16:21:52: \"theWhiteNinja<1><[U:1:1135799416]><TERRORIST>\" [-538 758 -23] attacked \"Buckshot<5><BOT><CT>\" [81 907 80] with \"ak47\" (damage \"109\") (damage_armor \"15\") (health \"0\") (armor \"76\") (hitgroup \"head\")");
 
             // When
-            result = parser.parseLine(mockLines.get(1), mockLines, 1);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 1);
 
             // Then
             assertTrue(result.isPresent());
-            response = result.get();
+            ParseLineResponse response = result.get();
             assertTrue(response.getGameEvent() instanceof AttackEvent);
             
             AttackEvent attackEvent = (AttackEvent) response.getGameEvent();
@@ -294,37 +298,14 @@ class CS2LogParserTest {
         @DisplayName("Should parse attack event with different hitgroup")
         void shouldParseAttackEventWithBodyShot() {
 
-            // force match start
-            String roundStartContent = "L 04/20/2024 - 17:00:00 : World triggered \"Round_Start\"";
-            String jsonLine = createJsonLogLine(roundStartContent, "2024-04-20T17:00:00Z");
-            mockLines.add(jsonLine);
-            Optional<ParseLineResponse> result = parser.parseLine(jsonLine, mockLines, 0);
-            assertFalse(result.isPresent());
-
-
-            // Sample action in the middle
-            String logContent = "L 04/20/2024 - 16:21:52: \"Player1<1><[U:1:123456]><CT>\" " +
-                              "[-538 758 -23] attacked \"Player2<5><[U:1:789012]><TERRORIST>\" [81 907 80] " +
-                              "with \"m4a1\" (damage \"35\") (damage_armor \"8\") (health \"65\") " +
-                              "(armor \"92\") (hitgroup \"chest\")";
-            jsonLine = createJsonLogLine(logContent, "2024-04-20T16:21:52Z");
-            mockLines.add(jsonLine);
-            result = parser.parseLine(jsonLine, mockLines, 0);
-            assertFalse(result.isPresent());
-
-            // Force game over
-            String gameOverLogContent = "L 04/20/2024 - 18:30:45: Game Over: competitive mg_active de_dust2 score 1:0 after 45 min";
-            jsonLine = createJsonLogLine(gameOverLogContent, "2024-04-20T18:30:45Z");
-            mockLines.add(jsonLine);
-
-            result = parser.parseLine(jsonLine, mockLines, 2);
-            assertTrue(result.isPresent());
-            ParseLineResponse response = result.get();
-            assertTrue(response.getGameEvent() instanceof GameOverEvent);
+            initiateGameEventParsing("L 04/20/2024 - 16:21:52: \"Player1<1><[U:1:123456]><CT>\" " +
+                    "[-538 758 -23] attacked \"Player2<5><[U:1:789012]><TERRORIST>\" [81 907 80] " +
+                    "with \"m4a1\" (damage \"35\") (damage_armor \"8\") (health \"65\") " +
+                    "(armor \"92\") (hitgroup \"chest\")");
 
             // parse the game event now
             // When
-            result = parser.parseLine(mockLines.get(1), mockLines, 0);
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
 
             // Then
             assertTrue(result.isPresent());
