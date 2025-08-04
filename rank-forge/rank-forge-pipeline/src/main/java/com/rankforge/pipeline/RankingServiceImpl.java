@@ -58,9 +58,16 @@ public class RankingServiceImpl implements RankingService {
 
     @Override
     public void updateRankings(List<PlayerStats> players) {
+        logger.debug("Starting ranking update for {} players", players.size());
         for (PlayerStats playerStats : players) {
-            playerStats.setRank(rankingAlgo.calculateRank(playerStats));
+            int oldRank = playerStats.getRank();
+            int newRank = rankingAlgo.calculateRank(playerStats);
+            playerStats.setRank(newRank);
+            logger.debug("Updated rank for player {}: {} -> {} (K/D: {}/{}, Damage: {})", 
+                    playerStats.getLastSeenNickname(), oldRank, newRank, 
+                    playerStats.getKills(), playerStats.getDeaths(), playerStats.getDamageDealt());
         }
+        logger.debug("Completed ranking update for {} players", players.size());
     }
 
     // Implementation of service methods...

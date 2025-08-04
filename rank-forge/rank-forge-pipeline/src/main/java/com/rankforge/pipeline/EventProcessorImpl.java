@@ -63,7 +63,7 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void processEvent(GameEvent event) {
-        //logger.info("Processing event {} at {}", event.getGameEventType(), event.getTimestamp().toString());
+        logger.debug("Processing event {} at {}", event.getGameEventType(), event.getTimestamp().toString());
         // delegate to eventType processor
         PlayerStats player1Stats = null;
         PlayerStats player2Stats = null;
@@ -96,13 +96,20 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void visit(AttackEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        double oldDamage = player1Stats.getDamageDealt();
         player1Stats.setDamageDealt(player1Stats.getDamageDealt() + event.getDamage());
+        logger.debug("Attack event: {} dealt {} damage to {} (total damage: {} -> {})", 
+                event.getPlayer1().getName(), event.getDamage(), event.getPlayer2().getName(), 
+                oldDamage, player1Stats.getDamageDealt());
         statsRepo.store(player1Stats, false);
     }
 
     @Override
     public void visit(AssistEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        int oldAssists = player1Stats.getAssists();
         player1Stats.setAssists(player1Stats.getAssists() + 1);
+        logger.debug("Assist event: {} assisted in kill (assists: {} -> {})", 
+                event.getPlayer1().getName(), oldAssists, player1Stats.getAssists());
         statsRepo.store(player1Stats, false);
     }
 
@@ -113,12 +120,22 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void visit(KillEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        int oldKills = player1Stats.getKills();
+        int oldHeadshotKills = player1Stats.getHeadshotKills();
+        int oldDeaths = player2Stats.getDeaths();
+        
         player1Stats.setKills(player1Stats.getKills() + 1);
         if (event.isHeadshot()) {
             player1Stats.setHeadshotKills(player1Stats.getHeadshotKills() + 1);
         }
 
         player2Stats.setDeaths(player2Stats.getDeaths() + 1);
+        
+        logger.debug("Kill event: {} killed {} with {} {} (killer: kills {} -> {}, hs {} -> {}, victim: deaths {} -> {})", 
+                event.getPlayer1().getName(), event.getPlayer2().getName(), event.getWeapon(),
+                event.isHeadshot() ? "(HEADSHOT)" : "", oldKills, player1Stats.getKills(),
+                oldHeadshotKills, player1Stats.getHeadshotKills(), oldDeaths, player2Stats.getDeaths());
+        
         if (!event.getPlayer1().isBot()) {
             statsRepo.store(player1Stats, false);
         }
@@ -136,15 +153,23 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
     @Override
     public void visit(RoundEndEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         event.getPlayers().remove("0"); //remove bots
+        logger.debug("Round end: processing {} players for ranking updates", event.getPlayers().size());
+        
         List<PlayerStats> list = event.getPlayers().stream()
                 .map(playerSteamId -> statsRepo.getPlayerStats("[U:1:" + playerSteamId + "]"))
                 .flatMap(playerStats1 -> playerStats1.stream()
-                        .peek(p -> p.setRoundsPlayed(p.getRoundsPlayed() + 1)))
+                        .peek(p -> {
+                            int oldRounds = p.getRoundsPlayed();
+                            p.setRoundsPlayed(p.getRoundsPlayed() + 1);
+                            logger.debug("Player {} rounds played: {} -> {}", p.getLastSeenNickname(), oldRounds, p.getRoundsPlayed());
+                        }))
                 .toList();
 
+        logger.debug("Updating rankings for {} players", list.size());
         rankingService.updateRankings(list);
 
         for (PlayerStats playerStats : list) {
+            logger.debug("Archiving stats for player: {} (rank: {})", playerStats.getLastSeenNickname(), playerStats.getRank());
             statsRepo.store(playerStats, true);
         }
     }
