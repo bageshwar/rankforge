@@ -59,7 +59,7 @@ public class RankingServiceImpl implements RankingService {
     @Override
     public void updateRankings(List<PlayerStats> players) {
         for (PlayerStats playerStats : players) {
-            playerStats.rank = rankingAlgo.calculateRank(playerStats);
+            playerStats.setRank(rankingAlgo.calculateRank(playerStats));
         }
     }
 

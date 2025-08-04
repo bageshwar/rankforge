@@ -96,13 +96,13 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void visit(AttackEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
-        player1Stats.damageDealt += event.getDamage();
+        player1Stats.setDamageDealt(player1Stats.getDamageDealt() + event.getDamage());
         statsRepo.store(player1Stats, false);
     }
 
     @Override
     public void visit(AssistEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
-        player1Stats.assists++;
+        player1Stats.setAssists(player1Stats.getAssists() + 1);
         statsRepo.store(player1Stats, false);
     }
 
@@ -113,12 +113,12 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void visit(KillEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
-        player1Stats.kills++;
+        player1Stats.setKills(player1Stats.getKills() + 1);
         if (event.isHeadshot()) {
-            player1Stats.headshotKills++;
+            player1Stats.setHeadshotKills(player1Stats.getHeadshotKills() + 1);
         }
 
-        player2Stats.deaths++;
+        player2Stats.setDeaths(player2Stats.getDeaths() + 1);
         if (!event.getPlayer1().isBot()) {
             statsRepo.store(player1Stats, false);
         }
@@ -139,7 +139,7 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
         List<PlayerStats> list = event.getPlayers().stream()
                 .map(playerSteamId -> statsRepo.getPlayerStats("[U:1:" + playerSteamId + "]"))
                 .flatMap(playerStats1 -> playerStats1.stream()
-                        .peek(p -> p.roundsPlayed++))
+                        .peek(p -> p.setRoundsPlayed(p.getRoundsPlayed() + 1)))
                 .toList();
 
         rankingService.updateRankings(list);
