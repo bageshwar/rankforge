@@ -118,8 +118,13 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
         }
 
         player2Stats.deaths++;
-        statsRepo.store(player1Stats, false);
-        statsRepo.store(player2Stats, false);
+        if (!event.getPlayer1().isBot()) {
+            statsRepo.store(player1Stats, false);
+        }
+
+        if(!event.getPlayer2().isBot()) {
+            statsRepo.store(player2Stats, false);
+        }
     }
 
     @Override

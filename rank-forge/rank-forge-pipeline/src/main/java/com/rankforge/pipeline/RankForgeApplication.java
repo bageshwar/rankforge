@@ -67,7 +67,7 @@ public class RankForgeApplication {
                     logParser, eventProcessor, eventStore, rankingService, Executors.newScheduledThreadPool(1));
 
             // Start monitoring log file
-            String logFile = args.length > 1 ? args[1] : "/Users/bageshwar.pn/src/rankforge/20apr.log";
+            String logFile = args.length > 1 ? args[1] : "./data/log.json";
             //rankingSystem.startProcessing(logFile);
             rankingSystem.processNewLogLines(logFile);
 
