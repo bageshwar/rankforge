@@ -213,6 +213,8 @@ public class CS2LogParser implements LogParser {
                 return Optional.of(parseRoundEndEvent(timestamp, lines, currentIndex));
             }
 
+            // TODO Parse Accolade
+
             return Optional.empty();
         } catch (Exception e) {
             logger.error("Failed to parse log line: {}", line, e);
