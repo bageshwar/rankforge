@@ -36,6 +36,7 @@ public class PlayerStats {
     public double damageDealt;
     public Instant lastUpdated;
     public int rank;
+    public String lastSeenNickname;
 
     // Getters, setters, and methods to update stats
 
@@ -110,5 +111,13 @@ public class PlayerStats {
 
     public void setLastUpdated(Instant lastUpdated) {
         this.lastUpdated = lastUpdated;
+    }
+
+    public String getLastSeenNickname() {
+        return lastSeenNickname;
+    }
+
+    public void setLastSeenNickname(String lastSeenNickname) {
+        this.lastSeenNickname = lastSeenNickname;
     }
 }

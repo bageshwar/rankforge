@@ -57,6 +57,7 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
     private static PlayerStats getDefaultPlayerStats(Player player) {
         PlayerStats playerStats = new PlayerStats();
         playerStats.setPlayerId(player.getSteamId());
+        playerStats.setLastSeenNickname(player.getName());
         return playerStats;
     }
 
