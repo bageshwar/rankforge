@@ -26,16 +26,17 @@ import java.time.Instant;
  * Date 26/10/24
  */
 public class PlayerStats {
-    public String playerId;
-    public int kills;
-    public int deaths;
-    public int assists;
-    public int headshotKills;
-    public int roundsPlayed;
-    public int clutchesWon;
-    public double damageDealt;
-    public Instant lastUpdated;
-    public int rank;
+    private String playerId;
+    private int kills;
+    private int deaths;
+    private int assists;
+    private int headshotKills;
+    private int roundsPlayed;
+    private int clutchesWon;
+    private double damageDealt;
+    private Instant lastUpdated;
+    private int rank;
+    private String lastSeenNickname;
 
     // Getters, setters, and methods to update stats
 
@@ -110,5 +111,21 @@ public class PlayerStats {
 
     public void setLastUpdated(Instant lastUpdated) {
         this.lastUpdated = lastUpdated;
+    }
+
+    public String getLastSeenNickname() {
+        return lastSeenNickname;
+    }
+
+    public void setLastSeenNickname(String lastSeenNickname) {
+        this.lastSeenNickname = lastSeenNickname;
+    }
+
+    public int getRank() {
+        return rank;
+    }
+
+    public void setRank(int rank) {
+        this.rank = rank;
     }
 }

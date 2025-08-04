@@ -93,7 +93,7 @@ public class DBBasedEventStore implements EventStore {
                 values.put("player2", gameActionEvent.getPlayer2().getSteamId());
             }
             persistenceLayer.insert(TABLE_NAME, values);
-            //logger.debug("Stored event: {}", event);
+            logger.debug("Stored event: {} at {}", event.getGameEventType(), event.getTimestamp());
         } catch (SQLException | JsonProcessingException e) {
             logger.error("Failed to store event", e);
         }

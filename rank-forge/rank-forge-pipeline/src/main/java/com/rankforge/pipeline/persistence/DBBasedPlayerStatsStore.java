@@ -85,12 +85,12 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore {
 
             if (archive) {
                 persistenceLayer.insert(ARCHIVE_TABLE_NAME, values);
-                //logger.debug("Archived playerstat: {}", stat);
+                logger.debug("Archived playerstat for player: {}", stat.getPlayerId());
             }
 
             persistenceLayer.upsert(TABLE_NAME, values, new String[]{"playerId"}, new String[]{"playerStats"});
 
-            //logger.debug("Stored playerstat: {}", stat);
+            logger.debug("Stored/updated playerstat for player: {} (archive={})", stat.getPlayerId(), archive);
         } catch (SQLException | JsonProcessingException e) {
             logger.error("Failed to store PlayerStats", e);
         }
