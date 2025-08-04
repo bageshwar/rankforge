@@ -78,24 +78,29 @@ public class GameRankingSystem {
         try {
             // Read new lines from log file
             List<String> newLines = readNewLines(logFile);
+            logger.debug("Starting batch processing of {} log lines from {}", newLines.size(), logFile);
             for (int i = 0; i < newLines.size(); i++) {
                 Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(newLines.get(i), newLines, i);
                 if (parseLineResponse.isPresent()) {
-                    //logger.info("Processing event {} at {}", parseLineResponse.get().getGameEvent().getGameEventType(), i);
+                    logger.debug("Processing event {} at index {}", parseLineResponse.get().getGameEvent().getGameEventType(), i);
                     ParseLineResponse response = parseLineResponse.get();
                     if (response.getGameEvent() instanceof GameActionEvent gameActionEvent) {
                         // ignore the event if both players are bots
                         if (gameActionEvent.getPlayer1().isBot() && gameActionEvent.getPlayer2().isBot()) {
+                            logger.debug("Skipping bot-only event at index {}", i);
                             continue;
                         }
                     }
 
+                    logger.debug("Transaction start: storing and processing event {} at index {}", response.getGameEvent().getGameEventType(), i);
                     eventStore.store(response.getGameEvent());
                     eventProcessor.processEvent(response.getGameEvent());
+                    logger.debug("Transaction complete: event processed successfully at index {}", i);
                     // move the pointer if more lines have been processed
                     i = response.getNextIndex();
                 }
             }
+            logger.debug("Completed batch processing of {} log lines", newLines.size());
         } catch (Exception e) {
             logger.error("Error processing log lines", e);
         }

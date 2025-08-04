@@ -78,9 +78,9 @@ class RankingServiceImplTest {
             rankingService.updateRankings(players);
 
             // Then
-            assertEquals(1850, player1.rank);
-            assertEquals(1520, player2.rank);
-            assertEquals(2100, player3.rank);
+            assertEquals(1850, player1.getRank());
+            assertEquals(1520, player2.getRank());
+            assertEquals(2100, player3.getRank());
 
             // Verify algorithm was called for each player
             verify(mockRankingAlgorithm).calculateRank(player1);
@@ -114,7 +114,7 @@ class RankingServiceImplTest {
             rankingService.updateRankings(singlePlayerList);
 
             // Then
-            assertEquals(1750, singlePlayer.rank);
+            assertEquals(1750, singlePlayer.getRank());
             verify(mockRankingAlgorithm).calculateRank(singlePlayer);
         }
 
@@ -150,7 +150,7 @@ class RankingServiceImplTest {
         void shouldMaintainOriginalRankIfAlgorithmReturnsNaN() {
             // Given
             PlayerStats player = createPlayerStats("nanPlayer", 10, 5, 2, 4);
-            player.rank = 1500; // Set initial rank
+            player.setRank(1500); // Set initial rank
             List<PlayerStats> players = List.of(player);
 
             when(mockRankingAlgorithm.calculateRank(player)).thenReturn((int) Double.NaN);
@@ -159,7 +159,7 @@ class RankingServiceImplTest {
             rankingService.updateRankings(players);
 
             // Then
-            assertEquals((int) Double.NaN, player.rank); // Should accept NaN if algorithm returns it
+            assertEquals((int) Double.NaN, player.getRank()); // Should accept NaN if algorithm returns it
         }
 
         @Test
@@ -175,7 +175,7 @@ class RankingServiceImplTest {
             rankingService.updateRankings(players);
 
             // Then
-            assertEquals(50000, player.rank);
+            assertEquals(50000, player.getRank());
         }
     }
 
@@ -276,8 +276,8 @@ class RankingServiceImplTest {
 
             // Then
             // Verify proper coordination
-            assertNotEquals(player1.rank, player2.rank);
-            assertTrue(player1.rank > player2.rank); // Better KDR should have higher rank
+            assertNotEquals(player1.getRank(), player2.getRank());
+            assertTrue(player1.getRank() > player2.getRank()); // Better KDR should have higher rank
             
             // Verify all interactions happened
             verify(mockRankingAlgorithm, times(2)).calculateRank(any(PlayerStats.class));
@@ -297,13 +297,13 @@ class RankingServiceImplTest {
 
             // When - Update rankings multiple times
             rankingService.updateRankings(players);
-            assertEquals(1500, player.rank);
+            assertEquals(1500, player.getRank());
 
             rankingService.updateRankings(players);
-            assertEquals(1600, player.rank);
+            assertEquals(1600, player.getRank());
 
             rankingService.updateRankings(players);
-            assertEquals(1550, player.rank);
+            assertEquals(1550, player.getRank());
 
             // Then
             verify(mockRankingAlgorithm, times(3)).calculateRank(player);
@@ -353,7 +353,7 @@ class RankingServiceImplTest {
         stats.setClutchesWon(3);
         stats.setDamageDealt(2500.0);
         stats.setLastUpdated(Instant.now());
-        stats.rank = 1000; // Default rank
+        stats.setRank(1000); // Default rank
         return stats;
     }
 }

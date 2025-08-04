@@ -162,6 +162,9 @@ public class CS2LogParser implements LogParser {
 
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
             line = jsonNode.get("log").asText();
+            
+            //logger.debug("Parsing line {} (matchStarted={}, matchProcessingIndex={}): {}",
+            //        currentIndex, matchStarted, matchProcessingIndex, line);
 
             if (matchProcessingIndex == currentIndex && matchStarted) {
                 logger.info("Resetting round at {}", currentIndex);
@@ -174,13 +177,13 @@ public class CS2LogParser implements LogParser {
             // track rounds till match is not started (then process them)
             if (!matchStarted && line.contains("World triggered \"Round_Start\"")) {
                 this.roundStartLineIndices.add(currentIndex);
-                logger.info("Tracking round start at {}", currentIndex);
+                logger.debug("Tracking round start at {} (total tracked: {})", currentIndex, roundStartLineIndices.size());
                 return Optional.empty();
             }
 
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
             if (gameOverMatcher.matches()) {
-                logger.info(line);
+                logger.debug("Game over detected at index {}: {}", currentIndex, line);
                 return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
             }
 
