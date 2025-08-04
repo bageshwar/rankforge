@@ -31,6 +31,7 @@ public class Player {
     public Player(String name, String steamId) {
         this.name = name;
         this.steamId = steamId;
+        // TODO Handle "STEAM_ID_PENDING" cases
         this.isBot = (steamId == null) || "BOT".equals(steamId);
     }
 
