@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RankForge - Player Rankings</title>
+    <link rel="stylesheet" th:href="@{/css/rankings.css}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">🏆 RankForge Player Rankings</h1>
+            <p class="subtitle">CS2 Competitive Player Statistics</p>
+        </header>
+
+        <div class="stats-summary">
+            <div class="stat-item">
+                <span class="stat-value" th:text="${totalPlayers}">0</span>
+                <span class="stat-label">Total Players</span>
+            </div>
+            <div class="stat-item" th:if="${isLimited}">
+                <span class="stat-value" th:text="'Top ' + ${limit}">Top 10</span>
+                <span class="stat-label">Showing</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="filter-controls">
+                <a th:href="@{/rankings}" class="btn btn-primary" th:classappend="${!isLimited} ? 'active' : ''">All Players</a>
+                <a th:href="@{/rankings(limit=10)}" class="btn btn-secondary" th:classappend="${isLimited && limit == 10} ? 'active' : ''">Top 10</a>
+                <a th:href="@{/rankings(limit=25)}" class="btn btn-secondary" th:classappend="${isLimited && limit == 25} ? 'active' : ''">Top 25</a>
+            </div>
+            <!--<div class="api-link">
+                <a th:href="@{/api/rankings}" target="_blank" class="btn btn-outline">📊 View API</a>
+            </div>-->
+        </div>
+
+        <div class="table-container">
+            <table class="rankings-table">
+                <thead>
+                    <tr>
+                        <th class="rank-col">Rank</th>
+                        <th class="player-col">Player</th>
+                        <th class="stat-col">K/D</th>
+                        <th class="stat-col">Kills</th>
+                        <th class="stat-col">Deaths</th>
+                        <th class="stat-col">Assists</th>
+                        <th class="stat-col">HS%</th>
+                        <th class="stat-col">Rounds</th>
+                        <th class="stat-col">Clutches</th>
+                        <th class="stat-col">Damage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="player : ${rankings}" class="player-row" th:classappend="${player.rank <= 3} ? 'top-player' : ''">
+                        <td class="rank-cell">
+                            <span class="rank-number" th:text="${player.rank}">1</span>
+                            <span th:if="${player.rank == 1}" class="rank-icon">🥇</span>
+                            <span th:if="${player.rank == 2}" class="rank-icon">🥈</span>
+                            <span th:if="${player.rank == 3}" class="rank-icon">🥉</span>
+                        </td>
+                        <td class="player-cell">
+                            <div class="player-info">
+                                <span class="player-name" th:text="${player.playerName}">Player Name</span>
+                                <span class="player-id" th:text="${player.playerId}">STEAM_ID</span>
+                            </div>
+                        </td>
+                        <td class="stat-cell kd-ratio" th:text="${#numbers.formatDecimal(player.killDeathRatio, 1, 2)}">1.50</td>
+                        <td class="stat-cell" th:text="${player.kills}">150</td>
+                        <td class="stat-cell" th:text="${player.deaths}">100</td>
+                        <td class="stat-cell" th:text="${player.assists}">50</td>
+                        <td class="stat-cell hs-percentage" th:text="${#numbers.formatDecimal(player.headshotPercentage, 1, 1)} + '%'">25.0%</td>
+                        <td class="stat-cell" th:text="${player.roundsPlayed}">120</td>
+                        <td class="stat-cell" th:text="${player.clutchesWon}">5</td>
+                        <td class="stat-cell damage" th:text="${#numbers.formatDecimal(player.damageDealt, 0, 0)}">12000</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="footer">
+            <p>Powered by RankForge • Real-time CS2 Player Analytics</p>
+        </footer>
+    </div>
+</body>
+</html>
