@@ -19,35 +19,61 @@
 package com.rankforge.server.service;
 
 import com.rankforge.core.models.PlayerStats;
+import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.pipeline.persistence.PersistenceLayer;
 import com.rankforge.server.dto.PlayerRankingDTO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
  * Service layer for managing player rankings
+ * Integrates with the persistence layer to provide real player statistics and rankings.
  * Author bageshwar.pn
  * Date 2024
  */
 @Service
 public class PlayerRankingService {
+    
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlayerRankingService.class);
+    
+    private final PlayerStatsStore playerStatsStore;
+    private final PersistenceLayer persistenceLayer;
+    
+    @Autowired
+    public PlayerRankingService(PlayerStatsStore playerStatsStore, PersistenceLayer persistenceLayer) {
+        this.playerStatsStore = playerStatsStore;
+        this.persistenceLayer = persistenceLayer;
+    }
 
     /**
-     * Get all player rankings sorted by rank
-     * For now, this returns mock data. In a real implementation, 
-     * this would fetch from a database or ranking service.
+     * Get all player rankings sorted by existing rank field
+     * Fetches real data from the persistence layer and sorts by rank
      */
     public List<PlayerRankingDTO> getAllPlayerRankings() {
-        List<PlayerStats> playerStats = generateMockPlayerStats();
-        
-        return playerStats.stream()
-                .sorted(Comparator.comparingInt(PlayerStats::getRank))
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
+        try {
+            List<PlayerStats> playerStats = getAllPlayerStatsFromDatabase();
+            
+            // Sort by existing rank field (descending order - rank 1 is best)
+            playerStats.sort((p1, p2) -> Integer.compare(p2.getRank(), p1.getRank()));
+            
+            return playerStats.stream()
+                    .map(this::convertToDTO)
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            LOGGER.error("Failed to retrieve player rankings", e);
+            // Return empty list on error instead of crashing
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -78,41 +104,45 @@ public class PlayerRankingService {
     }
 
     /**
-     * Generate mock player data for demonstration
-     * In a real implementation, this would be replaced with actual data access
+     * Retrieves all player statistics from the database
      */
-    private List<PlayerStats> generateMockPlayerStats() {
+    private List<PlayerStats> getAllPlayerStatsFromDatabase() throws SQLException {
         List<PlayerStats> playerStatsList = new ArrayList<>();
-
-        String[] playerNames = {
-                "ProGamer_2024", "ShadowSniper", "FragMaster", "HeadshotKing", "ClutchLord",
-                "AWPer_Elite", "SprayControl", "TacticalNinja", "BombDefuser", "TeamLeader",
-                "QuickScope", "FlashMaster", "SmokeGuru", "EntryFragger", "SupportPlayer"
-        };
-
-        for (int i = 0; i < playerNames.length; i++) {
-            PlayerStats stats = new PlayerStats();
-            stats.setPlayerId("STEAM_" + (1000000 + i));
-            stats.setLastSeenNickname(playerNames[i]);
-            stats.setRank(i + 1);
+        
+        try (ResultSet resultSet = persistenceLayer.query("PlayerStats", 
+                new String[]{"playerId", "playerStats"}, null)) {
             
-            // Generate realistic but varied stats
-            int baseKills = 150 - (i * 8) + (int)(Math.random() * 20);
-            int baseDeaths = 80 - (i * 3) + (int)(Math.random() * 15);
-            int baseAssists = 45 - (i * 2) + (int)(Math.random() * 10);
-            
-            stats.setKills(Math.max(10, baseKills));
-            stats.setDeaths(Math.max(5, baseDeaths));
-            stats.setAssists(Math.max(2, baseAssists));
-            stats.setHeadshotKills((int)(stats.getKills() * (0.25 + Math.random() * 0.15)));
-            stats.setRoundsPlayed(120 - (i * 3) + (int)(Math.random() * 20));
-            stats.setClutchesWon((int)(Math.random() * 8) + 1);
-            stats.setDamageDealt(12000 - (i * 400) + (Math.random() * 2000));
-            stats.setLastUpdated(Instant.now());
-            
-            playerStatsList.add(stats);
+            while (resultSet.next()) {
+                String playerId = resultSet.getString("playerId");
+                Optional<PlayerStats> statsOpt = playerStatsStore.getPlayerStats(playerId);
+                
+                if (statsOpt.isPresent()) {
+                    playerStatsList.add(statsOpt.get());
+                } else {
+                    LOGGER.warn("Failed to deserialize PlayerStats for player: {}", playerId);
+                }
+            }
         }
-
+        
+        LOGGER.info("Retrieved {} player statistics from database", playerStatsList.size());
         return playerStatsList;
+    }
+    
+
+    /**
+     * Gets a specific player's ranking and statistics
+     */
+    public Optional<PlayerRankingDTO> getPlayerRanking(String playerId) {
+        try {
+            Optional<PlayerStats> statsOpt = playerStatsStore.getPlayerStats(playerId);
+            if (statsOpt.isPresent()) {
+                PlayerStats stats = statsOpt.get();
+                return Optional.of(convertToDTO(stats));
+            }
+        } catch (Exception e) {
+            LOGGER.error("Failed to get player ranking for player: {}", playerId, e);
+        }
+        
+        return Optional.empty();
     }
 }

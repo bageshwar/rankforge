@@ -58,6 +58,13 @@
             <version>1.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Rank Forge Pipeline dependency (includes persistence layer) -->
+        <dependency>
+            <groupId>org.example</groupId>
+            <artifactId>rank-forge-pipeline</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Google App Engine API -->
         <dependency>
             <groupId>com.google.appengine</groupId>

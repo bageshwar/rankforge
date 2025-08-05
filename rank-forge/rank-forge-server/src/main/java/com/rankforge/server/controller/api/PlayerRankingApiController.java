@@ -25,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * REST API Controller for player rankings
@@ -71,11 +72,27 @@ public class PlayerRankingApiController {
     }
 
     /**
+     * Get ranking for a specific player
+     * @param playerId The Steam ID or player identifier
+     * @return Player ranking details if found
+     */
+    @GetMapping("/player/{playerId}")
+    public ResponseEntity<PlayerRankingDTO> getPlayerRanking(@PathVariable String playerId) {
+        Optional<PlayerRankingDTO> ranking = playerRankingService.getPlayerRanking(playerId);
+        
+        if (ranking.isPresent()) {
+            return ResponseEntity.ok(ranking.get());
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
      * Health check endpoint
      * @return Simple health status
      */
     @GetMapping("/health")
     public ResponseEntity<String> health() {
-        return ResponseEntity.ok("RankForge API is running!");
+        return ResponseEntity.ok("RankForge API is running with real data!");
     }
 }
