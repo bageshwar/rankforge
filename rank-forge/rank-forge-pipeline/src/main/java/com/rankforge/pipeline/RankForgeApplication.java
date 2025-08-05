@@ -25,9 +25,7 @@ import com.rankforge.core.interfaces.RankingAlgorithm;
 import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
-import com.rankforge.pipeline.persistence.DBBasedEventStore;
-import com.rankforge.pipeline.persistence.DBBasedPlayerStatsStore;
-import com.rankforge.pipeline.persistence.SQLiteBasedPersistenceLayer;
+import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +50,8 @@ public class RankForgeApplication {
             // Initialize services
             //EventStore eventStore = new FileBasedEventStore(dataDir);
             ObjectMapper objectMapper = new ObjectMapper();
-            SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
+            //SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
+            PersistenceLayer persistenceLayer = new FirestoreBasedPersistenceLayer("rankforge", "firestore-db");
             EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
             PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();

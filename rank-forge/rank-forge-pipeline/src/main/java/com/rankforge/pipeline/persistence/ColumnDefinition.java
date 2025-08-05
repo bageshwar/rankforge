@@ -66,6 +66,35 @@ public class ColumnDefinition {
         return sql.toString();
     }
 
+    // Getter methods
+    public String getName() {
+        return name;
+    }
+
+    public ColumnType getType() {
+        return type;
+    }
+
+    public boolean isPrimaryKey() {
+        return primaryKey;
+    }
+
+    public boolean isAutoIncrement() {
+        return autoIncrement;
+    }
+
+    public boolean isNotNull() {
+        return notNull;
+    }
+
+    public boolean isUnique() {
+        return unique;
+    }
+
+    public String getDefaultValue() {
+        return defaultValue;
+    }
+
     public static class Builder {
         private final String name;
         private final ColumnType type;
