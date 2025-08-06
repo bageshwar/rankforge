@@ -180,11 +180,11 @@ public class CS2LogParser implements LogParser {
 
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
             if (gameOverMatcher.matches()) {
-                logger.debug("Game over detected at index {}: {}", currentIndex, line);
+                logger.info("Game over detected at index {}: {}", currentIndex, line);
                 if (shouldProcessGameOverEvent(lines, currentIndex, timestamp)) {
                     return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
                 } else {
-                    logger.debug("Skipping Game at index {}: {}", currentIndex, line);
+                    logger.info("Skipping Game at index {}: {}", currentIndex, line);
                     this.roundStartLineIndices.clear();
                     return Optional.empty();
                 }

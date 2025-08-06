@@ -371,27 +371,61 @@ public class FirestoreBasedPersistenceLayer implements PersistenceLayer {
     /**
      * Parses a simplified WHERE clause and applies it to the Firestore query.
      * Supports basic operations like equality, inequality, etc.
+     * Now supports AND clauses for multiple conditions.
+     * 
+     * Format examples:
+     * - Single condition: "column = ?"
+     * - Multiple conditions: "column1 = ? AND column2 > ?"
      * 
      * Note: This is a simplified parser. A full implementation would need
      * a proper SQL parser for complex WHERE clauses.
      */
     private Query parseWhereClause(Query query, String whereClause, Object... whereParams) throws SQLException {
-        // Simple parsing for basic WHERE clauses
-        // Format: "column = ?" or "column > ?" etc.
+        if (whereClause == null || whereClause.trim().isEmpty()) {
+            return query;
+        }
         
-        String[] parts = whereClause.trim().split("\\s+");
+        // Split by AND (case-insensitive)
+        String[] conditions = whereClause.trim().split("(?i)\\s+AND\\s+");
+        
+        if (whereParams.length < conditions.length) {
+            throw new SQLException("Not enough parameters provided for WHERE clause. Expected: " + 
+                conditions.length + ", Provided: " + whereParams.length);
+        }
+        
+        // Apply each condition to the query
+        for (int i = 0; i < conditions.length; i++) {
+            String condition = conditions[i].trim();
+            Object value = whereParams[i];
+            
+            query = applySingleCondition(query, condition, value);
+        }
+        
+        return query;
+    }
+    
+    /**
+     * Applies a single WHERE condition to the Firestore query.
+     * 
+     * @param query The Firestore query to modify
+     * @param condition The condition string (e.g., "column = ?")
+     * @param value The parameter value for the condition
+     * @return Modified query with the condition applied
+     * @throws SQLException if the condition format is invalid
+     */
+    private Query applySingleCondition(Query query, String condition, Object value) throws SQLException {
+        String[] parts = condition.trim().split("\\s+");
         if (parts.length < 3) {
-            throw new SQLException("Invalid WHERE clause format: " + whereClause);
+            throw new SQLException("Invalid WHERE condition format: " + condition);
         }
         
         String column = parts[0];
         String operator = parts[1];
         
-        if (whereParams.length == 0) {
-            throw new SQLException("No parameters provided for WHERE clause");
+        // Validate that we have a parameter placeholder
+        if (!parts[2].equals("?")) {
+            throw new SQLException("Expected parameter placeholder '?' in condition: " + condition);
         }
-        
-        Object value = whereParams[0];
         
         switch (operator.toLowerCase()) {
             case "=":
