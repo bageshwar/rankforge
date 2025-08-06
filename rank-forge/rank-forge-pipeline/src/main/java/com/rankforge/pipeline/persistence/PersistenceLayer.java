@@ -20,6 +20,7 @@ package com.rankforge.pipeline.persistence;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -103,4 +104,58 @@ public interface PersistenceLayer extends AutoCloseable {
      */
     int delete(String tableName, String whereClause,
                Object... whereParams) throws SQLException;
+
+    /**
+     * Batch insert multiple records into specified table
+     *
+     * @param tableName Name of the table
+     * @param dataList  List of maps containing column names to values
+     * @return number of rows affected
+     * @throws SQLException if batch insert operation fails
+     */
+    int batchInsert(String tableName, List<Map<String, Object>> dataList) throws SQLException;
+
+    /**
+     * Batch update multiple records in specified table based on conditions
+     *
+     * @param tableName Name of the table
+     * @param updates   List of BatchUpdateOperation containing data and conditions
+     * @return number of rows affected
+     * @throws SQLException if batch update operation fails
+     */
+    int batchUpdate(String tableName, List<BatchUpdateOperation> updates) throws SQLException;
+
+    /**
+     * Batch upsert (insert or update) multiple records
+     *
+     * @param tableName     Name of the table
+     * @param dataList      List of maps containing column names to values
+     * @param uniqueColumns Array of column names that form the unique constraint
+     * @param updateColumns Array of column names to update on conflict (null means update all)
+     * @return number of rows affected
+     * @throws SQLException if batch upsert operation fails
+     */
+    int batchUpsert(String tableName,
+                    List<Map<String, Object>> dataList,
+                    String[] uniqueColumns,
+                    String[] updateColumns) throws SQLException;
+
+    /**
+     * Helper class for batch update operations
+     */
+    class BatchUpdateOperation {
+        private final Map<String, Object> data;
+        private final String whereClause;
+        private final Object[] whereParams;
+
+        public BatchUpdateOperation(Map<String, Object> data, String whereClause, Object... whereParams) {
+            this.data = data;
+            this.whereClause = whereClause;
+            this.whereParams = whereParams;
+        }
+
+        public Map<String, Object> getData() { return data; }
+        public String getWhereClause() { return whereClause; }
+        public Object[] getWhereParams() { return whereParams; }
+    }
 }

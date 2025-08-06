@@ -47,13 +47,18 @@ public class RankForgeApplication {
             String dataDir = args.length > 0 ? args[0] : "./data";
             Files.createDirectories(Paths.get(dataDir));
 
-            // Initialize services
+            // Initialize services with batching support
             //EventStore eventStore = new FileBasedEventStore(dataDir);
             ObjectMapper objectMapper = new ObjectMapper();
-            //SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
-            PersistenceLayer persistenceLayer = new FirestoreBasedPersistenceLayer("rankforge", "firestore-db");
-            EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
-            PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
+            SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
+            //PersistenceLayer persistenceLayer = new FirestoreBasedPersistenceLayer("rankforge", "firestore-db");
+            
+            // Configure batch sizes for better performance
+            int eventBatchSize = 500;
+            int statsBatchSize = 50;
+            
+            EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper, eventBatchSize);
+            PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper, statsBatchSize);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
             RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
 
@@ -61,9 +66,11 @@ public class RankForgeApplication {
             EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService);
             LogParser logParser = new CS2LogParser(objectMapper);
 
-            // Start the system
+            // Start the system with batch processing
+            int processingBatchSize = 500;
             GameRankingSystem rankingSystem = new GameRankingSystem(
-                    logParser, eventProcessor, eventStore, rankingService, Executors.newScheduledThreadPool(1));
+                    logParser, eventProcessor, eventStore, rankingService, 
+                    Executors.newScheduledThreadPool(2), processingBatchSize);
 
             // Start monitoring log file
             String logFile = args.length > 1 ? args[1] : "./data/log.json";
