@@ -19,9 +19,11 @@
 package com.rankforge.core.stores;
 
 import com.rankforge.core.events.GameEvent;
+import com.rankforge.core.events.GameEventType;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Interface for storing and retrieving game events
@@ -36,6 +38,8 @@ public interface EventStore {
     List<GameEvent> getEventsForPlayer(String playerId, Instant start, Instant end);
 
     void cleanup(Instant before);
+
+    Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp);
 
     /**
      *

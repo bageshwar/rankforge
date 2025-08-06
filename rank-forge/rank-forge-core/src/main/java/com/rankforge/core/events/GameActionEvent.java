@@ -43,6 +43,9 @@ public abstract class GameActionEvent extends GameEvent {
     private Player player2;
     private String weapon;
 
+    // Default constructor for Jackson deserialization
+    public GameActionEvent() {}
+
     public GameActionEvent(Instant timestamp, GameEventType type, Map<String, String> additionalData, Player player1, Player player2, String weapon) {
         super(timestamp, type, additionalData);
         this.player1 = player1;

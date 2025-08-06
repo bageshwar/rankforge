@@ -22,11 +22,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.*;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.models.Player;
+import com.rankforge.core.stores.EventStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -46,10 +48,13 @@ class CS2LogParserTest {
     private ObjectMapper objectMapper;
     private List<String> mockLines;
 
+    @Mock
+    private EventStore eventStore;
+
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        parser = new CS2LogParser(objectMapper);
+        parser = new CS2LogParser(objectMapper, eventStore);
         mockLines = new ArrayList<>();
     }
 

@@ -33,6 +33,9 @@ import java.util.Map;
 public class KillEvent extends GameActionEvent {
     private boolean isHeadshot;
 
+    // Default constructor for Jackson deserialization
+    public KillEvent() {}
+
     public KillEvent(Instant timestamp, Map<String, String> additionalData, Player player1, Player player2, String weapon, boolean isHeadshot) {
         super(timestamp, GameEventType.KILL, additionalData, player1, player2, weapon);
         this.isHeadshot = isHeadshot;

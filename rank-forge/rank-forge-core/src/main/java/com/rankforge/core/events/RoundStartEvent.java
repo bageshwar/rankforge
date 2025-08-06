@@ -28,6 +28,9 @@ import java.util.Map;
  */
 public class RoundStartEvent extends GameEvent {
 
+    // Default constructor for Jackson deserialization
+    public RoundStartEvent() {}
+
     public RoundStartEvent(Instant timestamp, Map<String, String> additionalData) {
         super(timestamp, GameEventType.ROUND_START, additionalData);
     }

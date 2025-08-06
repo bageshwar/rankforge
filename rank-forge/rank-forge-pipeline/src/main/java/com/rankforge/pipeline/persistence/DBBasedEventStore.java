@@ -22,16 +22,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.GameActionEvent;
 import com.rankforge.core.events.GameEvent;
+import com.rankforge.core.events.GameEventType;
+import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.EventStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -179,6 +179,19 @@ public class DBBasedEventStore implements EventStore {
         }
     }
 
+    @Override
+    public Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp) {
+        try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
+                new String[]{"event"}, "gameEventType = ? AND at = ?", eventType, timestamp.toString())){
+            if (queried.next()) {
+                GameEvent result = objectMapper.readValue(queried.getString("event"), GameEvent.class);
+                return Optional.of(result);
+            }
+        } catch (SQLException | JsonProcessingException e) {
+            logger.error("Failed to get GameEvent", e);
+        }
+        return Optional.empty();
+    }
 
     // TODO implement methods
     @Override

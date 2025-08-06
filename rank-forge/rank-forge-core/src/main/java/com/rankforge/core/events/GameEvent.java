@@ -36,7 +36,9 @@ import java.util.Map;
 @JsonSubTypes({
         @JsonSubTypes.Type(value = GameActionEvent.class),
         @JsonSubTypes.Type(value = RoundStartEvent.class),
-        @JsonSubTypes.Type(value = RoundEndEvent.class)
+        @JsonSubTypes.Type(value = RoundEndEvent.class),
+        @JsonSubTypes.Type(value = GameOverEvent.class),
+        @JsonSubTypes.Type(value = BombEvent.class)
 })
 public abstract class GameEvent {
 
@@ -45,6 +47,10 @@ public abstract class GameEvent {
     private GameEventType gameEventType;
 
     private Map<String, String> additionalData;
+
+
+    // for deserialization
+    public GameEvent() {}
 
     public GameEvent(Instant timestamp, GameEventType gameEventType, Map<String, String> additionalData) {
         this.timestamp = timestamp;
