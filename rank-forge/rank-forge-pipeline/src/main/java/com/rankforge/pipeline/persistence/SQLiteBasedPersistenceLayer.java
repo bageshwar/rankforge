@@ -31,6 +31,7 @@ import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -402,6 +403,181 @@ public class SQLiteBasedPersistenceLayer implements PersistenceLayer {
         if (data == null || data.isEmpty()) {
             LOGGER.error("Data map cannot be null or empty");
             throw new SQLException("Data map cannot be null or empty");
+        }
+    }
+
+    /**
+     * Batch insert multiple records
+     */
+    @Override
+    public synchronized int batchInsert(String tableName, List<Map<String, Object>> dataList) throws SQLException {
+        validateTableName(tableName);
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
+        
+        // All records should have the same columns
+        Map<String, Object> firstRecord = dataList.get(0);
+        String columns = String.join(", ", firstRecord.keySet());
+        String placeholders = firstRecord.keySet().stream()
+                .map(key -> "?")
+                .collect(Collectors.joining(", "));
+
+        String sql = String.format("INSERT INTO %s (%s) VALUES (%s)",
+                tableName, columns, placeholders);
+
+        Connection conn = getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        
+        try {
+            conn.setAutoCommit(false); // Start transaction
+            
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                for (Map<String, Object> data : dataList) {
+                    int paramIndex = 1;
+                    for (String key : firstRecord.keySet()) {
+                        stmt.setObject(paramIndex++, data.get(key));
+                    }
+                    stmt.addBatch();
+                }
+                
+                int[] results = stmt.executeBatch();
+                conn.commit(); // Commit transaction
+                
+                int totalInserted = Arrays.stream(results).sum();
+                LOGGER.debug("Batch inserted {} records into table {}", totalInserted, tableName);
+                return totalInserted;
+            }
+        } catch (SQLException e) {
+            conn.rollback(); // Rollback on error
+            throw e;
+        } finally {
+            conn.setAutoCommit(originalAutoCommit); // Restore original autocommit
+        }
+    }
+
+    /**
+     * Batch update multiple records
+     */
+    @Override
+    public synchronized int batchUpdate(String tableName, List<BatchUpdateOperation> updates) throws SQLException {
+        validateTableName(tableName);
+        if (updates == null || updates.isEmpty()) {
+            return 0;
+        }
+
+        Connection conn = getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        int totalUpdated = 0;
+        
+        try {
+            conn.setAutoCommit(false); // Start transaction
+            
+            for (BatchUpdateOperation update : updates) {
+                StringJoiner setClause = new StringJoiner(", ");
+                update.getData().keySet().forEach(key -> setClause.add(key + " = ?"));
+
+                String sql = String.format("UPDATE %s SET %s WHERE %s",
+                        tableName, setClause.toString(), update.getWhereClause());
+
+                try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                    int paramIndex = 1;
+
+                    for (Object value : update.getData().values()) {
+                        stmt.setObject(paramIndex++, value);
+                    }
+
+                    for (Object param : update.getWhereParams()) {
+                        stmt.setObject(paramIndex++, param);
+                    }
+
+                    totalUpdated += stmt.executeUpdate();
+                }
+            }
+            
+            conn.commit(); // Commit transaction
+            LOGGER.debug("Batch updated {} records in table {}", totalUpdated, tableName);
+            return totalUpdated;
+            
+        } catch (SQLException e) {
+            conn.rollback(); // Rollback on error
+            throw e;
+        } finally {
+            conn.setAutoCommit(originalAutoCommit); // Restore original autocommit
+        }
+    }
+
+    /**
+     * Batch upsert multiple records
+     */
+    @Override
+    public synchronized int batchUpsert(String tableName,
+                                        List<Map<String, Object>> dataList,
+                                        String[] uniqueColumns,
+                                        String[] updateColumns) throws SQLException {
+        validateTableName(tableName);
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
+        if (uniqueColumns == null || uniqueColumns.length == 0) {
+            throw new SQLException("Unique columns must be specified for batch upsert operation");
+        }
+
+        // All records should have the same structure
+        Map<String, Object> firstRecord = dataList.get(0);
+        
+        // If updateColumns is null, use all non-unique columns
+        Set<String> columnsToUpdate;
+        if (updateColumns == null) {
+            columnsToUpdate = new HashSet<>(firstRecord.keySet());
+            columnsToUpdate.removeAll(Arrays.asList(uniqueColumns));
+        } else {
+            columnsToUpdate = new HashSet<>(Arrays.asList(updateColumns));
+        }
+
+        // Build the SQL query
+        StringBuilder sql = new StringBuilder()
+                .append("INSERT INTO ").append(tableName)
+                .append(" (").append(String.join(", ", firstRecord.keySet())).append(")")
+                .append(" VALUES (").append(String.join(", ", Collections.nCopies(firstRecord.size(), "?")))
+                .append(")")
+                .append(" ON CONFLICT(").append(String.join(", ", uniqueColumns)).append(")")
+                .append(" DO UPDATE SET ");
+
+        // Add update assignments
+        StringJoiner updateClause = new StringJoiner(", ");
+        for (String column : columnsToUpdate) {
+            updateClause.add(column + " = excluded." + column);
+        }
+        sql.append(updateClause.toString());
+
+        Connection conn = getConnection();
+        boolean originalAutoCommit = conn.getAutoCommit();
+        
+        try {
+            conn.setAutoCommit(false); // Start transaction
+            
+            try (PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+                for (Map<String, Object> data : dataList) {
+                    int paramIndex = 1;
+                    for (String key : firstRecord.keySet()) {
+                        stmt.setObject(paramIndex++, data.get(key));
+                    }
+                    stmt.addBatch();
+                }
+                
+                int[] results = stmt.executeBatch();
+                conn.commit(); // Commit transaction
+                
+                int totalAffected = Arrays.stream(results).sum();
+                LOGGER.debug("Batch upserted {} records in table {}", totalAffected, tableName);
+                return totalAffected;
+            }
+        } catch (SQLException e) {
+            conn.rollback(); // Rollback on error
+            throw e;
+        } finally {
+            conn.setAutoCommit(originalAutoCommit); // Restore original autocommit
         }
     }
 

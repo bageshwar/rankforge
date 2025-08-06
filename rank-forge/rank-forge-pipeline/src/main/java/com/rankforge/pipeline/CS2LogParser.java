@@ -184,7 +184,14 @@ public class CS2LogParser implements LogParser {
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
             if (gameOverMatcher.matches()) {
                 logger.debug("Game over detected at index {}: {}", currentIndex, line);
-                return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
+                if (checkIfSeriousGame(lines, currentIndex)) {
+                    return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
+                } else {
+                    logger.debug("Non serious game detected at index {}: {}, ignoring", currentIndex, line);
+                    this.roundStartLineIndices.clear();
+                    return Optional.empty();
+                }
+
             }
 
             // Don't start the scoring till the match is started
@@ -223,6 +230,27 @@ public class CS2LogParser implements LogParser {
             logger.error("Failed to parse log line: {}", line, e);
             return Optional.empty();
         }
+    }
+
+    private boolean checkIfSeriousGame(List<String> lines, int currentIndex) {
+        // find if this was a serious game
+        int i = currentIndex;
+        boolean allAccoladesFound = true;
+        int accoladesCount = 0;
+
+        while(!lines.get(i).contains("ACCOLADE")) {
+            i--;
+        }
+
+        // found accolades
+        while(lines.get(i).contains("ACCOLADE")) {
+            accoladesCount++;
+            i--;
+        }
+
+        logger.info("After Game over, accolades: {}", accoladesCount);
+
+        return accoladesCount > 6;
     }
 
     private ParseLineResponse parseRoundStartEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {

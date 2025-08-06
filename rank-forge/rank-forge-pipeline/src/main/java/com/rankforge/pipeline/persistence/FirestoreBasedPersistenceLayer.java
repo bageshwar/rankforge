@@ -26,6 +26,7 @@ import com.google.cloud.firestore.FirestoreOptions;
 import com.google.cloud.firestore.Query;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
+import com.google.cloud.firestore.WriteBatch;
 import com.google.cloud.firestore.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -456,6 +457,201 @@ public class FirestoreBasedPersistenceLayer implements PersistenceLayer {
         }
     }
     
+    /**
+     * Batch insert multiple documents
+     */
+    @Override
+    public synchronized int batchInsert(String tableName, List<Map<String, Object>> dataList) throws SQLException {
+        validateTableName(tableName);
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            CollectionReference collection = firestore.collection(tableName);
+            WriteBatch batch = firestore.batch();
+            
+            int count = 0;
+            for (Map<String, Object> data : dataList) {
+                String documentId = extractOrGenerateDocumentId(data);
+                DocumentReference docRef = collection.document(documentId);
+                batch.set(docRef, data);
+                count++;
+                
+                // Firestore batch limit is 500 operations
+                if (count >= 500) {
+                    ApiFuture<List<WriteResult>> future = batch.commit();
+                    future.get(); // Wait for completion
+                    
+                    // Start new batch
+                    batch = firestore.batch();
+                    count = 0;
+                }
+            }
+            
+            // Commit remaining operations
+            if (count > 0) {
+                ApiFuture<List<WriteResult>> future = batch.commit();
+                future.get(); // Wait for completion
+            }
+            
+            LOGGER.debug("Batch inserted {} documents into collection {}", dataList.size(), tableName);
+            return dataList.size();
+            
+        } catch (InterruptedException | ExecutionException e) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("Failed to batch insert documents: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Batch update multiple documents
+     */
+    @Override
+    public synchronized int batchUpdate(String tableName, List<BatchUpdateOperation> updates) throws SQLException {
+        validateTableName(tableName);
+        if (updates == null || updates.isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            WriteBatch batch = firestore.batch();
+            int totalUpdated = 0;
+            int batchCount = 0;
+            
+            for (BatchUpdateOperation update : updates) {
+                // Find documents matching the where clause
+                List<QueryDocumentSnapshot> documentsToUpdate = executeQuery(
+                    tableName, update.getWhereClause(), update.getWhereParams());
+                
+                for (QueryDocumentSnapshot doc : documentsToUpdate) {
+                    batch.update(doc.getReference(), update.getData());
+                    batchCount++;
+                    totalUpdated++;
+                    
+                    // Firestore batch limit is 500 operations
+                    if (batchCount >= 500) {
+                        ApiFuture<List<WriteResult>> future = batch.commit();
+                        future.get(); // Wait for completion
+                        
+                        // Start new batch
+                        batch = firestore.batch();
+                        batchCount = 0;
+                    }
+                }
+            }
+            
+            // Commit remaining operations
+            if (batchCount > 0) {
+                ApiFuture<List<WriteResult>> future = batch.commit();
+                future.get(); // Wait for completion
+            }
+            
+            LOGGER.debug("Batch updated {} documents in collection {}", totalUpdated, tableName);
+            return totalUpdated;
+            
+        } catch (InterruptedException | ExecutionException e) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("Failed to batch update documents: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Batch upsert multiple documents
+     */
+    @Override
+    public synchronized int batchUpsert(String tableName,
+                                        List<Map<String, Object>> dataList,
+                                        String[] uniqueColumns,
+                                        String[] updateColumns) throws SQLException {
+        validateTableName(tableName);
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
+        if (uniqueColumns == null || uniqueColumns.length == 0) {
+            throw new SQLException("Unique columns must be specified for batch upsert operation");
+        }
+        
+        try {
+            WriteBatch batch = firestore.batch();
+            int totalAffected = 0;
+            int batchCount = 0;
+            
+            for (Map<String, Object> data : dataList) {
+                // Build query to find existing document
+                Query query = firestore.collection(tableName);
+                for (String column : uniqueColumns) {
+                    if (!data.containsKey(column)) {
+                        throw new SQLException("Unique column '" + column + "' not found in data map");
+                    }
+                    query = query.whereEqualTo(column, data.get(column));
+                }
+                
+                ApiFuture<QuerySnapshot> future = query.get();
+                QuerySnapshot querySnapshot = future.get();
+                
+                if (querySnapshot.isEmpty()) {
+                    // Insert new document
+                    String documentId = extractOrGenerateDocumentId(data);
+                    DocumentReference docRef = firestore.collection(tableName).document(documentId);
+                    batch.set(docRef, data);
+                    totalAffected++;
+                    batchCount++;
+                } else {
+                    // Update existing document(s)
+                    for (QueryDocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        Map<String, Object> updateData = new HashMap<>();
+                        
+                        if (updateColumns == null) {
+                            // Update all non-unique columns
+                            for (Map.Entry<String, Object> entry : data.entrySet()) {
+                                if (!Arrays.asList(uniqueColumns).contains(entry.getKey())) {
+                                    updateData.put(entry.getKey(), entry.getValue());
+                                }
+                            }
+                        } else {
+                            // Update only specified columns
+                            for (String column : updateColumns) {
+                                if (data.containsKey(column)) {
+                                    updateData.put(column, data.get(column));
+                                }
+                            }
+                        }
+                        
+                        if (!updateData.isEmpty()) {
+                            batch.update(doc.getReference(), updateData);
+                            totalAffected++;
+                            batchCount++;
+                        }
+                    }
+                }
+                
+                // Firestore batch limit is 500 operations
+                if (batchCount >= 500) {
+                    ApiFuture<List<WriteResult>> future2 = batch.commit();
+                    future2.get(); // Wait for completion
+                    
+                    // Start new batch
+                    batch = firestore.batch();
+                    batchCount = 0;
+                }
+            }
+            
+            // Commit remaining operations
+            if (batchCount > 0) {
+                ApiFuture<List<WriteResult>> future = batch.commit();
+                future.get(); // Wait for completion
+            }
+            
+            LOGGER.debug("Batch upserted {} documents in collection {}", totalAffected, tableName);
+            return totalAffected;
+            
+        } catch (InterruptedException | ExecutionException e) {
+            Thread.currentThread().interrupt();
+            throw new SQLException("Failed to batch upsert documents: " + e.getMessage(), e);
+        }
+    }
+
     @Override
     public void close() {
         connectionLock.lock();
