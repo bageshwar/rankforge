@@ -19,10 +19,7 @@
 package com.rankforge.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rankforge.core.interfaces.EventProcessor;
-import com.rankforge.core.interfaces.LogParser;
-import com.rankforge.core.interfaces.RankingAlgorithm;
-import com.rankforge.core.interfaces.RankingService;
+import com.rankforge.core.interfaces.*;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.*;
@@ -64,6 +61,10 @@ public class RankForgeApplication {
 
             // Initialize processors
             EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService);
+
+            // TODO see if there is a better way to latch the listeners other than typecasting
+            eventProcessor.addGameEventListener((GameEventListener) eventStore);
+            eventProcessor.addGameEventListener((GameEventListener) statsRepo);
             LogParser logParser = new CS2LogParser(objectMapper, eventStore);
 
             // Start the system with batch processing

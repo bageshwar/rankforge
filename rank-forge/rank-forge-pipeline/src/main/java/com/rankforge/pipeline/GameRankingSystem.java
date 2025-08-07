@@ -99,9 +99,7 @@ public class GameRankingSystem {
             // Read new lines from log file
             List<String> newLines = readNewLines(logFile);
             logger.debug("Starting batch processing of {} log lines from {}", newLines.size(), logFile);
-            
-            List<GameEvent> eventBatch = new ArrayList<>();
-            
+
             for (int i = 0; i < newLines.size(); i++) {
                 Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(newLines.get(i), newLines, i);
                 if (parseLineResponse.isPresent()) {
@@ -117,76 +115,20 @@ public class GameRankingSystem {
                     }
 
                     logger.debug("Adding event {} to batch at index {}", response.getGameEvent().getGameEventType(), i);
-                    eventBatch.add(response.getGameEvent());
-                    
-                    // Process in batches
-                    if (eventBatch.size() >= batchSize) {
-                        processBatch(eventBatch);
-                        eventBatch.clear();
-                    }
+                    eventProcessor.processEvent(response.getGameEvent());
+                    eventStore.store(response.getGameEvent());
                     
                     // move the pointer if more lines have been processed
                     i = response.getNextIndex();
                 }
             }
-            
-            // Process remaining events in the batch
-            if (!eventBatch.isEmpty()) {
-                processBatch(eventBatch);
-            }
-            
-            // Trigger batch flushes after processing all lines
-            flushAllBatches();
-            
+
             logger.info("Completed batch processing of {} log lines", newLines.size());
         } catch (Exception e) {
             logger.error("Error processing log lines", e);
         }
     }
-    
-    /**
-     * Processes a batch of events efficiently
-     */
-    private void processBatch(List<GameEvent> events) {
-        if (events.isEmpty()) {
-            return;
-        }
-        
-        logger.debug("Processing batch of {} events", events.size());
-        
-        try {
-            // Store events in batch if the event store supports it
-            if (eventStore.isBatchable()) {
-                eventStore.storeBatch(events);
-            } else {
-                // Fallback to individual storage
-                for (GameEvent event : events) {
-                    eventStore.store(event);
-                }
-            }
-            
-            // Process events for ranking updates
-            for (GameEvent event : events) {
-                eventProcessor.processEvent(event);
-            }
-            
-            logger.info("Successfully processed batch of {} events", events.size());
-            
-        } catch (Exception e) {
-            logger.error("Error processing event batch", e);
-            
-            // Fallback to individual processing on batch failure
-            logger.info("Falling back to individual event processing");
-            for (GameEvent event : events) {
-                try {
-                    eventStore.store(event);
-                    eventProcessor.processEvent(event);
-                } catch (Exception individualError) {
-                    logger.error("Failed to process individual event: {}", event.getGameEventType(), individualError);
-                }
-            }
-        }
-    }
+
     
     /**
      * Flushes all pending batches across the system

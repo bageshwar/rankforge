@@ -49,10 +49,6 @@ public interface EventStore {
         return false;
     }
 
-    default void storeBatch(List<GameEvent> events) {
-        throw new UnsupportedOperationException();
-    }
-
     default void flushBatch() {
         throw new UnsupportedOperationException();
     }

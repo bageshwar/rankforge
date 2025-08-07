@@ -20,9 +20,8 @@ package com.rankforge.pipeline.persistence;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rankforge.core.events.GameActionEvent;
-import com.rankforge.core.events.GameEvent;
-import com.rankforge.core.events.GameEventType;
+import com.rankforge.core.events.*;
+import com.rankforge.core.interfaces.GameEventListener;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.EventStore;
 import org.slf4j.Logger;
@@ -39,15 +38,15 @@ import java.util.concurrent.locks.ReentrantLock;
  * Author bageshwar.pn
  * Date 26/10/24
  */
-public class DBBasedEventStore implements EventStore {
+public class DBBasedEventStore implements EventStore, GameEventListener {
     private static final String TABLE_NAME = "GameEvent";
     private static final Logger logger = LoggerFactory.getLogger(DBBasedEventStore.class);
     private static final int DEFAULT_BATCH_SIZE = 100;
     
     private final PersistenceLayer persistenceLayer;
     private final ObjectMapper objectMapper;
+    private final List<GameEvent> gameEvents;
     private final List<Map<String, Object>> eventBatch;
-    private final int batchSize;
     private final ReentrantLock batchLock = new ReentrantLock();
 
     public DBBasedEventStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
@@ -57,8 +56,8 @@ public class DBBasedEventStore implements EventStore {
     public DBBasedEventStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper, int batchSize) {
         this.persistenceLayer = persistenceLayer;
         this.objectMapper = new ObjectMapper();
-        this.batchSize = batchSize;
         this.eventBatch = new ArrayList<>(batchSize);
+        this.gameEvents = new LinkedList<>();
         this.createTable();
     }
 
@@ -95,39 +94,14 @@ public class DBBasedEventStore implements EventStore {
 
     @Override
     public void store(GameEvent event) {
-        try {
-            Map<String, Object> values = new HashMap<>();
-            values.put("event", objectMapper.writeValueAsString(event));
-            values.put("at", event.getTimestamp());
-            values.put("gameEventType", event.getGameEventType());
-            if (event instanceof GameActionEvent gameActionEvent) {
-                values.put("player1", gameActionEvent.getPlayer1().getSteamId());
-                values.put("player2", gameActionEvent.getPlayer2().getSteamId());
-            }
-            
-            batchLock.lock();
-            try {
-                eventBatch.add(values);
-                
-                // If batch is full, flush it
-                if (eventBatch.size() >= batchSize) {
-                    flushBatch();
-                }
-            } finally {
-                batchLock.unlock();
-            }
-            
-            logger.debug("Stored event: {} at {}", event.getGameEventType(), event.getTimestamp());
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize event", e);
-        }
+        gameEvents.add(event);
+        logger.debug("Stored event in-mem: {} at {}", event.getGameEventType(), event.getTimestamp());
     }
     
     /**
      * Stores multiple events in a batch
      */
-    @Override
-    public void storeBatch(List<GameEvent> events) {
+    private void storeBatch(List<GameEvent> events) throws SQLException, JsonProcessingException {
         if (events == null || events.isEmpty()) {
             return;
         }
@@ -151,6 +125,7 @@ public class DBBasedEventStore implements EventStore {
             
         } catch (SQLException | JsonProcessingException e) {
             logger.error("Failed to batch store events", e);
+            throw e;
         }
     }
     
@@ -161,17 +136,14 @@ public class DBBasedEventStore implements EventStore {
     public void flushBatch() {
         batchLock.lock();
         try {
-            if (!eventBatch.isEmpty()) {
-                List<Map<String, Object>> toFlush = new ArrayList<>(eventBatch);
-                eventBatch.clear();
+            if (!gameEvents.isEmpty()) {
                 
                 try {
-                    persistenceLayer.batchInsert(TABLE_NAME, toFlush);
-                    logger.debug("Flushed batch of {} events", toFlush.size());
-                } catch (SQLException e) {
+                    storeBatch(gameEvents);
+                    logger.debug("Flushed batch of {} events", gameEvents.size());
+                    gameEvents.clear();
+                } catch (SQLException | JsonProcessingException e) {
                     logger.error("Failed to flush event batch", e);
-                    // Add events back to the batch on failure
-                    eventBatch.addAll(0, toFlush);
                 }
             }
         } finally {
@@ -213,6 +185,30 @@ public class DBBasedEventStore implements EventStore {
     @Override
     public boolean isBatchable() {
         return true;
+    }
+
+    @Override
+    public void onGameStarted(GameOverEvent event) {
+        gameEvents.clear();
+    }
+
+    @Override
+    public void onGameEnded(GameProcessedEvent event) {
+        try {
+            storeBatch(gameEvents);
+        } catch (SQLException | JsonProcessingException e) {
+            logger.error("Failed to batch store events", e);
+        }
+    }
+
+    @Override
+    public void onRoundStarted(RoundStartEvent event) {
+        // do nothing
+    }
+
+    @Override
+    public void onRoundEnded(RoundEndEvent event) {
+        // do nothing
     }
 
     // Implementation of other methods...
