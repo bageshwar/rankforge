@@ -64,7 +64,7 @@ public class RankForgeApplication {
 
             // Initialize processors
             EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService);
-            LogParser logParser = new CS2LogParser(objectMapper);
+            LogParser logParser = new CS2LogParser(objectMapper, eventStore);
 
             // Start the system with batch processing
             int processingBatchSize = 500;

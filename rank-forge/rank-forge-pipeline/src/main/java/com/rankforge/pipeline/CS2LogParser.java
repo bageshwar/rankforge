@@ -21,16 +21,11 @@ package com.rankforge.pipeline;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rankforge.core.events.AssistEvent;
-import com.rankforge.core.events.AttackEvent;
-import com.rankforge.core.events.GameOverEvent;
-import com.rankforge.core.events.GameProcessedEvent;
-import com.rankforge.core.events.KillEvent;
-import com.rankforge.core.events.RoundEndEvent;
-import com.rankforge.core.events.RoundStartEvent;
+import com.rankforge.core.events.*;
 import com.rankforge.core.interfaces.LogParser;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.models.Player;
+import com.rankforge.core.stores.EventStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -138,12 +133,14 @@ public class CS2LogParser implements LogParser {
     );
 
     private final ObjectMapper objectMapper;
+    private final EventStore eventStore;
     private final List<Integer> roundStartLineIndices;
     private boolean matchStarted;
     private int matchProcessingIndex;
 
-    public CS2LogParser(ObjectMapper objectMapper) {
+    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore) {
         this.objectMapper = objectMapper;
+        this.eventStore = eventStore;
         this.roundStartLineIndices = new ArrayList<>();
         matchStarted = false;
         matchProcessingIndex = 0;
@@ -183,11 +180,11 @@ public class CS2LogParser implements LogParser {
 
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
             if (gameOverMatcher.matches()) {
-                logger.debug("Game over detected at index {}: {}", currentIndex, line);
-                if (checkIfSeriousGame(lines, currentIndex)) {
+                logger.info("Game over detected at index {}: {}", currentIndex, line);
+                if (shouldProcessGameOverEvent(lines, currentIndex, timestamp)) {
                     return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
                 } else {
-                    logger.debug("Non serious game detected at index {}: {}, ignoring", currentIndex, line);
+                    logger.info("Skipping Game at index {}: {}", currentIndex, line);
                     this.roundStartLineIndices.clear();
                     return Optional.empty();
                 }
@@ -232,10 +229,9 @@ public class CS2LogParser implements LogParser {
         }
     }
 
-    private boolean checkIfSeriousGame(List<String> lines, int currentIndex) {
+    private boolean shouldProcessGameOverEvent(List<String> lines, int currentIndex, Instant timestamp) {
         // find if this was a serious game
         int i = currentIndex;
-        boolean allAccoladesFound = true;
         int accoladesCount = 0;
 
         while(!lines.get(i).contains("ACCOLADE")) {
@@ -250,7 +246,20 @@ public class CS2LogParser implements LogParser {
 
         logger.info("After Game over, accolades: {}", accoladesCount);
 
-        return accoladesCount > 6;
+        if (accoladesCount < 6) {
+            // not enough players
+            return false;
+        } else {
+            // find existing processed event
+            Optional<GameEvent> event = eventStore.getGameEvent(GameEventType.GAME_OVER, timestamp);
+            if (event.isPresent()) {
+                logger.info("Game already processed in previous runs. line: {} , at {}", currentIndex, timestamp);
+                return false;
+            } else {
+                return true;
+            }
+        }
+
     }
 
     private ParseLineResponse parseRoundStartEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {

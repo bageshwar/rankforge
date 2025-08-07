@@ -31,6 +31,9 @@ import java.util.Map;
 public class RoundEndEvent extends GameEvent {
     List<String> players;
 
+    // Default constructor for Jackson deserialization
+    public RoundEndEvent() {}
+
     public RoundEndEvent(Instant timestamp, Map<String, String> additionalData) {
         super(timestamp, GameEventType.ROUND_END, additionalData);
         players = new ArrayList<>();

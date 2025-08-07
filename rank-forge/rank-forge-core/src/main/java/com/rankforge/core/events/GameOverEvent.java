@@ -32,6 +32,9 @@ public class GameOverEvent extends GameEvent {
     int team1Score;
     int team2Score;
 
+    // Default constructor for Jackson deserialization
+    public GameOverEvent() {}
+
     public GameOverEvent(Instant timestamp, Map<String, String> additionalData,
                          String map, String mode, int team1Score, int team2Score) {
         super(timestamp, GameEventType.GAME_OVER, additionalData);

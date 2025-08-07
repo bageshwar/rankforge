@@ -32,6 +32,9 @@ public class BombEvent extends GameEvent {
     private BombEventType eventType;
     private int timeRemaining;
 
+    // Default constructor for Jackson deserialization
+    public BombEvent() {}
+
     public BombEvent(Instant timestamp, Map<String, String> additionalData, String player, BombEventType eventType, int timeRemaining) {
         super(timestamp, GameEventType.BOMB_EVENT, additionalData);
         this.player = player;

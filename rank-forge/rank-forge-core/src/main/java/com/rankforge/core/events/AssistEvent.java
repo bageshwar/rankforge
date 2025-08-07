@@ -34,6 +34,9 @@ public class AssistEvent extends GameActionEvent {
 
     private AssistType assistType;
 
+    // Default constructor for Jackson deserialization
+    public AssistEvent() {}
+
     public AssistEvent(Instant timestamp, Map<String, String> additionalData, Player player1, Player player2, String weapon, AssistType assistType) {
         super(timestamp, GameEventType.ASSIST, additionalData, player1, player2, weapon);
         this.assistType = assistType;

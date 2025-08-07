@@ -138,7 +138,7 @@ public class GameRankingSystem {
             // Trigger batch flushes after processing all lines
             flushAllBatches();
             
-            logger.debug("Completed batch processing of {} log lines", newLines.size());
+            logger.info("Completed batch processing of {} log lines", newLines.size());
         } catch (Exception e) {
             logger.error("Error processing log lines", e);
         }
@@ -170,7 +170,7 @@ public class GameRankingSystem {
                 eventProcessor.processEvent(event);
             }
             
-            logger.debug("Successfully processed batch of {} events", events.size());
+            logger.info("Successfully processed batch of {} events", events.size());
             
         } catch (Exception e) {
             logger.error("Error processing event batch", e);
