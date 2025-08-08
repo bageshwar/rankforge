@@ -50,21 +50,12 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
     private final PersistenceLayer persistenceLayer;
     private final ObjectMapper objectMapper;
     private final Map<String, PlayerStats> playerStatsMap;
-    private final List<Map<String, Object>> insertBatch;
-    private final List<Map<String, Object>> upsertBatch;
-    private final int batchSize;
     private final ReentrantLock batchLock = new ReentrantLock();
 
-    public DBBasedPlayerStatsStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
-        this(persistenceLayer, objectMapper, DEFAULT_BATCH_SIZE);
-    }
     
-    public DBBasedPlayerStatsStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper, int batchSize) {
+    public DBBasedPlayerStatsStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
         this.persistenceLayer = persistenceLayer;
         this.objectMapper = objectMapper;
-        this.batchSize = batchSize;
-        this.insertBatch = new ArrayList<>(batchSize);
-        this.upsertBatch = new ArrayList<>(batchSize);
         this.playerStatsMap = new ConcurrentHashMap<>();
         this.createTable();
     }
