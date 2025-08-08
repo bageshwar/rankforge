@@ -45,16 +45,16 @@ public class RankForgeApplication {
             Files.createDirectories(Paths.get(dataDir));
 
             // Initialize services with batching support
-            //EventStore eventStore = new FileBasedEventStore(dataDir);
             ObjectMapper objectMapper = new ObjectMapper();
-            SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
-            //PersistenceLayer persistenceLayer = new FirestoreBasedPersistenceLayer("rankforge", "firestore-db");
-            
-            // Configure batch sizes for better performance
-            int statsBatchSize = 50;
-            
+            //SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
+
+            String jdbcUrl = System.getProperty("jdbcUrl");
+            String username = System.getProperty("jdbcUsername");
+            String password = System.getProperty("jdbcPassword");
+            PersistenceLayer persistenceLayer = new JdbcBasedPersistenceLayer(jdbcUrl, username, password);
+
             EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
-            PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper, statsBatchSize);
+            PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
             RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
 

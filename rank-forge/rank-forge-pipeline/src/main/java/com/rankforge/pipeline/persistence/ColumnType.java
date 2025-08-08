@@ -26,6 +26,8 @@ package com.rankforge.pipeline.persistence;
 public enum ColumnType {
     INTEGER("INTEGER"),
     TEXT("TEXT"),
+    TEXT_SHORT("VARCHAR(255)"), // For indexable text columns (IDs, names, etc.)
+    TEXT_LONG("TEXT"),          // For large text content (JSON, descriptions, etc.)
     REAL("REAL"),
     BLOB("BLOB"),
     BOOLEAN("INTEGER"); // SQLite doesn't have a native boolean type

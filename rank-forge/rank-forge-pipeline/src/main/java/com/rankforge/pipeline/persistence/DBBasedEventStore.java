@@ -22,7 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.*;
 import com.rankforge.core.interfaces.GameEventListener;
-import com.rankforge.core.models.PlayerStats;
+
 import com.rankforge.core.stores.EventStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.locks.ReentrantLock;
+
 
 /**
  * DAO layer for events with batching support
@@ -60,27 +60,28 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
                         .primaryKey()
                         .autoIncrement()
                         .build(),
-                new ColumnDefinition.Builder("event", ColumnType.TEXT)
+                new ColumnDefinition.Builder("event", ColumnType.TEXT_LONG)
                         .notNull()
                         .build(),
-                new ColumnDefinition.Builder("at", ColumnType.TEXT)
+                new ColumnDefinition.Builder("at", ColumnType.TEXT_SHORT)
                         .notNull()
                         .build(),
-                new ColumnDefinition.Builder("created_at", ColumnType.TEXT)
+                new ColumnDefinition.Builder("created_at", ColumnType.TEXT_SHORT)
                         .defaultValue("CURRENT_TIMESTAMP")
                         .build(),
-                new ColumnDefinition.Builder("gameEventType", ColumnType.TEXT)
+                new ColumnDefinition.Builder("gameEventType", ColumnType.TEXT_SHORT)
                         .notNull()
                         .build(),
-                new ColumnDefinition.Builder("player1", ColumnType.TEXT)
+                new ColumnDefinition.Builder("player1", ColumnType.TEXT_SHORT)
                         .build(),
-                new ColumnDefinition.Builder("player2", ColumnType.TEXT)
+                new ColumnDefinition.Builder("player2", ColumnType.TEXT_SHORT)
                         .build()
         };
         try {
             persistenceLayer.createTable(TABLE_NAME, columns, null, true);
         } catch (SQLException e) {
-            logger.error("Unable to create table {}", TABLE_NAME);
+            logger.error("Unable to create table {}", TABLE_NAME, e);
+            System.exit(1);
         }
     }
 
@@ -124,7 +125,7 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
     @Override
     public Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp) {
         try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
-                new String[]{"event"}, "gameEventType = ? AND at = ?", eventType, timestamp.toString())){
+                new String[]{"event"}, "gameEventType = ? AND at = ?", eventType, timestamp)){
             if (queried.next()) {
                 GameEvent result = objectMapper.readValue(queried.getString("event"), GameEvent.class);
                 return Optional.of(result);
