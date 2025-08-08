@@ -51,10 +51,9 @@ public class RankForgeApplication {
             //PersistenceLayer persistenceLayer = new FirestoreBasedPersistenceLayer("rankforge", "firestore-db");
             
             // Configure batch sizes for better performance
-            int eventBatchSize = 500;
             int statsBatchSize = 50;
             
-            EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper, eventBatchSize);
+            EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
             PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper, statsBatchSize);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
             RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
@@ -67,19 +66,15 @@ public class RankForgeApplication {
             eventProcessor.addGameEventListener((GameEventListener) statsRepo);
             LogParser logParser = new CS2LogParser(objectMapper, eventStore);
 
-            // Start the system with batch processing
-            int processingBatchSize = 500;
             GameRankingSystem rankingSystem = new GameRankingSystem(
-                    logParser, eventProcessor, eventStore, rankingService, 
-                    Executors.newScheduledThreadPool(2), processingBatchSize);
+                    logParser, eventProcessor, eventStore,
+                    Executors.newScheduledThreadPool(2));
 
             // Start monitoring log file
             String logFile = args.length > 1 ? args[1] : "./data/log.json";
             //rankingSystem.startProcessing(logFile);
             rankingSystem.processNewLogLines(logFile);
 
-            // Start HTTP server for API
-            //new RankingApiServer(rankingService).start(8080);
 
         } catch (Exception e) {
             logger.error("Failed to start ranking system", e);

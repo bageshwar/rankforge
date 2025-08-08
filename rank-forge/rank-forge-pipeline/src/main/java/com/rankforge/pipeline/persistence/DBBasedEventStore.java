@@ -41,22 +41,14 @@ import java.util.concurrent.locks.ReentrantLock;
 public class DBBasedEventStore implements EventStore, GameEventListener {
     private static final String TABLE_NAME = "GameEvent";
     private static final Logger logger = LoggerFactory.getLogger(DBBasedEventStore.class);
-    private static final int DEFAULT_BATCH_SIZE = 100;
     
     private final PersistenceLayer persistenceLayer;
     private final ObjectMapper objectMapper;
     private final List<GameEvent> gameEvents;
-    private final List<Map<String, Object>> eventBatch;
-    private final ReentrantLock batchLock = new ReentrantLock();
-
-    public DBBasedEventStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
-        this(persistenceLayer, objectMapper, DEFAULT_BATCH_SIZE);
-    }
     
-    public DBBasedEventStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper, int batchSize) {
+    public DBBasedEventStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
         this.persistenceLayer = persistenceLayer;
-        this.objectMapper = new ObjectMapper();
-        this.eventBatch = new ArrayList<>(batchSize);
+        this.objectMapper = objectMapper;
         this.gameEvents = new LinkedList<>();
         this.createTable();
     }
@@ -128,28 +120,6 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
             throw e;
         }
     }
-    
-    /**
-     * Flushes pending events in batch
-     */
-    @Override
-    public void flushBatch() {
-        batchLock.lock();
-        try {
-            if (!gameEvents.isEmpty()) {
-                
-                try {
-                    storeBatch(gameEvents);
-                    logger.debug("Flushed batch of {} events", gameEvents.size());
-                    gameEvents.clear();
-                } catch (SQLException | JsonProcessingException e) {
-                    logger.error("Failed to flush event batch", e);
-                }
-            }
-        } finally {
-            batchLock.unlock();
-        }
-    }
 
     @Override
     public Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp) {
@@ -163,28 +133,6 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
             logger.error("Failed to get GameEvent", e);
         }
         return Optional.empty();
-    }
-
-    // TODO implement methods
-    @Override
-    public List<GameEvent> getEventsBetween(Instant start, Instant end) {
-        return List.of();
-    }
-
-    @Override
-    public List<GameEvent> getEventsForPlayer(String playerId, Instant start, Instant end) {
-        return List.of();
-    }
-
-    @Override
-    public void cleanup(Instant before) {
-        // Flush any pending events before cleanup
-        flushBatch();
-    }
-
-    @Override
-    public boolean isBatchable() {
-        return true;
     }
 
     @Override

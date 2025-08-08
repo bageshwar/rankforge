@@ -130,63 +130,6 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
             logger.error("Failed to batch store PlayerStats", e);
         }
     }
-    
-    /**
-     * Flushes pending insert operations (for archival)
-     */
-    public void flushInsertBatch() {
-        batchLock.lock();
-        try {
-            if (!insertBatch.isEmpty()) {
-                List<Map<String, Object>> toFlush = new ArrayList<>(insertBatch);
-                insertBatch.clear();
-                
-                try {
-                    persistenceLayer.batchInsert(ARCHIVE_TABLE_NAME, toFlush);
-                    logger.debug("Flushed insert batch of {} player stats", toFlush.size());
-                } catch (SQLException e) {
-                    logger.error("Failed to flush insert batch", e);
-                    // Add back to batch on failure
-                    insertBatch.addAll(0, toFlush);
-                }
-            }
-        } finally {
-            batchLock.unlock();
-        }
-    }
-    
-    /**
-     * Flushes pending upsert operations
-     */
-    public void flushUpsertBatch() {
-        batchLock.lock();
-        try {
-            if (!upsertBatch.isEmpty()) {
-                List<Map<String, Object>> toFlush = new ArrayList<>(upsertBatch);
-                upsertBatch.clear();
-                
-                try {
-                    persistenceLayer.batchUpsert(TABLE_NAME, toFlush, 
-                        new String[]{"playerId"}, new String[]{"playerStats"});
-                    logger.debug("Flushed upsert batch of {} player stats", toFlush.size());
-                } catch (SQLException e) {
-                    logger.error("Failed to flush upsert batch", e);
-                    // Add back to batch on failure
-                    upsertBatch.addAll(0, toFlush);
-                }
-            }
-        } finally {
-            batchLock.unlock();
-        }
-    }
-    
-    /**
-     * Flushes all pending batches
-     */
-    public void flushAllBatches() {
-        flushInsertBatch();
-        flushUpsertBatch();
-    }
 
     @Override
     public Optional<PlayerStats> getPlayerStats(String playerSteamId) {
@@ -206,8 +149,7 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
 
     @Override
     public void onGameEnded(GameProcessedEvent event) {
-        // no-op
-        flushAllBatches();
+        storeBatch(playerStatsMap.values());
     }
 
     @Override
@@ -217,6 +159,6 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
 
     @Override
     public void onRoundEnded(RoundEndEvent event) {
-        storeBatch(playerStatsMap.values());
+        // no-op
     }
 }

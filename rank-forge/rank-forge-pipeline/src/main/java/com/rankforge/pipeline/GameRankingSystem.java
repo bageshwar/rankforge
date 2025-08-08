@@ -45,30 +45,19 @@ import java.util.concurrent.TimeUnit;
  */
 public class GameRankingSystem {
     private static final Logger logger = LoggerFactory.getLogger(GameRankingSystem.class);
-    private static final int DEFAULT_BATCH_SIZE = 100;
 
     private final LogParser logParser;
     private final EventProcessor eventProcessor;
     private final EventStore eventStore;
-    private final RankingService rankingService;
     private final ScheduledExecutorService scheduler;
-    private final int batchSize;
-
-    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
-                           EventStore eventStore, RankingService rankingService, 
-                           ScheduledExecutorService scheduler) {
-        this(logParser, eventProcessor, eventStore, rankingService, scheduler, DEFAULT_BATCH_SIZE);
-    }
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
-                           EventStore eventStore, RankingService rankingService, 
-                           ScheduledExecutorService scheduler, int batchSize) {
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler) {
         this.logParser = logParser;
         this.eventProcessor = eventProcessor;
         this.eventStore = eventStore;
-        this.rankingService = rankingService;
         this.scheduler = scheduler;
-        this.batchSize = batchSize;
     }
 
     public void startProcessing(String logFile) throws IOException {
@@ -82,12 +71,6 @@ public class GameRankingSystem {
         scheduler.scheduleWithFixedDelay(
                 () -> processNewLogLines(logFile),
                 0, 1, TimeUnit.SECONDS
-        );
-        
-        // Schedule periodic batch flushes
-        scheduler.scheduleWithFixedDelay(
-                this::flushAllBatches,
-                5, 5, TimeUnit.SECONDS
         );
 
         logger.info("Started processing log file: {}", logFile);
@@ -129,52 +112,7 @@ public class GameRankingSystem {
         }
     }
 
-    
-    /**
-     * Flushes all pending batches across the system
-     */
-    private void flushAllBatches() {
-        try {
-            // Flush event store batches
-            if (eventStore.isBatchable()) {
-                eventStore.flushBatch();
-            }
-            
-            // Flush player stats store batches if accessible
-            // Note: In a real implementation, you might want to inject the stats store
-            // or make it accessible for flushing. For now, batches will be flushed
-            // automatically when they reach their size limits.
-            
-            logger.debug("Flushed all pending batches");
-        } catch (Exception e) {
-            logger.error("Error flushing batches", e);
-        }
-    }
-
     private List<String> readNewLines(String logFile) throws IOException {
         return Files.readAllLines(Path.of(logFile));
-    }
-    
-    /**
-     * Graceful shutdown that flushes all pending data
-     */
-    public void shutdown() {
-        logger.info("Shutting down GameRankingSystem...");
-        
-        // Flush all pending batches
-        flushAllBatches();
-        
-        // Shutdown scheduler
-        scheduler.shutdown();
-        try {
-            if (!scheduler.awaitTermination(30, TimeUnit.SECONDS)) {
-                scheduler.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            scheduler.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-        
-        logger.info("GameRankingSystem shutdown complete");
     }
 }
