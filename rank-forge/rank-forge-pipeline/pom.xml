@@ -52,6 +52,19 @@
             <artifactId>google-cloud-firestore</artifactId>
             <version>3.32.0</version>
         </dependency>
+        <!-- H2 Database for testing -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Microsoft SQL Server JDBC Driver for Azure SQL Database -->
+        <dependency>
+            <groupId>com.microsoft.sqlserver</groupId>
+            <artifactId>mssql-jdbc</artifactId>
+            <version>12.4.2.jre11</version>
+        </dependency>
     </dependencies>
 
 

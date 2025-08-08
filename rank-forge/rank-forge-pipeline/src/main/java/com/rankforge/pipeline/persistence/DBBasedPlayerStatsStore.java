@@ -30,7 +30,7 @@ import com.rankforge.core.stores.PlayerStatsStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.ResultSet;
+
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -75,13 +75,13 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
                         .primaryKey()
                         .autoIncrement()
                         .build(),
-                new ColumnDefinition.Builder("playerId", ColumnType.TEXT)
+                new ColumnDefinition.Builder("playerId", ColumnType.TEXT_SHORT)
                         .notNull()
                         .build(),
-                new ColumnDefinition.Builder("playerStats", ColumnType.TEXT)
+                new ColumnDefinition.Builder("playerStats", ColumnType.TEXT_LONG)
                         .notNull()
                         .build(),
-                new ColumnDefinition.Builder("createdAt", ColumnType.TEXT)
+                new ColumnDefinition.Builder("createdAt", ColumnType.TEXT_SHORT)
                         .defaultValue("CURRENT_TIMESTAMP")
                         .build()
         };
@@ -89,7 +89,8 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListe
             persistenceLayer.createTable(TABLE_NAME, columns, new String[]{"playerId"}, true);
             persistenceLayer.createTable(ARCHIVE_TABLE_NAME, columns, null, true);
         } catch (SQLException e) {
-            logger.error("Unable to create table {}", TABLE_NAME);
+            logger.error("Unable to create table {}", TABLE_NAME, e);
+            System.exit(1);
         }
     }
 
