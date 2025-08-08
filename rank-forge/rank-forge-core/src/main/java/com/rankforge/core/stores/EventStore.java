@@ -33,27 +33,5 @@ import java.util.Optional;
 public interface EventStore {
     void store(GameEvent event);
 
-    List<GameEvent> getEventsBetween(Instant start, Instant end);
-
-    List<GameEvent> getEventsForPlayer(String playerId, Instant start, Instant end);
-
-    void cleanup(Instant before);
-
     Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp);
-
-    /**
-     *
-     * @return Returns true of the underlying implementation supports batch writes.
-     */
-    default boolean isBatchable() {
-        return false;
-    }
-
-    default void storeBatch(List<GameEvent> events) {
-        throw new UnsupportedOperationException();
-    }
-
-    default void flushBatch() {
-        throw new UnsupportedOperationException();
-    }
 }

@@ -30,6 +30,7 @@ import com.rankforge.core.events.KillEvent;
 import com.rankforge.core.events.RoundEndEvent;
 import com.rankforge.core.events.RoundStartEvent;
 import com.rankforge.core.interfaces.EventProcessor;
+import com.rankforge.core.interfaces.GameEventListener;
 import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
@@ -37,6 +38,7 @@ import com.rankforge.core.stores.PlayerStatsStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -44,14 +46,16 @@ import java.util.List;
  * Author bageshwar.pn
  * Date 26/10/24
  */
-public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
+public class EventProcessorImpl implements EventProcessor, GameEventVisitor, GameEventListener {
     private static final Logger logger = LoggerFactory.getLogger(EventProcessorImpl.class);
     private final PlayerStatsStore statsRepo;
     private final RankingService rankingService;
+    private final List<GameEventListener> eventListeners;
 
     public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
+        this.eventListeners = new ArrayList<>();
     }
 
     private static PlayerStats getDefaultPlayerStats(Player player) {
@@ -90,8 +94,14 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
     }
 
     @Override
+    public void addGameEventListener(GameEventListener listener) {
+        eventListeners.add(listener);
+    }
+
+    @Override
     public void visit(GameProcessedEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         logger.info("Processed game at {}", event.getTimestamp());
+        this.onGameEnded(event);
     }
 
     @Override
@@ -147,7 +157,7 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
 
     @Override
     public void visit(RoundStartEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
-
+        this.onRoundStarted(event);
     }
 
     @Override
@@ -172,9 +182,40 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor {
             logger.debug("Archiving stats for player: {} (rank: {})", playerStats.getLastSeenNickname(), playerStats.getRank());
             statsRepo.store(playerStats, true);
         }
+
+        this.onRoundEnded(event);
     }
 
     @Override
     public void visit(GameOverEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        this.onGameStarted(event);
+    }
+
+    @Override
+    public void onGameStarted(GameOverEvent event) {
+        for (GameEventListener listener : this.eventListeners) {
+            listener.onGameStarted(event);
+        }
+    }
+
+    @Override
+    public void onGameEnded(GameProcessedEvent event) {
+        for (GameEventListener listener : this.eventListeners) {
+            listener.onGameEnded(event);
+        }
+    }
+
+    @Override
+    public void onRoundStarted(RoundStartEvent event) {
+        for (GameEventListener listener : this.eventListeners) {
+            listener.onRoundStarted(event);
+        }
+    }
+
+    @Override
+    public void onRoundEnded(RoundEndEvent event) {
+        for (GameEventListener listener : this.eventListeners) {
+            listener.onRoundEnded(event);
+        }
     }
 }

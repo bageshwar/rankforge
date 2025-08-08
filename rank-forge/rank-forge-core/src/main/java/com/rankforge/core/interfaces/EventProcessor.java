@@ -27,4 +27,6 @@ import com.rankforge.core.events.GameEvent;
  */
 public interface EventProcessor {
     void processEvent(GameEvent event);
+
+    void addGameEventListener(GameEventListener listener);
 }

@@ -20,6 +20,11 @@ package com.rankforge.pipeline.persistence;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rankforge.core.events.GameOverEvent;
+import com.rankforge.core.events.GameProcessedEvent;
+import com.rankforge.core.events.RoundEndEvent;
+import com.rankforge.core.events.RoundStartEvent;
+import com.rankforge.core.interfaces.GameEventListener;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import org.slf4j.Logger;
@@ -27,11 +32,8 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -39,7 +41,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Author bageshwar.pn
  * Date 26/10/24
  */
-public class DBBasedPlayerStatsStore implements PlayerStatsStore {
+public class DBBasedPlayerStatsStore implements PlayerStatsStore, GameEventListener {
     private static final Logger logger = LoggerFactory.getLogger(DBBasedPlayerStatsStore.class);
     private static final String TABLE_NAME = "PlayerStats";
     private static final String ARCHIVE_TABLE_NAME = "PlayerStatsArchive";
@@ -47,6 +49,7 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore {
 
     private final PersistenceLayer persistenceLayer;
     private final ObjectMapper objectMapper;
+    private final Map<String, PlayerStats> playerStatsMap;
     private final List<Map<String, Object>> insertBatch;
     private final List<Map<String, Object>> upsertBatch;
     private final int batchSize;
@@ -62,6 +65,7 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore {
         this.batchSize = batchSize;
         this.insertBatch = new ArrayList<>(batchSize);
         this.upsertBatch = new ArrayList<>(batchSize);
+        this.playerStatsMap = new ConcurrentHashMap<>();
         this.createTable();
     }
 
@@ -91,42 +95,13 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore {
 
     @Override
     public void store(PlayerStats stat, boolean archive) {
-        try {
-            Map<String, Object> values = new HashMap<>();
-            values.put("playerId", stat.getPlayerId());
-            values.put("playerStats", objectMapper.writeValueAsString(stat));
-
-            batchLock.lock();
-            try {
-                if (archive) {
-                    insertBatch.add(new HashMap<>(values));
-                    
-                    // If insert batch is full, flush it
-                    if (insertBatch.size() >= batchSize) {
-                        flushInsertBatch();
-                    }
-                }
-
-                upsertBatch.add(values);
-                
-                // If upsert batch is full, flush it
-                if (upsertBatch.size() >= batchSize) {
-                    flushUpsertBatch();
-                }
-            } finally {
-                batchLock.unlock();
-            }
-
-            logger.debug("Stored/updated playerstat for player: {} (archive={})", stat.getPlayerId(), archive);
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to serialize PlayerStats", e);
-        }
+        playerStatsMap.put(stat.getPlayerId(), stat);
     }
     
     /**
      * Stores multiple player stats in batches
      */
-    public void storeBatch(List<PlayerStats> stats, boolean archive) {
+    private void storeBatch(Collection<PlayerStats> stats) {
         if (stats == null || stats.isEmpty()) {
             return;
         }
@@ -139,104 +114,51 @@ public class DBBasedPlayerStatsStore implements PlayerStatsStore {
                 Map<String, Object> values = new HashMap<>();
                 values.put("playerId", stat.getPlayerId());
                 values.put("playerStats", objectMapper.writeValueAsString(stat));
-                
-                if (archive) {
-                    insertDataList.add(new HashMap<>(values));
-                }
+
+                insertDataList.add(new HashMap<>(values));
                 upsertDataList.add(values);
             }
-            
-            if (archive && !insertDataList.isEmpty()) {
-                persistenceLayer.batchInsert(ARCHIVE_TABLE_NAME, insertDataList);
-                logger.debug("Batch archived {} player stats", insertDataList.size());
-            }
-            
-            if (!upsertDataList.isEmpty()) {
-                persistenceLayer.batchUpsert(TABLE_NAME, upsertDataList, 
+
+            persistenceLayer.batchInsert(ARCHIVE_TABLE_NAME, insertDataList);
+            logger.info("Batch archived {} player stats", insertDataList.size());
+
+            persistenceLayer.batchUpsert(TABLE_NAME, upsertDataList,
                     new String[]{"playerId"}, new String[]{"playerStats"});
-                logger.debug("Batch upserted {} player stats", upsertDataList.size());
-            }
-            
+            logger.info("Batch upserted {} player stats", upsertDataList.size());
+
         } catch (SQLException | JsonProcessingException e) {
             logger.error("Failed to batch store PlayerStats", e);
         }
     }
-    
-    /**
-     * Flushes pending insert operations (for archival)
-     */
-    public void flushInsertBatch() {
-        batchLock.lock();
-        try {
-            if (!insertBatch.isEmpty()) {
-                List<Map<String, Object>> toFlush = new ArrayList<>(insertBatch);
-                insertBatch.clear();
-                
-                try {
-                    persistenceLayer.batchInsert(ARCHIVE_TABLE_NAME, toFlush);
-                    logger.debug("Flushed insert batch of {} player stats", toFlush.size());
-                } catch (SQLException e) {
-                    logger.error("Failed to flush insert batch", e);
-                    // Add back to batch on failure
-                    insertBatch.addAll(0, toFlush);
-                }
-            }
-        } finally {
-            batchLock.unlock();
-        }
-    }
-    
-    /**
-     * Flushes pending upsert operations
-     */
-    public void flushUpsertBatch() {
-        batchLock.lock();
-        try {
-            if (!upsertBatch.isEmpty()) {
-                List<Map<String, Object>> toFlush = new ArrayList<>(upsertBatch);
-                upsertBatch.clear();
-                
-                try {
-                    persistenceLayer.batchUpsert(TABLE_NAME, toFlush, 
-                        new String[]{"playerId"}, new String[]{"playerStats"});
-                    logger.debug("Flushed upsert batch of {} player stats", toFlush.size());
-                } catch (SQLException e) {
-                    logger.error("Failed to flush upsert batch", e);
-                    // Add back to batch on failure
-                    upsertBatch.addAll(0, toFlush);
-                }
-            }
-        } finally {
-            batchLock.unlock();
-        }
-    }
-    
-    /**
-     * Flushes all pending batches
-     */
-    public void flushAllBatches() {
-        flushInsertBatch();
-        flushUpsertBatch();
-    }
 
     @Override
     public Optional<PlayerStats> getPlayerStats(String playerSteamId) {
-        // Flush batches before reading to ensure data consistency
-        // TODO this design has to change, we are doing DB read/writes for player stats at every game event
-        flushAllBatches();
-        
-        try {
-            try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
-                    new String[]{"playerStats", "createdAt"}, "playerId = ?", playerSteamId)) {
-                if (queried.next()) {
-                    PlayerStats result = objectMapper.readValue(queried.getString("playerStats"), PlayerStats.class);
-                    return Optional.of(result);
-                }
-            }
-        } catch (SQLException | JsonProcessingException e) {
-            logger.error("Failed to get PlayerStats", e);
+
+        if (playerSteamId == null) {
+            return Optional.empty();
         }
 
-        return Optional.empty();
+        return playerStatsMap.containsKey(playerSteamId) ? Optional.of(playerStatsMap.get(playerSteamId))
+                : Optional.empty();
+    }
+
+    @Override
+    public void onGameStarted(GameOverEvent event) {
+        // no-op
+    }
+
+    @Override
+    public void onGameEnded(GameProcessedEvent event) {
+        storeBatch(playerStatsMap.values());
+    }
+
+    @Override
+    public void onRoundStarted(RoundStartEvent event) {
+        // no-op
+    }
+
+    @Override
+    public void onRoundEnded(RoundEndEvent event) {
+        // no-op
     }
 }
