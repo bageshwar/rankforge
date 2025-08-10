@@ -68,11 +68,13 @@ public class GameService {
     public List<GameDTO> getAllGames() {
         try {
             List<GameOverEvent> gameOverEvents = getGameOverEventsFromDatabase();
+            Map<String, String> playerIdToNameCache = new HashMap<>();
             
             List<GameDTO> games = new ArrayList<>();
             for (GameOverEvent gameOverEvent : gameOverEvents) {
+                long start = System.currentTimeMillis();
                 // Use temporal boundaries to find players for this game
-                List<String> players = getPlayersForGame(gameOverEvent);
+                List<String> players = getPlayersForGame(gameOverEvent, playerIdToNameCache);
                 
                 // Extract duration from additional data if available
                 String duration = gameOverEvent.getAdditionalData().get("duration");
@@ -91,6 +93,7 @@ public class GameService {
                         duration
                 );
                 games.add(gameDTO);
+                LOGGER.info("Game processing {} took {}ms", gameId, System.currentTimeMillis() - start);
             }
             
             // Sort by game date descending (most recent first)
@@ -116,7 +119,7 @@ public class GameService {
     /**
      * Get players who participated in a specific game using temporal boundaries
      */
-    private List<String> getPlayersForGame(GameOverEvent gameOverEvent) {
+    private List<String> getPlayersForGame(GameOverEvent gameOverEvent, Map<String, String> playerIdToNameCache) {
         Set<String> uniquePlayers = new HashSet<>();
         
         // Calculate game boundaries: 
@@ -133,14 +136,14 @@ public class GameService {
             gameStartTime = gameEndTime.minusSeconds(estimatedDurationSeconds);
         }
         
-        LOGGER.debug("Looking for players between {} and {} for game on {}", 
+        LOGGER.info("Looking for players between {} and {} for game on {}",
                 gameStartTime, gameEndTime, gameOverEvent.getMap());
         
         // Convert Instant objects to ISO-8601 strings for string comparison
         String startTimeStr = gameStartTime.toString();
         String endTimeStr = gameEndTime.toString();
         
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
+        try (ResultSet resultSet = persistenceLayer.query("GameEvent",
                 new String[]{"event"}, "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
                 GameEventType.ROUND_END.name(), startTimeStr, endTimeStr)) {
             
@@ -151,7 +154,7 @@ public class GameService {
                         // Add all players from this round, converting steam IDs to readable names
                         roundEndEvent.getPlayers().forEach(playerId -> {
                             if (!"0".equals(playerId)) { // Exclude bots
-                                String playerName = getPlayerNameById(playerId);
+                                String playerName = getPlayerNameById(playerIdToNameCache, playerId);
                                 if (playerName != null) {
                                     uniquePlayers.add(playerName);
                                 }
@@ -172,7 +175,11 @@ public class GameService {
     /**
      * Retrieve player name by ID from PlayerStats table
      */
-    private String getPlayerNameById(String playerId) {
+    private String getPlayerNameById(Map<String, String> playerIdToNameCache, String playerId) {
+        if (playerIdToNameCache.containsKey(playerId)) {
+            return playerIdToNameCache.get(playerId);
+        }
+
         try {
             // Convert the player ID format from round end events to full steam ID
             String fullSteamId = "[U:1:" + playerId + "]";
@@ -184,7 +191,9 @@ public class GameService {
                     String playerStatsJson = resultSet.getString("playerStats");
                     // Parse the JSON to extract the lastSeenNickname
                     var playerStats = objectMapper.readTree(playerStatsJson);
-                    return playerStats.get("lastSeenNickname").asText();
+                    String nick = playerStats.get("lastSeenNickname").asText();
+                    playerIdToNameCache.put(playerId, nick);
+                    return nick;
                 }
             }
         } catch (SQLException | JsonProcessingException e) {
