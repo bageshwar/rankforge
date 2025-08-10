@@ -77,7 +77,7 @@ public class GameWebController {
      * @return game-details template or redirect to games if not found
      */
     @GetMapping("/games/details/{gameId}")
-    public String gameDetails(@PathVariable String gameId, Model model) {
+    public String gameDetails(@PathVariable("gameId") String gameId, Model model) {
         GameDTO game = gameService.getGameById(gameId);
         if (game == null) {
             // Game not found, redirect to games list

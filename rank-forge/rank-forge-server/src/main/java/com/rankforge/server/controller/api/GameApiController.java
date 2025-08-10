@@ -86,7 +86,7 @@ public class GameApiController {
      * @return Detailed game information including rounds and player stats
      */
     @GetMapping("/{gameId}")
-    public ResponseEntity<GameDTO> getGame(@PathVariable String gameId) {
+    public ResponseEntity<GameDTO> getGame(@PathVariable("gameId") String gameId) {
         GameDTO game = gameService.getGameById(gameId);
         if (game == null) {
             return ResponseEntity.notFound().build();
@@ -100,7 +100,7 @@ public class GameApiController {
      * @return Detailed game statistics
      */
     @GetMapping("/{gameId}/details")
-    public ResponseEntity<GameDetailsDTO> getGameDetails(@PathVariable String gameId) {
+    public ResponseEntity<GameDetailsDTO> getGameDetails(@PathVariable("gameId") String gameId) {
         GameDetailsDTO gameDetails = gameService.getGameDetails(gameId);
         if (gameDetails == null) {
             return ResponseEntity.notFound().build();
