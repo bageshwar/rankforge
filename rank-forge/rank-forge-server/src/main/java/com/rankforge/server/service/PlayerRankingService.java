@@ -18,6 +18,9 @@
 
 package com.rankforge.server.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.PersistenceLayer;
@@ -45,12 +48,12 @@ public class PlayerRankingService {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerRankingService.class);
     
-    private final PlayerStatsStore playerStatsStore;
+    private final ObjectMapper objectMapper;
     private final PersistenceLayer persistenceLayer;
     
     @Autowired
-    public PlayerRankingService(PlayerStatsStore playerStatsStore, PersistenceLayer persistenceLayer) {
-        this.playerStatsStore = playerStatsStore;
+    public PlayerRankingService(ObjectMapper objectMapper, PersistenceLayer persistenceLayer) {
+        this.objectMapper = objectMapper;
         this.persistenceLayer = persistenceLayer;
     }
 
@@ -114,16 +117,16 @@ public class PlayerRankingService {
             
             while (resultSet.next()) {
                 String playerId = resultSet.getString("playerId");
-                Optional<PlayerStats> statsOpt = playerStatsStore.getPlayerStats(playerId);
-                
-                if (statsOpt.isPresent()) {
-                    playerStatsList.add(statsOpt.get());
-                } else {
-                    LOGGER.warn("Failed to deserialize PlayerStats for player: {}", playerId);
+                try {
+                    PlayerStats statsOpt = objectMapper.readValue(resultSet.getString("playerStats"), PlayerStats.class);
+                    playerStatsList.add(statsOpt);
+                } catch (JsonProcessingException e) {
+                    LOGGER.warn("Failed to parse playerId {}", playerId, e);
+                    throw new RuntimeException(e);
                 }
             }
         }
-        
+
         LOGGER.info("Retrieved {} player statistics from database", playerStatsList.size());
         return playerStatsList;
     }
@@ -133,16 +136,6 @@ public class PlayerRankingService {
      * Gets a specific player's ranking and statistics
      */
     public Optional<PlayerRankingDTO> getPlayerRanking(String playerId) {
-        try {
-            Optional<PlayerStats> statsOpt = playerStatsStore.getPlayerStats(playerId);
-            if (statsOpt.isPresent()) {
-                PlayerStats stats = statsOpt.get();
-                return Optional.of(convertToDTO(stats));
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to get player ranking for player: {}", playerId, e);
-        }
-        
         return Optional.empty();
     }
 }

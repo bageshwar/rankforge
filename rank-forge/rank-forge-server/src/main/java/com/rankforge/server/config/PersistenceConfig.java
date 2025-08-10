@@ -20,10 +20,7 @@ package com.rankforge.server.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.stores.PlayerStatsStore;
-import com.rankforge.pipeline.persistence.DBBasedPlayerStatsStore;
-import com.rankforge.pipeline.persistence.FirestoreBasedPersistenceLayer;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
-import com.rankforge.pipeline.persistence.SQLiteBasedPersistenceLayer;
+import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +51,16 @@ public class PersistenceConfig {
     @Value("${rankforge.persistence.firestore.database-id:firestore-db}")
     private String firestoreDatabaseId;
 
+    @Value("${rankforge.persistence.jdbc.url}")
+    private String jdbcUrl;
+
+    @Value("${rankforge.persistence.jdbc.username}")
+    private String jdbcUsername;
+
+    @Value("${rankforge.persistence.jdbc.password}")
+    private String jdbcPassword;
+
+
     /**
      * SQLite-based persistence layer bean
      */
@@ -76,6 +83,18 @@ public class PersistenceConfig {
     }
 
     /**
+     * JDBC persistence layer bean
+     */
+    @Bean
+    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "jdbc")
+    public PersistenceLayer jdbcPersistenceLayer() throws SQLException {
+
+        LOGGER.info("Initializing JDBC persistence layer with jdbcURL: {}, username: {}",
+                jdbcUrl, jdbcUsername);
+        return new JdbcBasedPersistenceLayer(jdbcUrl, jdbcUsername, jdbcPassword);
+    }
+
+    /**
      * Jackson ObjectMapper bean for JSON serialization
      */
     @Bean
@@ -86,7 +105,7 @@ public class PersistenceConfig {
     /**
      * Player stats store that uses the configured persistence layer
      */
-    @Bean
+    //@Bean
     public PlayerStatsStore playerStatsStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
         LOGGER.info("Initializing PlayerStatsStore with persistence layer: {}", 
                 persistenceLayer.getClass().getSimpleName());
