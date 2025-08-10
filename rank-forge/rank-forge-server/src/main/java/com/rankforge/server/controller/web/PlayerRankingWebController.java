@@ -44,11 +44,12 @@ public class PlayerRankingWebController {
     }
 
     /**
-     * Home page - redirects to rankings
+     * Home page - displays navigation options
      */
     @GetMapping("/")
-    public String home() {
-        return "redirect:/rankings";
+    public String home(Model model) {
+        model.addAttribute("pageTitle", "RankForge - CS2 Player Rankings & Game Analytics");
+        return "home";
     }
 
     /**

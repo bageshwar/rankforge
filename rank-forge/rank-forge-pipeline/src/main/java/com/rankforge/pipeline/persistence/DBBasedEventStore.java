@@ -104,7 +104,7 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
             for (GameEvent event : events) {
                 Map<String, Object> values = new HashMap<>();
                 values.put("event", objectMapper.writeValueAsString(event));
-                values.put("at", event.getTimestamp());
+                values.put("at", event.getTimestamp().toString()); // Convert Instant to ISO-8601 string
                 values.put("gameEventType", event.getGameEventType());
                 if (event instanceof GameActionEvent gameActionEvent) {
                     values.put("player1", gameActionEvent.getPlayer1().getSteamId());
@@ -125,7 +125,7 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
     @Override
     public Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp) {
         try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
-                new String[]{"event"}, "gameEventType = ? AND at = ?", eventType, timestamp)){
+                new String[]{"event"}, "gameEventType = ? AND at = ?", eventType, timestamp.toString())){
             if (queried.next()) {
                 GameEvent result = objectMapper.readValue(queried.getString("event"), GameEvent.class);
                 return Optional.of(result);
@@ -134,6 +134,45 @@ public class DBBasedEventStore implements EventStore, GameEventListener {
             logger.error("Failed to get GameEvent", e);
         }
         return Optional.empty();
+    }
+
+    @Override
+    public List<GameEvent> getGameOverEvents() {
+        List<GameEvent> gameOverEvents = new ArrayList<>();
+        try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
+                new String[]{"event"}, "gameEventType = ?", GameEventType.GAME_OVER)) {
+            while (queried.next()) {
+                GameEvent event = objectMapper.readValue(queried.getString("event"), GameEvent.class);
+                gameOverEvents.add(event);
+            }
+        } catch (SQLException | JsonProcessingException e) {
+            logger.error("Failed to get GameOver events", e);
+        }
+        return gameOverEvents;
+    }
+
+    @Override
+    public List<GameEvent> getEventsBetween(GameEventType eventType, Instant startTime, Instant endTime) {
+        List<GameEvent> events = new ArrayList<>();
+        String startTimeStr = startTime.toString(); // Convert to ISO-8601 string
+        String endTimeStr = endTime.toString();     // Convert to ISO-8601 string
+        
+        try (ResultSet queried = persistenceLayer.query(TABLE_NAME,
+                new String[]{"event"}, "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
+                eventType, startTimeStr, endTimeStr)) {
+            while (queried.next()) {
+                GameEvent event = objectMapper.readValue(queried.getString("event"), GameEvent.class);
+                events.add(event);
+            }
+        } catch (SQLException | JsonProcessingException e) {
+            logger.error("Failed to get events of type {} between {} and {}", eventType, startTimeStr, endTimeStr, e);
+        }
+        return events;
+    }
+
+    @Override
+    public List<GameEvent> getRoundEndEventsBetween(Instant gameStartTime, Instant gameEndTime) {
+        return getEventsBetween(GameEventType.ROUND_END, gameStartTime, gameEndTime);
     }
 
     @Override

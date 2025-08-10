@@ -42,7 +42,6 @@ import java.util.Map;
 })
 public abstract class GameEvent {
 
-    @JsonIgnore
     private Instant timestamp;
     private GameEventType gameEventType;
 

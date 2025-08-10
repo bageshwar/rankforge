@@ -263,12 +263,13 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseRoundStartEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {
-        RoundStartEvent roundEndEvent = new RoundStartEvent(timestamp, Map.of());
-        return new ParseLineResponse(roundEndEvent, currentIndex);
+        RoundStartEvent roundStartEvent = new RoundStartEvent(timestamp, Map.of());
+        return new ParseLineResponse(roundStartEvent, currentIndex);
     }
 
     private ParseLineResponse parseGameOverEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {
         this.matchStarted = true;
+        
         int scoreTeam1 = Integer.parseInt(matcher.group("scoreTeam1"));
         int scoreTeam2 = Integer.parseInt(matcher.group("scoreTeam2"));
         // rewind back team1+team2 score rounds to start the tracking
