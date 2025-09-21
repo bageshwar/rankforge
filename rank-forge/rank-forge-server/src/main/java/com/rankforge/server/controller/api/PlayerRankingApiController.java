@@ -77,7 +77,7 @@ public class PlayerRankingApiController {
      * @return Player ranking details if found
      */
     @GetMapping("/player/{playerId}")
-    public ResponseEntity<PlayerRankingDTO> getPlayerRanking(@PathVariable String playerId) {
+    public ResponseEntity<PlayerRankingDTO> getPlayerRanking(@PathVariable("playerId") String playerId) {
         Optional<PlayerRankingDTO> ranking = playerRankingService.getPlayerRanking(playerId);
         
         if (ranking.isPresent()) {

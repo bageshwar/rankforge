@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processed Games - RankForge</title>
+    <link rel="stylesheet" th:href="@{/css/rankings.css}">
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <style>
+        .games-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .games-title {
+            color: #333;
+            margin: 0;
+        }
+        
+        .games-stats {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2196F3;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .games-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .games-table th,
+        .games-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .games-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .games-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .map-badge {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .score {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        /* Enhanced Player List Styles */
+        .players-container {
+            position: relative;
+        }
+        
+        .players-summary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .players-summary:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .players-count {
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .expand-icon {
+            color: #2196F3;
+            font-size: 0.8rem;
+            transition: transform 0.2s;
+        }
+        
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+        
+        .players-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .players-dropdown.show {
+            display: block;
+        }
+        
+        .player-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+        }
+        
+        .player-item:last-child {
+            border-bottom: none;
+        }
+        
+        .player-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* Game Details Button */
+        .game-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .details-btn {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .details-btn:hover {
+            background: #1976D2;
+            text-decoration: none;
+            color: white;
+        }
+        
+        /* Timezone indicator */
+        .timezone-info {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 2px;
+            font-style: italic;
+        }
+        
+        .game-date {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .no-games {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        
+        .nav-links {
+            margin: 2rem 0;
+            text-align: center;
+        }
+        
+        .nav-links a {
+            color: #2196F3;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .nav-links a:hover {
+            background: #e3f2fd;
+            text-decoration: none;
+        }
+        
+        /* Loading States */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            visibility: hidden;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .loading-overlay.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-content {
+            text-align: center;
+            color: #666;
+        }
+        
+        .loading-text {
+            margin-top: 1rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        
+        .table-loading {
+            position: relative;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .table-loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        .inline-loader {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        
+        .details-btn.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        
+        .page-loading {
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 768px) {
+            .games-table {
+                font-size: 0.85rem;
+            }
+            
+            .games-table th,
+            .games-table td {
+                padding: 8px 12px;
+            }
+            
+            .players-dropdown {
+                position: fixed;
+                left: 20px;
+                right: 20px;
+                max-height: 300px;
+            }
+            
+            .loading-spinner {
+                width: 50px;
+                height: 50px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading games...</div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="nav-links">
+            <a href="/">🏠 Home</a>
+            <a href="/rankings">🏆 Rankings</a>
+            <a href="/games">🎮 Games</a>
+        </div>
+        
+        <div class="games-header">
+            <h1 class="games-title">🎮 Processed Games</h1>
+            <div class="games-stats">
+                <div class="stat-item">
+                    <span class="stat-number" th:text="${totalGames}">0</span>
+                    <span class="stat-label">Total Games</span>
+                </div>
+                <div class="stat-item" th:if="${isLimited}">
+                    <span class="stat-number" th:text="'Top ' + ${limit}">Top 10</span>
+                    <span class="stat-label">Displayed</span>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${games.empty}" class="no-games">
+            <h3>No games processed yet</h3>
+            <p>Games will appear here once the CS2 log processing pipeline has analyzed completed matches.</p>
+        </div>
+
+        <div th:if="${!games.empty}">
+            <table id="gamesTable" class="games-table">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Map</th>
+                        <th>Mode</th>
+                        <th>Score</th>
+                        <th>Duration</th>
+                        <th>Players</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="game : ${games}">
+                        <td class="game-date">
+                            <!-- UTC timestamp that will be localized by JavaScript -->
+                            <div class="utc-timestamp" 
+                                 th:data-utc="${game.gameDate.toString()}"
+                                 th:text="${#temporals.format(game.gameDate, 'MMM dd, yyyy HH:mm')}">
+                                Oct 26, 2024 14:30
+                            </div>
+                            <div class="timezone-info">Loading timezone...</div>
+                        </td>
+                        <td>
+                            <span class="map-badge" th:text="${game.map}">de_dust2</span>
+                        </td>
+                        <td th:text="${game.mode}">competitive</td>
+                        <td class="score" th:text="${game.score}">16 - 8</td>
+                        <td th:text="${game.formattedDuration}">45 min</td>
+                        <td>
+                            <div class="players-container">
+                                <div class="players-summary" onclick="togglePlayers(this)">
+                                    <span class="players-count" th:text="${game.players.size()} + ' players'">5 players</span>
+                                    <span class="expand-icon">▼</span>
+                                </div>
+                                <div class="players-dropdown">
+                                    <div class="player-item" th:each="player : ${game.players}" th:text="${player}">Player Name</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="game-actions">
+                                <a th:href="@{/games/details/{gameId}(gameId=${game.gameId})}" 
+                                   class="details-btn" 
+                                   onclick="showDetailsLoading(this, event)">
+                                    📊 Details
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div th:if="${isLimited}" class="nav-links">
+            <a th:href="@{/games}">View All Games</a>
+        </div>
+        
+        <div th:if="${!isLimited and totalGames > 10}" class="nav-links">
+            <a th:href="@{/games(limit=10)}">View Recent 10</a>
+            <a th:href="@{/games(limit=25)}">View Recent 25</a>
+        </div>
+    </div>
+
+    <script>
+        // Loading state management
+        let isLoading = false;
+        
+        // Show loading overlay
+        function showLoading(message = 'Loading...') {
+            if (isLoading) return;
+            isLoading = true;
+            
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = overlay.querySelector('.loading-text');
+            
+            if (loadingText) {
+                loadingText.textContent = message;
+            }
+            
+            overlay.classList.add('show');
+        }
+        
+        // Hide loading overlay
+        function hideLoading() {
+            isLoading = false;
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('show');
+        }
+        
+        // Show loading for details button
+        function showDetailsLoading(buttonElement, event) {
+            // Add loading state to button
+            const originalText = buttonElement.innerHTML;
+            buttonElement.innerHTML = '<span class="inline-loader"></span>Loading...';
+            buttonElement.classList.add('loading');
+            
+            // Show main loading overlay
+            showLoading('Loading game details...');
+            
+            // Let the default navigation continue
+            // The loading will hide when the new page loads
+        }
+        
+        // Table loading state
+        function showTableLoading() {
+            const table = document.getElementById('gamesTable');
+            if (table) {
+                table.classList.add('table-loading');
+            }
+        }
+        
+        function hideTableLoading() {
+            const table = document.getElementById('gamesTable');
+            if (table) {
+                table.classList.remove('table-loading');
+            }
+        }
+        
+        // API call wrapper with loading states
+        async function makeAPICall(url, options = {}) {
+            showLoading('Fetching data...');
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // Enhanced navigation with loading states
+        function navigateWithLoading(url, message = 'Loading...') {
+            showLoading(message);
+            window.location.href = url;
+        }
+        
+        // Timezone localization functionality
+        function localizeTimestamps() {
+            const timestampElements = document.querySelectorAll('.utc-timestamp');
+            const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            
+            console.log(`Localizing timestamps for timezone: ${userTimezone}`);
+            
+            timestampElements.forEach(element => {
+                const utcString = element.getAttribute('data-utc');
+                if (utcString) {
+                    try {
+                        console.log(`Processing timestamp: ${utcString}`);
+                        
+                        // Parse the UTC timestamp - the server now properly converts IST to UTC
+                        let utcDate;
+                        
+                        // Handle different timestamp formats
+                        if (utcString.includes('T')) {
+                            // ISO 8601 format
+                            utcDate = new Date(utcString);
+                        } else {
+                            // Handle LocalDateTime format from Java (YYYY-MM-DDTHH:mm:ss)
+                            // If it doesn't have 'T', assume it's already in the correct format
+                            utcDate = new Date(utcString + 'Z'); // Add Z to indicate UTC
+                        }
+                        
+                        // Validate the date
+                        if (isNaN(utcDate.getTime())) {
+                            throw new Error('Invalid date');
+                        }
+                        
+                        console.log(`Parsed UTC date: ${utcDate.toISOString()}`);
+                        
+                        // Format in user's local timezone
+                        const localDate = new Intl.DateTimeFormat('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                            timeZone: userTimezone
+                        }).format(utcDate);
+                        
+                        console.log(`Formatted local date: ${localDate}`);
+                        
+                        // Update the displayed text
+                        element.textContent = localDate;
+                        
+                        // Update timezone info
+                        const timezoneInfo = element.parentNode.querySelector('.timezone-info');
+                        if (timezoneInfo) {
+                            timezoneInfo.textContent = `Local time (${userTimezone})`;
+                        }
+                    } catch (error) {
+                        console.warn('Failed to parse timestamp:', utcString, error);
+                        // Keep original text, update timezone info
+                        const timezoneInfo = element.parentNode.querySelector('.timezone-info');
+                        if (timezoneInfo) {
+                            timezoneInfo.textContent = 'Server time (check logs)';
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Player list expansion functionality
+        function togglePlayers(element) {
+            const container = element.parentNode;
+            const dropdown = container.querySelector('.players-dropdown');
+            const icon = element.querySelector('.expand-icon');
+            
+            // Close other open dropdowns
+            document.querySelectorAll('.players-dropdown.show').forEach(otherDropdown => {
+                if (otherDropdown !== dropdown) {
+                    otherDropdown.classList.remove('show');
+                    const otherIcon = otherDropdown.parentNode.querySelector('.expand-icon');
+                    if (otherIcon) {
+                        otherIcon.classList.remove('expanded');
+                    }
+                }
+            });
+            
+            // Toggle current dropdown
+            dropdown.classList.toggle('show');
+            icon.classList.toggle('expanded');
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.players-container')) {
+                document.querySelectorAll('.players-dropdown.show').forEach(dropdown => {
+                    dropdown.classList.remove('show');
+                    const icon = dropdown.parentNode.querySelector('.expand-icon');
+                    if (icon) {
+                        icon.classList.remove('expanded');
+                    }
+                });
+            }
+        });
+        
+        // Enhanced navigation links with loading
+        function enhanceNavigationLinks() {
+            const navLinks = document.querySelectorAll('.nav-links a:not([href^="#"])');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    if (this.href && !this.href.includes('#')) {
+                        showLoading('Navigating...');
+                    }
+                });
+            });
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            localizeTimestamps();
+            enhanceNavigationLinks();
+            
+            // Hide any loading that might be showing
+            setTimeout(hideLoading, 100);
+        });
+        
+        // Handle page visibility changes (when user navigates back)
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                hideLoading();
+            }
+        });
+        
+        // Handle browser back/forward buttons
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                hideLoading();
+            }
+        });
+    </script>
+</body>
+</html>

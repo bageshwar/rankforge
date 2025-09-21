@@ -34,4 +34,27 @@ public interface EventStore {
     void store(GameEvent event);
 
     Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp);
+    
+    /**
+     * Get all GameOver events to display completed games
+     */
+    List<GameEvent> getGameOverEvents();
+    
+    /**
+     * Get all events of a specific type between two timestamps
+     * @param eventType The type of events to retrieve
+     * @param startTime Start of the time range (inclusive)
+     * @param endTime End of the time range (inclusive)
+     * @return List of events within the time range
+     */
+    List<GameEvent> getEventsBetween(GameEventType eventType, Instant startTime, Instant endTime);
+    
+    /**
+     * Get all round end events between game start and end times
+     * This is used to determine players who participated in a game
+     * @param gameStartTime When the game started
+     * @param gameEndTime When the game ended
+     * @return List of RoundEndEvent instances for the game
+     */
+    List<GameEvent> getRoundEndEventsBetween(Instant gameStartTime, Instant gameEndTime);
 }

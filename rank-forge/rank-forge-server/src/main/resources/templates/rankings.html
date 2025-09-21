@@ -12,6 +12,12 @@
 </head>
 <body>
     <div class="container">
+        <div class="nav-links" style="margin: 2rem 0; text-align: center;">
+            <a href="/" style="color: #2196F3; text-decoration: none; margin: 0 1rem; padding: 0.5rem 1rem; border-radius: 4px; transition: background 0.2s;">🏠 Home</a>
+            <a href="/rankings" style="color: #2196F3; text-decoration: none; margin: 0 1rem; padding: 0.5rem 1rem; border-radius: 4px; transition: background 0.2s;">🏆 Rankings</a>
+            <a href="/games" style="color: #2196F3; text-decoration: none; margin: 0 1rem; padding: 0.5rem 1rem; border-radius: 4px; transition: background 0.2s;">🎮 Games</a>
+        </div>
+        
         <header class="header">
             <h1 class="title">🏆 RankForge Player Rankings</h1>
             <p class="subtitle">CS2 Competitive Player Statistics</p>
@@ -86,5 +92,43 @@
             <p>Powered by RankForge • Real-time CS2 Player Analytics</p>
         </footer>
     </div>
+
+    <script>
+        // Enhanced navigation with loading states
+        document.addEventListener('DOMContentLoaded', function() {
+            const navLinks = document.querySelectorAll('.nav-links a:not([href^="#"])');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    if (this.href && !this.href.includes('#')) {
+                        // Show a simple loading indication
+                        this.style.opacity = '0.6';
+                        this.style.pointerEvents = 'none';
+                        
+                        // Create simple loading overlay for navigation
+                        const loadingDiv = document.createElement('div');
+                        loadingDiv.innerHTML = `
+                            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                                        background: rgba(255,255,255,0.9); display: flex; 
+                                        justify-content: center; align-items: center; z-index: 9999;">
+                                <div style="text-align: center; color: #666;">
+                                    <div style="width: 40px; height: 40px; border: 3px solid #f3f3f3; 
+                                               border-top: 3px solid #2196F3; border-radius: 50%; 
+                                               animation: spin 1s linear infinite; margin: 0 auto 1rem;"></div>
+                                    <div>Loading...</div>
+                                </div>
+                            </div>
+                            <style>
+                                @keyframes spin {
+                                    0% { transform: rotate(0deg); }
+                                    100% { transform: rotate(360deg); }
+                                }
+                            </style>
+                        `;
+                        document.body.appendChild(loadingDiv);
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
