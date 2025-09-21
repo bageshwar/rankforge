@@ -518,12 +518,33 @@
             const timestampElements = document.querySelectorAll('.utc-timestamp');
             const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             
+            console.log(`Localizing timestamps for timezone: ${userTimezone}`);
+            
             timestampElements.forEach(element => {
                 const utcString = element.getAttribute('data-utc');
                 if (utcString) {
                     try {
-                        // Parse the UTC timestamp
-                        const utcDate = new Date(utcString);
+                        console.log(`Processing timestamp: ${utcString}`);
+                        
+                        // Parse the UTC timestamp - the server now properly converts IST to UTC
+                        let utcDate;
+                        
+                        // Handle different timestamp formats
+                        if (utcString.includes('T')) {
+                            // ISO 8601 format
+                            utcDate = new Date(utcString);
+                        } else {
+                            // Handle LocalDateTime format from Java (YYYY-MM-DDTHH:mm:ss)
+                            // If it doesn't have 'T', assume it's already in the correct format
+                            utcDate = new Date(utcString + 'Z'); // Add Z to indicate UTC
+                        }
+                        
+                        // Validate the date
+                        if (isNaN(utcDate.getTime())) {
+                            throw new Error('Invalid date');
+                        }
+                        
+                        console.log(`Parsed UTC date: ${utcDate.toISOString()}`);
                         
                         // Format in user's local timezone
                         const localDate = new Intl.DateTimeFormat('en-US', {
@@ -535,6 +556,8 @@
                             hour12: false,
                             timeZone: userTimezone
                         }).format(utcDate);
+                        
+                        console.log(`Formatted local date: ${localDate}`);
                         
                         // Update the displayed text
                         element.textContent = localDate;
@@ -549,7 +572,7 @@
                         // Keep original text, update timezone info
                         const timezoneInfo = element.parentNode.querySelector('.timezone-info');
                         if (timezoneInfo) {
-                            timezoneInfo.textContent = 'UTC time';
+                            timezoneInfo.textContent = 'Server time (check logs)';
                         }
                     }
                 }

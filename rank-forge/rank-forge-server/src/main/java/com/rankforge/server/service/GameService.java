@@ -367,6 +367,7 @@ public class GameService {
     /**
      * Parse timestamp from database format to Instant
      * Handles both ISO-8601 format and SQL Server datetime format
+     * Assumes database timestamps are in IST (UTC+5:30)
      */
     private Instant parseTimestamp(String timestampStr) {
         try {
@@ -378,7 +379,9 @@ public class GameService {
                 // Define the formatter for SQL Server datetime format
                 DateTimeFormatter sqlServerFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn");
                 LocalDateTime localDateTime = LocalDateTime.parse(timestampStr, sqlServerFormatter);
-                return localDateTime.toInstant(ZoneOffset.UTC);
+                // Convert from IST (UTC+5:30) to UTC
+                ZoneOffset istOffset = ZoneOffset.ofHoursMinutes(5, 30);
+                return localDateTime.toInstant(istOffset);
             } catch (Exception ex) {
                 LOGGER.warn("Failed to parse timestamp '{}', using current time as fallback", timestampStr, ex);
                 return Instant.now();
