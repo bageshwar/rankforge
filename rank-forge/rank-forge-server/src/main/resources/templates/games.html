@@ -107,10 +107,23 @@
             background-color: #f0f0f0;
         }
         
+        .players-summary:has(.no-players) {
+            cursor: default;
+        }
+        
+        .players-summary:has(.no-players):hover {
+            background-color: transparent;
+        }
+        
         .players-count {
             color: #666;
             font-size: 0.9rem;
             font-weight: 500;
+        }
+        
+        .players-count.no-players {
+            color: #999;
+            font-style: italic;
         }
         
         .expand-icon {
@@ -154,6 +167,23 @@
         
         .player-item:hover {
             background-color: #f8f9fa;
+        }
+        
+        .players-dropdown.no-players-msg {
+            display: block;
+            position: static;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: none;
+            max-height: none;
+            overflow: visible;
+        }
+        
+        .no-players-msg .player-item {
+            color: #999;
+            font-style: italic;
+            text-align: center;
         }
         
         /* Game Details Button */
@@ -401,12 +431,17 @@
                         <td th:text="${game.formattedDuration}">45 min</td>
                         <td>
                             <div class="players-container">
-                                <div class="players-summary" onclick="togglePlayers(this)">
-                                    <span class="players-count" th:text="${game.players.size()} + ' players'">5 players</span>
-                                    <span class="expand-icon">▼</span>
+                                <div class="players-summary" th:onclick="${game.players != null and !game.players.empty} ? 'togglePlayers(this)' : ''">
+                                    <span class="players-count" 
+                                          th:text="${game.players != null and !game.players.empty} ? (${game.players.size()} + ' players') : 'No players'"
+                                          th:class="${game.players != null and !game.players.empty} ? 'players-count' : 'players-count no-players'">5 players</span>
+                                    <span class="expand-icon" th:if="${game.players != null and !game.players.empty}">▼</span>
                                 </div>
-                                <div class="players-dropdown">
+                                <div class="players-dropdown" th:if="${game.players != null and !game.players.empty}">
                                     <div class="player-item" th:each="player : ${game.players}" th:text="${player}">Player Name</div>
+                                </div>
+                                <div class="players-dropdown no-players-msg" th:if="${game.players == null or game.players.empty}">
+                                    <div class="player-item">Player data not available</div>
                                 </div>
                             </div>
                         </td>
@@ -582,8 +617,13 @@
         // Player list expansion functionality
         function togglePlayers(element) {
             const container = element.parentNode;
-            const dropdown = container.querySelector('.players-dropdown');
+            const dropdown = container.querySelector('.players-dropdown:not(.no-players-msg)');
             const icon = element.querySelector('.expand-icon');
+            
+            // Only proceed if we have a valid dropdown and icon
+            if (!dropdown || !icon) {
+                return;
+            }
             
             // Close other open dropdowns
             document.querySelectorAll('.players-dropdown.show').forEach(otherDropdown => {

@@ -71,6 +71,8 @@ public class GameService {
             Map<String, String> playerIdToNameCache = new HashMap<>();
             
             List<GameDTO> games = new ArrayList<>();
+            LOGGER.info("Processing {} GameOver events from database", gameOverEvents.size());
+            
             for (GameOverEvent gameOverEvent : gameOverEvents) {
                 long start = System.currentTimeMillis();
                 // Use temporal boundaries to find players for this game
@@ -117,59 +119,155 @@ public class GameService {
     }
 
     /**
-     * Get players who participated in a specific game using temporal boundaries
+     * Get players for a specific game by finding the closest ROUND_END events to the GameOver timestamp
+     * Uses database timestamps since Event timestamps appear to be null
      */
     private List<String> getPlayersForGame(GameOverEvent gameOverEvent, Map<String, String> playerIdToNameCache) {
         Set<String> uniquePlayers = new HashSet<>();
         
-        // Calculate game boundaries: 
-        // Game start = game end time minus estimated game duration
-        // For safety, we'll look back up to 2 hours (max reasonable game duration)
         Instant gameEndTime = gameOverEvent.getTimestamp();
-        Instant gameStartTime = gameEndTime.minusSeconds(7200); // Look back 2 hours max
-        
-        // Try to estimate a more accurate start time based on total rounds played
         int totalRounds = gameOverEvent.getTeam1Score() + gameOverEvent.getTeam2Score();
-        if (totalRounds > 0) {
-            // Estimate ~2 minutes per round on average, with some buffer
-            long estimatedDurationSeconds = totalRounds * 120L + 600L; // 120s per round + 10min buffer
-            gameStartTime = gameEndTime.minusSeconds(estimatedDurationSeconds);
-        }
         
-        LOGGER.info("Looking for players between {} and {} for game on {}",
-                gameStartTime, gameEndTime, gameOverEvent.getMap());
+        LOGGER.info("Looking for players for game ending at {} on map: {} ({} total rounds)", 
+                gameEndTime, gameOverEvent.getMap(), totalRounds);
         
-        // Convert Instant objects to ISO-8601 strings for string comparison
-        String startTimeStr = gameStartTime.toString();
-        String endTimeStr = gameEndTime.toString();
+        // NEW APPROACH: Find ROUND_END events closest to the GameOver timestamp
+        // Since Event timestamps are null, use database timestamps and look for temporal clusters
+        
+        // First, get all ROUND_END events from the day and find the cluster closest to game end time
+        String dayStart = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).toString();
+        String dayEnd = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).plusSeconds(86400).toString();
+        
+        LOGGER.info("Searching for ROUND_END events on day {} to group by temporal proximity", dayStart);
         
         try (ResultSet resultSet = persistenceLayer.query("GameEvent",
-                new String[]{"event"}, "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
-                GameEventType.ROUND_END.name(), startTimeStr, endTimeStr)) {
+                new String[]{"at", "event"}, 
+                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
+                GameEventType.ROUND_END.name(), dayStart, dayEnd)) {
             
+            List<RoundEndEventWithTime> allRounds = new ArrayList<>();
+            
+            // Collect all round events with their database timestamps
             while (resultSet.next()) {
                 try {
+                    String dbTimestamp = resultSet.getString("at");
+                    Instant roundTime = parseTimestamp(dbTimestamp);
                     GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
+                    
                     if (event instanceof RoundEndEvent roundEndEvent) {
-                        // Add all players from this round, converting steam IDs to readable names
-                        roundEndEvent.getPlayers().forEach(playerId -> {
-                            if (!"0".equals(playerId)) { // Exclude bots
-                                String playerName = getPlayerNameById(playerIdToNameCache, playerId);
-                                if (playerName != null) {
-                                    uniquePlayers.add(playerName);
-                                }
-                            }
-                        });
+                        allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
                     }
                 } catch (JsonProcessingException e) {
-                    LOGGER.warn("Failed to parse game event", e);
+                    LOGGER.warn("Failed to parse RoundEndEvent", e);
                 }
             }
+            
+            LOGGER.info("Found {} total ROUND_END events on this day", allRounds.size());
+            
+            if (allRounds.isEmpty()) {
+                LOGGER.warn("No ROUND_END events found for game ending at {}", gameEndTime);
+                return new ArrayList<>();
+            }
+            
+            // Group rounds into games by temporal proximity (gaps > 5 minutes = new game)
+            List<List<RoundEndEventWithTime>> gameGroups = groupRoundsByTemporalProximity(allRounds);
+            LOGGER.info("Grouped rounds into {} potential games", gameGroups.size());
+            
+            // Find the game group closest to our GameOver timestamp
+            List<RoundEndEventWithTime> bestMatch = findClosestGameGroup(gameGroups, gameEndTime);
+            
+            if (bestMatch == null || bestMatch.isEmpty()) {
+                LOGGER.warn("No round group found close to game end time {}", gameEndTime);
+                return new ArrayList<>();
+            }
+            
+            LOGGER.info("Selected game group with {} rounds spanning {} to {}", 
+                    bestMatch.size(), 
+                    bestMatch.get(0).timestamp(), 
+                    bestMatch.get(bestMatch.size() - 1).timestamp());
+            
+            // Extract players from the selected game group
+            for (RoundEndEventWithTime roundWithTime : bestMatch) {
+                roundWithTime.event().getPlayers().forEach(playerId -> {
+                    if (!"0".equals(playerId)) { // Exclude bots
+                        String playerName = getPlayerNameById(playerIdToNameCache, playerId);
+                        if (playerName != null) {
+                            uniquePlayers.add(playerName);
+                        }
+                    }
+                });
+            }
+            
         } catch (SQLException e) {
             LOGGER.error("Failed to get players for game ending at {}", gameEndTime, e);
         }
         
-        return new ArrayList<>(uniquePlayers);
+        List<String> playerList = new ArrayList<>(uniquePlayers);
+        LOGGER.info("Found {} unique players for game ending at {} on map {}: {}", 
+                playerList.size(), gameEndTime, gameOverEvent.getMap(), playerList);
+        
+        return playerList;
+    }
+    
+    /**
+     * Helper record to store RoundEndEvent with its database timestamp
+     */
+    private record RoundEndEventWithTime(RoundEndEvent event, Instant timestamp) {}
+    
+    /**
+     * Group rounds by temporal proximity - rounds with gaps > 5 minutes are considered separate games
+     */
+    private List<List<RoundEndEventWithTime>> groupRoundsByTemporalProximity(List<RoundEndEventWithTime> allRounds) {
+        List<List<RoundEndEventWithTime>> groups = new ArrayList<>();
+        List<RoundEndEventWithTime> currentGroup = new ArrayList<>();
+        
+        for (RoundEndEventWithTime round : allRounds) {
+            if (currentGroup.isEmpty()) {
+                currentGroup.add(round);
+            } else {
+                // If gap > 5 minutes, start new group
+                Instant lastRoundTime = currentGroup.get(currentGroup.size() - 1).timestamp();
+                long gapSeconds = round.timestamp().getEpochSecond() - lastRoundTime.getEpochSecond();
+                
+                if (gapSeconds > 300) { // 5 minutes
+                    groups.add(new ArrayList<>(currentGroup));
+                    currentGroup.clear();
+                }
+                currentGroup.add(round);
+            }
+        }
+        
+        if (!currentGroup.isEmpty()) {
+            groups.add(currentGroup);
+        }
+        
+        return groups;
+    }
+    
+    /**
+     * Find the game group whose end time is closest to the GameOver timestamp
+     */
+    private List<RoundEndEventWithTime> findClosestGameGroup(List<List<RoundEndEventWithTime>> gameGroups, Instant gameEndTime) {
+        List<RoundEndEventWithTime> bestMatch = null;
+        long bestDistance = Long.MAX_VALUE;
+        
+        for (List<RoundEndEventWithTime> group : gameGroups) {
+            if (group.isEmpty()) continue;
+            
+            // Use the last round's timestamp as the game end time
+            Instant groupEndTime = group.get(group.size() - 1).timestamp();
+            long distance = Math.abs(groupEndTime.getEpochSecond() - gameEndTime.getEpochSecond());
+            
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestMatch = group;
+            }
+        }
+        
+        LOGGER.info("Best match: {} rounds, time distance: {} seconds", 
+                bestMatch != null ? bestMatch.size() : 0, bestDistance);
+        
+        return bestMatch;
     }
 
     /**
@@ -197,7 +295,7 @@ public class GameService {
                 }
             }
         } catch (SQLException | JsonProcessingException e) {
-            LOGGER.debug("Could not find player name for ID {}", playerId);
+            LOGGER.warn("Could not find player name for ID {}: {}", playerId, e.getMessage());
         }
         
         // Return the player ID as fallback
@@ -367,7 +465,7 @@ public class GameService {
     /**
      * Parse timestamp from database format to Instant
      * Handles both ISO-8601 format and SQL Server datetime format
-     * Assumes database timestamps are in IST (UTC+5:30)
+     * Database timestamps are stored in local server time, treat as UTC for consistency
      */
     private Instant parseTimestamp(String timestampStr) {
         try {
@@ -379,9 +477,9 @@ public class GameService {
                 // Define the formatter for SQL Server datetime format
                 DateTimeFormatter sqlServerFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn");
                 LocalDateTime localDateTime = LocalDateTime.parse(timestampStr, sqlServerFormatter);
-                // Convert from IST (UTC+5:30) to UTC
-                ZoneOffset istOffset = ZoneOffset.ofHoursMinutes(5, 30);
-                return localDateTime.toInstant(istOffset);
+                // Treat database timestamps as UTC (no timezone conversion)
+                // This ensures GameOver and RoundEnd events use the same timezone interpretation
+                return localDateTime.toInstant(ZoneOffset.UTC);
             } catch (Exception ex) {
                 LOGGER.warn("Failed to parse timestamp '{}', using current time as fallback", timestampStr, ex);
                 return Instant.now();
@@ -400,8 +498,11 @@ public class GameService {
             
             while (resultSet.next()) {
                 try {
+                    String rawTimestamp = resultSet.getString("at");
                     GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
-                    event.setTimestamp(parseTimestamp(resultSet.getString("at")));
+                    Instant parsedTimestamp = parseTimestamp(rawTimestamp);
+                    event.setTimestamp(parsedTimestamp);
+                    
                     if (event instanceof GameOverEvent gameOverEvent) {
                         gameOverEvents.add(gameOverEvent);
                     }

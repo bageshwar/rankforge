@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="RankForgeApplication" type="Application" factoryName="Application" nameIsGenerated="true">
+    <option name="MAIN_CLASS_NAME" value="com.rankforge.pipeline.RankForgeApplication" />
+    <module name="rank-forge-pipeline" />
+    <option name="VM_PARAMETERS" value="-DjdbcUrl=&quot;jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30;&quot; -DjdbcUsername=&quot;db_admin@rankforge-db&quot; -DjdbcPassword=&quot;Rank12345!&quot;" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="com.rankforge.pipeline.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

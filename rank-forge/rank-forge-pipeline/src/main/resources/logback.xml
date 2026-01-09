@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console Appender -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Set specific package logging levels -->
+    <logger name="com.rankforge.pipeline" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+    
+    <!-- Set persistence layer to WARN to reduce noise -->
+    <logger name="com.rankforge.pipeline.persistence" level="INFO" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
+    <!-- Root logger set to INFO (disables DEBUG) -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

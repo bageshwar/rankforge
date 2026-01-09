@@ -1,0 +1,16 @@
+# Local Development Configuration Template
+# 
+# Option 1: Copy this file to application-local.properties and fill in your credentials
+#           Then run with: mvn spring-boot:run -Dspring-boot.run.profiles=local
+#
+# Option 2: Set environment variables instead (no file needed):
+#           export AZURE_SQL_URL="..."
+#           export AZURE_SQL_USERNAME="..."
+#           export AZURE_SQL_PASSWORD="..."
+#
+# Note: application-local.properties is gitignored and will not be committed
+
+# Azure SQL Database Configuration
+rankforge.persistence.jdbc.url=jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=300;socketTimeout=300000;queryTimeout=300;
+rankforge.persistence.jdbc.username=your_username_here
+rankforge.persistence.jdbc.password=your_password_here

@@ -3,3 +3,13 @@
 **/target
 
 data/**
+
+# Local configuration files with sensitive credentials
+**/application-local.properties
+**/.env
+**/.env.local
+
+
+serverlog.json
+.vscode/**
+.runPipeline/**
