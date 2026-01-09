@@ -13,3 +13,5 @@ data/**
 serverlog.json
 .vscode/**
 .runPipeline/**
+.vscode/settings.json
+.runPipeline/RankForgeApplication.run.xml

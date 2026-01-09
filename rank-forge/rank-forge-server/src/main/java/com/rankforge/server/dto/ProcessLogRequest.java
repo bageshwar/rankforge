@@ -16,22 +16,32 @@
  *
  */
 
-package com.rankforge.server;
+package com.rankforge.server.dto;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableAsync;
+import jakarta.validation.constraints.NotBlank;
 
 /**
- * Main Spring Boot application class for RankForge Server
+ * Request DTO for log processing endpoint
  * Author bageshwar.pn
  * Date 2024
  */
-@SpringBootApplication
-@EnableAsync
-public class RankForgeServerApplication {
+public class ProcessLogRequest {
+    
+    @NotBlank(message = "S3 path is required")
+    private String s3Path;
 
-    public static void main(String[] args) {
-        SpringApplication.run(RankForgeServerApplication.class, args);
+    public ProcessLogRequest() {
+    }
+
+    public ProcessLogRequest(String s3Path) {
+        this.s3Path = s3Path;
+    }
+
+    public String getS3Path() {
+        return s3Path;
+    }
+
+    public void setS3Path(String s3Path) {
+        this.s3Path = s3Path;
     }
 }

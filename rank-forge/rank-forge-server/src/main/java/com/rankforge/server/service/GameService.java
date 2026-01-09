@@ -488,8 +488,11 @@ public class GameService {
         } catch (Exception e) {
             try {
                 // Handle SQL Server datetime format: "2025-08-03 22:59:08.0651720"
-                // Define the formatter for SQL Server datetime format
-                DateTimeFormatter sqlServerFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.nnnnnnn");
+                // Use 'S' (fraction-of-second) instead of 'n' (nano-of-second) because:
+                // - SQL Server datetime2(7) stores 7 fractional digits (hundreds of nanoseconds)
+                // - 'n' requires exactly 9 digits and misinterprets 7-digit values
+                // - 'S' correctly handles variable-length fractional seconds (1-9 digits)
+                DateTimeFormatter sqlServerFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS");
                 LocalDateTime localDateTime = LocalDateTime.parse(timestampStr, sqlServerFormatter);
                 // Treat database timestamps as UTC (no timezone conversion)
                 // This ensures GameOver and RoundEnd events use the same timezone interpretation
