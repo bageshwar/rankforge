@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for processing log files asynchronously
@@ -56,32 +57,37 @@ public class LogProcessingService {
      * Processes a log file from S3 asynchronously
      * 
      * @param s3Path S3 path to the log file
-     * @return Job ID for tracking the processing
+     * @return CompletableFuture containing the job ID for tracking the processing
      */
     @Async
-    public String processLogFileAsync(String s3Path) {
+    public CompletableFuture<String> processLogFileAsync(String s3Path) {
+        // Generate job ID immediately so it can be returned to the caller
         String jobId = UUID.randomUUID().toString();
         logger.info("Starting async log processing job {} for S3 path: {}", jobId, s3Path);
         
-        try {
-            // Download file from S3 into memory
-            List<String> lines = s3Service.downloadFileAsLines(s3Path);
-            logger.info("Downloaded {} lines from S3 for job {}", lines.size(), jobId);
-            
-            // Create pipeline components for this job
-            GameRankingSystem rankingSystem = pipelineService.createGameRankingSystem();
-            
-            // Process lines using pipeline
-            processLogLines(rankingSystem, lines, s3Path);
-            
-            logger.info("Successfully completed log processing job {} for S3 path: {}", jobId, s3Path);
-            
-        } catch (Exception e) {
-            logger.error("Error processing log file for job {} from S3 path: {}", jobId, s3Path, e);
-            // Error is logged but doesn't fail the request since it's async
-        }
+        // Process asynchronously but return jobId immediately
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Download file from S3 into memory
+                List<String> lines = s3Service.downloadFileAsLines(s3Path);
+                logger.info("Downloaded {} lines from S3 for job {}", lines.size(), jobId);
+                
+                // Create pipeline components for this job
+                GameRankingSystem rankingSystem = pipelineService.createGameRankingSystem();
+                
+                // Process lines using pipeline
+                processLogLines(rankingSystem, lines, s3Path);
+                
+                logger.info("Successfully completed log processing job {} for S3 path: {}", jobId, s3Path);
+                
+            } catch (Exception e) {
+                logger.error("Error processing log file for job {} from S3 path: {}", jobId, s3Path, e);
+                // Error is logged but doesn't fail the request since it's async
+            }
+        });
         
-        return jobId;
+        // Return the jobId immediately
+        return CompletableFuture.completedFuture(jobId);
     }
 
     /**

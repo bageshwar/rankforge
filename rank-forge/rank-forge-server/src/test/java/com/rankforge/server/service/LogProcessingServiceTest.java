@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -68,8 +69,13 @@ class LogProcessingServiceTest {
         when(pipelineService.createGameRankingSystem()).thenReturn(gameRankingSystem);
 
         // Note: Since processLogFileAsync is @Async, the actual execution happens in a separate thread
-        // We can verify the method returns a job ID immediately
-        String jobId = logProcessingService.processLogFileAsync(s3Path);
+        // We can verify the method returns a CompletableFuture with job ID immediately
+        CompletableFuture<String> futureJobId = logProcessingService.processLogFileAsync(s3Path);
+        
+        assertNotNull(futureJobId, "Future should not be null");
+        
+        // Get the job ID (it's already completed, so this returns immediately)
+        String jobId = futureJobId.join();
 
         assertNotNull(jobId, "Job ID should not be null");
         assertFalse(jobId.isEmpty(), "Job ID should not be empty");
@@ -87,7 +93,9 @@ class LogProcessingServiceTest {
 
         // Should not throw exception, but log error (async processing)
         assertDoesNotThrow(() -> {
-            String jobId = logProcessingService.processLogFileAsync(s3Path);
+            CompletableFuture<String> futureJobId = logProcessingService.processLogFileAsync(s3Path);
+            assertNotNull(futureJobId);
+            String jobId = futureJobId.join();
             assertNotNull(jobId);
         });
     }
@@ -102,7 +110,9 @@ class LogProcessingServiceTest {
 
         // Processing errors should be caught and logged, not thrown
         assertDoesNotThrow(() -> {
-            String jobId = logProcessingService.processLogFileAsync(s3Path);
+            CompletableFuture<String> futureJobId = logProcessingService.processLogFileAsync(s3Path);
+            assertNotNull(futureJobId);
+            String jobId = futureJobId.join();
             assertNotNull(jobId);
         });
     }

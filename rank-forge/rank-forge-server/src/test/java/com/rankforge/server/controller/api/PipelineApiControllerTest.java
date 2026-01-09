@@ -30,6 +30,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -61,7 +62,8 @@ class PipelineApiControllerTest {
         String jobId = UUID.randomUUID().toString();
         ProcessLogRequest request = new ProcessLogRequest(s3Path);
 
-        when(logProcessingService.processLogFileAsync(s3Path)).thenReturn(jobId);
+        when(logProcessingService.processLogFileAsync(s3Path))
+                .thenReturn(CompletableFuture.completedFuture(jobId));
 
         mockMvc.perform(post("/api/pipeline/process")
                         .header("X-API-Key", VALID_API_KEY)
