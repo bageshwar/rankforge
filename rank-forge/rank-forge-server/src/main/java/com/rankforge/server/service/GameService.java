@@ -199,6 +199,10 @@ public class GameService {
             }
             
         } catch (SQLException e) {
+            if (isTableNotFoundError(e)) {
+                LOGGER.info("GameEvent table does not exist yet. Returning empty player list.");
+                return new ArrayList<>();
+            }
             LOGGER.error("Failed to get players for game ending at {}", gameEndTime, e);
         }
         
@@ -294,8 +298,14 @@ public class GameService {
                     return nick;
                 }
             }
-        } catch (SQLException | JsonProcessingException e) {
-            LOGGER.warn("Could not find player name for ID {}: {}", playerId, e.getMessage());
+        } catch (SQLException e) {
+            if (isTableNotFoundError(e)) {
+                LOGGER.debug("PlayerStats table does not exist yet for player ID {}", playerId);
+            } else {
+                LOGGER.warn("Could not find player name for ID {}: {}", playerId, e.getMessage());
+            }
+        } catch (JsonProcessingException e) {
+            LOGGER.warn("Could not parse player stats for ID {}: {}", playerId, e.getMessage());
         }
         
         // Return the player ID as fallback
@@ -413,6 +423,10 @@ public class GameService {
                 }
             }
         } catch (SQLException e) {
+            if (isTableNotFoundError(e)) {
+                LOGGER.info("GameEvent table does not exist yet. Returning empty round results.");
+                return rounds;
+            }
             LOGGER.error("Failed to get round results for game between {} and {}", gameStartTime, gameEndTime, e);
         }
         
@@ -510,9 +524,43 @@ public class GameService {
                     LOGGER.warn("Failed to parse GameOver event", e);
                 }
             }
+        } catch (SQLException e) {
+            if (isTableNotFoundError(e)) {
+                LOGGER.info("GameEvent table does not exist yet. Returning empty list.");
+                return gameOverEvents;
+            }
+            throw e;
         }
 
         LOGGER.info("Retrieved {} GameOver events from database", gameOverEvents.size());
         return gameOverEvents;
+    }
+    
+    /**
+     * Checks if an SQLException indicates that a table does not exist.
+     * Handles SQL Server (error code 208) and other common database error codes.
+     */
+    private boolean isTableNotFoundError(SQLException e) {
+        if (e == null) {
+            return false;
+        }
+        
+        // SQL Server error code for "Invalid object name"
+        if (e.getErrorCode() == 208) {
+            return true;
+        }
+        
+        // Check error message for common table-not-found patterns
+        String errorMessage = e.getMessage();
+        if (errorMessage != null) {
+            String lowerMessage = errorMessage.toLowerCase();
+            return lowerMessage.contains("invalid object name") ||
+                   lowerMessage.contains("table") && lowerMessage.contains("doesn't exist") ||
+                   lowerMessage.contains("table") && lowerMessage.contains("does not exist") ||
+                   lowerMessage.contains("no such table") ||
+                   lowerMessage.contains("relation") && lowerMessage.contains("does not exist");
+        }
+        
+        return false;
     }
 }

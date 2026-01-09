@@ -19,10 +19,8 @@
 package com.rankforge.server.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.models.PlayerStats;
-import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.PersistenceLayer;
 import com.rankforge.server.dto.PlayerRankingDTO;
 import org.slf4j.Logger;
@@ -125,10 +123,44 @@ public class PlayerRankingService {
                     throw new RuntimeException(e);
                 }
             }
+        } catch (SQLException e) {
+            if (isTableNotFoundError(e)) {
+                LOGGER.info("PlayerStats table does not exist yet. Returning empty list.");
+                return playerStatsList;
+            }
+            throw e;
         }
 
         LOGGER.info("Retrieved {} player statistics from database", playerStatsList.size());
         return playerStatsList;
+    }
+    
+    /**
+     * Checks if an SQLException indicates that a table does not exist.
+     * Handles SQL Server (error code 208) and other common database error codes.
+     */
+    private boolean isTableNotFoundError(SQLException e) {
+        if (e == null) {
+            return false;
+        }
+        
+        // SQL Server error code for "Invalid object name"
+        if (e.getErrorCode() == 208) {
+            return true;
+        }
+        
+        // Check error message for common table-not-found patterns
+        String errorMessage = e.getMessage();
+        if (errorMessage != null) {
+            String lowerMessage = errorMessage.toLowerCase();
+            return lowerMessage.contains("invalid object name") ||
+                   lowerMessage.contains("table") && lowerMessage.contains("doesn't exist") ||
+                   lowerMessage.contains("table") && lowerMessage.contains("does not exist") ||
+                   lowerMessage.contains("no such table") ||
+                   lowerMessage.contains("relation") && lowerMessage.contains("does not exist");
+        }
+        
+        return false;
     }
     
 
