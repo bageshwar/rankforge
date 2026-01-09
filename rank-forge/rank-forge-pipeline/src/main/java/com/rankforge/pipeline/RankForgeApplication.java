@@ -54,6 +54,7 @@ public class RankForgeApplication {
 
             EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
             PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
+            AccoladeStore accoladeStore = new AccoladeStore(persistenceLayer);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
             RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
 
@@ -63,7 +64,7 @@ public class RankForgeApplication {
             // TODO see if there is a better way to latch the listeners other than typecasting
             eventProcessor.addGameEventListener((GameEventListener) eventStore);
             eventProcessor.addGameEventListener((GameEventListener) statsRepo);
-            LogParser logParser = new CS2LogParser(objectMapper, eventStore);
+            LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
 
             GameRankingSystem rankingSystem = new GameRankingSystem(
                     logParser, eventProcessor, eventStore,

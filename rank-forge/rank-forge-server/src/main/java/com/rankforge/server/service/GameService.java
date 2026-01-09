@@ -25,6 +25,8 @@ import com.rankforge.core.events.GameEventType;
 import com.rankforge.core.events.GameOverEvent;
 import com.rankforge.core.events.RoundEndEvent;
 import com.rankforge.pipeline.persistence.PersistenceLayer;
+import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.server.dto.AccoladeDTO;
 import com.rankforge.server.dto.GameDTO;
 import com.rankforge.server.dto.GameDetailsDTO;
 import com.rankforge.server.dto.PlayerStatsDTO;
@@ -368,6 +370,10 @@ public class GameService {
             List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, game.getPlayers());
             details.setPlayerStats(playerStats);
             
+            // Extract accolades from GameOverEvent
+            List<AccoladeDTO> accolades = extractAccolades(gameEndTime);
+            details.setAccolades(accolades);
+            
             return details;
             
         } catch (NumberFormatException e) {
@@ -539,6 +545,37 @@ public class GameService {
 
         LOGGER.info("Retrieved {} GameOver events from database", gameOverEvents.size());
         return gameOverEvents;
+    }
+    
+    /**
+     * Extract accolades from Accolade table for a specific game
+     */
+    private List<AccoladeDTO> extractAccolades(Instant gameEndTime) {
+        List<AccoladeDTO> accolades = new ArrayList<>();
+        
+        try {
+            AccoladeStore accoladeStore = new AccoladeStore(persistenceLayer);
+            List<AccoladeStore.Accolade> storedAccolades = accoladeStore.getAccoladesForGame(gameEndTime);
+            
+            for (AccoladeStore.Accolade storedAccolade : storedAccolades) {
+                AccoladeDTO accoladeDTO = new AccoladeDTO(
+                        storedAccolade.getType(),
+                        storedAccolade.getPlayerName(),
+                        storedAccolade.getPlayerId(),
+                        storedAccolade.getValue(),
+                        storedAccolade.getPosition(),
+                        storedAccolade.getScore()
+                );
+                accolades.add(accoladeDTO);
+            }
+            
+            LOGGER.info("Extracted {} accolades for game ending at {}", accolades.size(), gameEndTime);
+            
+        } catch (Exception e) {
+            LOGGER.warn("Failed to extract accolades", e);
+        }
+        
+        return accolades;
     }
     
     /**

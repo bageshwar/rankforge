@@ -64,6 +64,7 @@ public class PipelineService {
         // Create stores using server's persistence layer
         EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
         PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
+        AccoladeStore accoladeStore = new AccoladeStore(persistenceLayer);
         
         // Create ranking algorithm and service
         RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
@@ -76,8 +77,8 @@ public class PipelineService {
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
         eventProcessor.addGameEventListener((GameEventListener) statsRepo);
         
-        // Create log parser
-        LogParser logParser = new CS2LogParser(objectMapper, eventStore);
+        // Create log parser with accolade store
+        LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
         
         // Create scheduler for async processing
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);

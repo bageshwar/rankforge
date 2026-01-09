@@ -26,11 +26,13 @@ import com.rankforge.core.interfaces.LogParser;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.stores.EventStore;
+import com.rankforge.pipeline.persistence.AccoladeStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -131,16 +133,37 @@ public class CS2LogParser implements LogParser {
                     "score (?<scoreTeam1>\\d+):(?<scoreTeam2>\\d+) " +
                     "after (?<duration>\\d+) min\\r?\\n?"
     );
+    
+    // Pattern for parsing accolade lines
+    // Format: L MM/DD/YYYY - HH:MM:SS: ACCOLADE, FINAL: {type},	PlayerName<id>,	VALUE: X,	POS: Y,	SCORE: Z
+    // Example: L 01/07/2026 - 17:18:27: ACCOLADE, FINAL: {5k},	Khanjer<0>,	VALUE: 1.000000,	POS: 1,	SCORE: 40.000000
+    // Note: Fields are separated by tabs (\t) and commas in the actual log format
+    private static final Pattern ACCOLADE_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +  // Timestamp prefix
+            "ACCOLADE, FINAL: \\{(?<type>[^}]+)\\}" +           // Type between {}
+            "[,\\s\\t]+" +                                       // Separator (comma, space, or tab)
+            "(?<playerName>[^<]+)" +                             // Player name (everything before <)
+            "<(?<playerId>\\d+)>" +                               // Player ID between <>
+            "[,\\s\\t]+" +                                       // Separator
+            "VALUE: (?<value>\\d+(?:\\.\\d+)?)" +                // Value (integer or decimal)
+            "[,\\s\\t]+" +                                       // Separator
+            "POS: (?<position>\\d+)" +                           // Position
+            "[,\\s\\t]+" +                                       // Separator
+            "SCORE: (?<score>\\d+(?:\\.\\d+)?)" +                // Score (integer or decimal)
+            "\\s*"                                               // Optional trailing whitespace
+    );
 
     private final ObjectMapper objectMapper;
     private final EventStore eventStore;
+    private final AccoladeStore accoladeStore;
     private final List<Integer> roundStartLineIndices;
     private boolean matchStarted;
     private int matchProcessingIndex;
 
-    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore) {
+    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore) {
         this.objectMapper = objectMapper;
         this.eventStore = eventStore;
+        this.accoladeStore = accoladeStore;
         this.roundStartLineIndices = new ArrayList<>();
         matchStarted = false;
         matchProcessingIndex = 0;
@@ -220,8 +243,6 @@ public class CS2LogParser implements LogParser {
                 return Optional.of(parseRoundEndEvent(timestamp, lines, currentIndex));
             }
 
-            // TODO Parse Accolade
-
             return Optional.empty();
         } catch (Exception e) {
             logger.error("Failed to parse log line: {}", line, e);
@@ -231,15 +252,16 @@ public class CS2LogParser implements LogParser {
 
     private boolean shouldProcessGameOverEvent(List<String> lines, int currentIndex, Instant timestamp) {
         // find if this was a serious game
-        int i = currentIndex;
+        int i = currentIndex - 1; // Start from line before game over
         int accoladesCount = 0;
 
-        while(!lines.get(i).contains("ACCOLADE")) {
+        // Find the start of accolades section (going backwards)
+        while (i >= 0 && !lines.get(i).contains("ACCOLADE")) {
             i--;
         }
 
-        // found accolades
-        while(lines.get(i).contains("ACCOLADE")) {
+        // Count all accolade lines
+        while (i >= 0 && lines.get(i).contains("ACCOLADE")) {
             accoladesCount++;
             i--;
         }
@@ -284,6 +306,9 @@ public class CS2LogParser implements LogParser {
             logger.warn("Failed to parse duration from game over event", e);
         }
         
+        // Parse and store accolades from log lines
+        parseAndStoreAccolades(lines, currentIndex, timestamp);
+        
         // rewind back team1+team2 score rounds to start the tracking
         int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
         int indexToStart = this.roundStartLineIndices.get(roundToStart);
@@ -293,12 +318,73 @@ public class CS2LogParser implements LogParser {
                 (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex, duration);
         return new ParseLineResponse(new GameOverEvent(
                 timestamp,
-                Map.of(),
+                new HashMap<String, String>(),
                 matcher.group("map"),
                 matcher.group("gameMode"),
                 scoreTeam1, scoreTeam2,
                 duration
         ), indexToStart);
+    }
+    
+    /**
+     * Parse accolades from log lines after game over event and store them in the database
+     * Uses regex pattern matching similar to other event parsers (KILL_PATTERN, ASSIST_PATTERN, etc.)
+     */
+    private void parseAndStoreAccolades(List<String> lines, int gameOverIndex, Instant gameTimestamp) {
+        List<AccoladeStore.Accolade> accolades = new ArrayList<>();
+        
+        try {
+            // Find accolades by going backwards from game over line
+            // Start from the line before game over (game over is at gameOverIndex)
+            int i = gameOverIndex - 1;
+            
+            // Find the start of accolades section
+            while (i >= 0 && !lines.get(i).contains("ACCOLADE")) {
+                i--;
+            }
+            
+            // Parse all accolade lines using regex pattern matching
+            while (i >= 0 && lines.get(i).contains("ACCOLADE")) {
+                String line = lines.get(i);
+                try {
+                    JsonNode jsonNode = objectMapper.readTree(line);
+                    String logLine = jsonNode.get("log").asText();
+                    
+                    // Use regex pattern to parse accolade (similar to parseKillEvent, parseAssistEvent)
+                    Matcher accoladeMatcher = ACCOLADE_PATTERN.matcher(logLine);
+                    if (accoladeMatcher.matches()) {
+                        String type = accoladeMatcher.group("type");
+                        String playerName = accoladeMatcher.group("playerName").trim();
+                        String playerId = accoladeMatcher.group("playerId");
+                        double value = Double.parseDouble(accoladeMatcher.group("value"));
+                        int position = Integer.parseInt(accoladeMatcher.group("position"));
+                        double score = Double.parseDouble(accoladeMatcher.group("score"));
+                        
+                        AccoladeStore.Accolade accolade = new AccoladeStore.Accolade(
+                                type, playerName, playerId, value, position, score
+                        );
+                        accolades.add(accolade);
+                        logger.debug("Parsed accolade: type={}, player={}, value={}, pos={}, score={}", 
+                                type, playerName, value, position, score);
+                    } else {
+                        logger.debug("Accolade line did not match pattern: {}", logLine);
+                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to parse accolade line: {}", line, e);
+                }
+                i--;
+            }
+            
+            // Store accolades in database table (not in additionalData)
+            if (!accolades.isEmpty()) {
+                accoladeStore.storeAccolades(gameTimestamp, accolades);
+                logger.info("Parsed and stored {} accolades for game over event at {}", accolades.size(), gameTimestamp);
+            } else {
+                logger.debug("No accolades found for game over event at {}", gameTimestamp);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to parse and store accolades", e);
+        }
     }
 
     private ParseLineResponse parseRoundEndEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {

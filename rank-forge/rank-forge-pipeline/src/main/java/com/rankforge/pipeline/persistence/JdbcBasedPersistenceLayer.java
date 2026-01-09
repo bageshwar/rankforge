@@ -309,11 +309,15 @@ public class JdbcBasedPersistenceLayer implements PersistenceLayer {
         StringBuilder sql = new StringBuilder(column.getName())
                 .append(" ").append(adaptColumnType(column.getType()));
 
-        if (column.isPrimaryKey()) {
+        if (column.isPrimaryKey() && column.isAutoIncrement()) {
+            // For H2: Use AUTO_INCREMENT before PRIMARY KEY
+            // Syntax: INTEGER AUTO_INCREMENT PRIMARY KEY
+            sql.append(" AUTO_INCREMENT PRIMARY KEY");
+        } else if (column.isPrimaryKey()) {
             sql.append(" PRIMARY KEY");
-            if (column.isAutoIncrement()) {
-                sql.append(getAutoIncrementSyntax());
-            }
+        } else if (column.isAutoIncrement()) {
+            // Auto-increment without primary key (uncommon but possible)
+            sql.append(getAutoIncrementSyntax());
         }
         
         if (column.isNotNull()) {
@@ -385,7 +389,7 @@ public class JdbcBasedPersistenceLayer implements PersistenceLayer {
             case POSTGRESQL -> ""; // PostgreSQL uses SERIAL types
             case SQL_SERVER -> " IDENTITY(1,1)";
             case ORACLE -> ""; // Oracle uses sequences
-            default -> " AUTOINCREMENT";
+            default -> " IDENTITY"; // H2 uses IDENTITY instead of AUTOINCREMENT
         };
     }
 
