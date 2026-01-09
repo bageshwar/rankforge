@@ -436,6 +436,7 @@ class CS2LogParserTest {
             assertEquals("competitive", gameOverEvent.getMode());
             assertEquals(16, gameOverEvent.getTeam1Score());
             assertEquals(10, gameOverEvent.getTeam2Score());
+            assertEquals(45, gameOverEvent.getDuration(), "Duration should be parsed from log");
             
             // Check that it rewinds to the correct round start
             assertEquals(0, response.getNextIndex()); // Should rewind to beginning

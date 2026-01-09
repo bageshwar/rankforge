@@ -78,8 +78,10 @@ public class GameService {
                 // Use temporal boundaries to find players for this game
                 List<String> players = getPlayersForGame(gameOverEvent, playerIdToNameCache);
                 
-                // Extract duration from additional data if available
-                String duration = gameOverEvent.getAdditionalData().get("duration");
+                // Extract duration from GameOverEvent field
+                String duration = gameOverEvent.getDuration() != null 
+                    ? String.valueOf(gameOverEvent.getDuration()) 
+                    : null;
                 
                 // Generate a unique identifier for this game based on timestamp and map
                 String gameId = gameOverEvent.getTimestamp().toEpochMilli() + "_" + gameOverEvent.getMap();
@@ -95,7 +97,7 @@ public class GameService {
                         duration
                 );
                 games.add(gameDTO);
-                LOGGER.info("Game processing {} took {}ms", gameId, System.currentTimeMillis() - start);
+                LOGGER.info("Game processing {} took {}ms, duration: {} min", gameId, System.currentTimeMillis() - start, duration);
             }
             
             // Sort by game date descending (most recent first)

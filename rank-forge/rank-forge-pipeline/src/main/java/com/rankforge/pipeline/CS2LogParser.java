@@ -272,18 +272,32 @@ public class CS2LogParser implements LogParser {
         
         int scoreTeam1 = Integer.parseInt(matcher.group("scoreTeam1"));
         int scoreTeam2 = Integer.parseInt(matcher.group("scoreTeam2"));
+        
+        // Extract duration from the log pattern
+        Integer duration = null;
+        try {
+            String durationStr = matcher.group("duration");
+            if (durationStr != null && !durationStr.isEmpty()) {
+                duration = Integer.parseInt(durationStr);
+            }
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            logger.warn("Failed to parse duration from game over event", e);
+        }
+        
         // rewind back team1+team2 score rounds to start the tracking
         int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
         int indexToStart = this.roundStartLineIndices.get(roundToStart);
         this.matchProcessingIndex = currentIndex;
         this.roundStartLineIndices.clear();
-        logger.info("In game over, moving pointer back {} rounds to {}, game over at {}", (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex);
+        logger.info("In game over, moving pointer back {} rounds to {}, game over at {}, duration: {} min", 
+                (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex, duration);
         return new ParseLineResponse(new GameOverEvent(
                 timestamp,
                 Map.of(),
                 matcher.group("map"),
                 matcher.group("gameMode"),
-                scoreTeam1, scoreTeam2
+                scoreTeam1, scoreTeam2,
+                duration
         ), indexToStart);
     }
 
