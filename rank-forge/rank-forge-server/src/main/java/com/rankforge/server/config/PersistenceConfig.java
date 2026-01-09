@@ -32,7 +32,7 @@ import java.sql.SQLException;
 
 /**
  * Configuration for persistence layer beans.
- * Supports both Firestore and JDBC persistence based on configuration.
+ * Supports JDBC persistence based on configuration.
  * 
  * Author bageshwar.pn
  * Date [Current Date]
@@ -42,12 +42,6 @@ public class PersistenceConfig {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PersistenceConfig.class);
 
-    @Value("${rankforge.persistence.firestore.project-id:rankforge}")
-    private String firestoreProjectId;
-
-    @Value("${rankforge.persistence.firestore.database-id:firestore-db}")
-    private String firestoreDatabaseId;
-
     @Value("${rankforge.persistence.jdbc.url}")
     private String jdbcUrl;
 
@@ -56,17 +50,6 @@ public class PersistenceConfig {
 
     @Value("${rankforge.persistence.jdbc.password}")
     private String jdbcPassword;
-
-    /**
-     * Firestore-based persistence layer bean
-     */
-    @Bean
-    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "firestore")
-    public PersistenceLayer firestorePersistenceLayer() throws SQLException {
-        LOGGER.info("Initializing Firestore persistence layer with project: {}, database: {}", 
-                firestoreProjectId, firestoreDatabaseId);
-        return new FirestoreBasedPersistenceLayer(firestoreProjectId, firestoreDatabaseId);
-    }
 
     /**
      * JDBC persistence layer bean
