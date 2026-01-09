@@ -19,6 +19,7 @@
 package com.rankforge.server.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.GameEvent;
 import com.rankforge.core.events.GameEventType;
@@ -127,7 +128,8 @@ public class GameService {
      * Uses database timestamps since Event timestamps appear to be null
      */
     private List<String> getPlayersForGame(GameOverEvent gameOverEvent, Map<String, String> playerIdToNameCache) {
-        Set<String> uniquePlayers = new HashSet<>();
+        // Use a map to track normalized names for case-insensitive deduplication
+        Map<String, String> normalizedToOriginal = new HashMap<>();
         
         Instant gameEndTime = gameOverEvent.getTimestamp();
         int totalRounds = gameOverEvent.getTeam1Score() + gameOverEvent.getTeam2Score();
@@ -193,10 +195,16 @@ public class GameService {
             // Extract players from the selected game group
             for (RoundEndEventWithTime roundWithTime : bestMatch) {
                 roundWithTime.event().getPlayers().forEach(playerId -> {
-                    if (!"0".equals(playerId)) { // Exclude bots
+                    if (playerId != null && !playerId.isEmpty() && !"0".equals(playerId)) { // Exclude bots and invalid IDs
                         String playerName = getPlayerNameById(playerIdToNameCache, playerId);
-                        if (playerName != null) {
-                            uniquePlayers.add(playerName);
+                        if (playerName != null && !playerName.trim().isEmpty()) {
+                            String trimmedName = playerName.trim();
+                            // Use normalized (lowercase) key for case-insensitive deduplication
+                            // Keep the first occurrence's original casing
+                            String normalizedKey = trimmedName.toLowerCase();
+                            if (!normalizedToOriginal.containsKey(normalizedKey)) {
+                                normalizedToOriginal.put(normalizedKey, trimmedName);
+                            }
                         }
                     }
                 });
@@ -210,7 +218,10 @@ public class GameService {
             LOGGER.error("Failed to get players for game ending at {}", gameEndTime, e);
         }
         
-        List<String> playerList = new ArrayList<>(uniquePlayers);
+        // Convert to sorted list for consistent display
+        List<String> playerList = new ArrayList<>(normalizedToOriginal.values());
+        playerList.sort(String.CASE_INSENSITIVE_ORDER);
+        
         LOGGER.info("Found {} unique players for game ending at {} on map {}: {}", 
                 playerList.size(), gameEndTime, gameOverEvent.getMap(), playerList);
         
@@ -347,14 +358,12 @@ public class GameService {
             long timestamp = Long.parseLong(parts[0]);
             Instant gameEndTime = Instant.ofEpochMilli(timestamp);
             
-            // Calculate game start time (same logic as in getPlayersForGame)
-            Instant gameStartTime = gameEndTime.minusSeconds(7200); // Look back 2 hours max
+            // Use the same temporal grouping logic as getPlayersForGame to find the specific game's rounds
+            List<RoundResultDTO> rounds = getRoundResultsForGame(gameEndTime);
             
-            // Get round data to calculate actual game duration
-            List<RoundResultDTO> rounds = getRoundResults(gameStartTime, gameEndTime);
-            
+            // Calculate game start time from rounds
+            Instant gameStartTime = gameEndTime.minusSeconds(7200); // Default fallback
             if (!rounds.isEmpty()) {
-                // Adjust start time based on first round
                 gameStartTime = rounds.get(0).getRoundEndTime().minusSeconds(120); // 2 minutes before first round end
             }
             
@@ -383,59 +392,101 @@ public class GameService {
     }
     
     /**
-     * Get round-by-round results for a game
+     * Get round-by-round results for a specific game using temporal grouping
+     * Uses the same logic as getPlayersForGame to find the correct round group
      */
-    private List<RoundResultDTO> getRoundResults(Instant gameStartTime, Instant gameEndTime) {
+    private List<RoundResultDTO> getRoundResultsForGame(Instant gameEndTime) {
         List<RoundResultDTO> rounds = new ArrayList<>();
-        String startTimeStr = gameStartTime.toString();
-        String endTimeStr = gameEndTime.toString();
         
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
-                new String[]{"event", "at"}, "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC",
-                GameEventType.ROUND_END.name(), startTimeStr, endTimeStr)) {
+        // Use the same approach as getPlayersForGame - find rounds on the same day
+        String dayStart = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).toString();
+        String dayEnd = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).plusSeconds(86400).toString();
+        
+        LOGGER.info("Searching for ROUND_END events on day {} to find rounds for game ending at {}", dayStart, gameEndTime);
+        
+        try (ResultSet resultSet = persistenceLayer.query("GameEvent",
+                new String[]{"at", "event"}, 
+                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
+                GameEventType.ROUND_END.name(), dayStart, dayEnd)) {
             
-            int roundNumber = 1;
+            List<RoundEndEventWithTime> allRounds = new ArrayList<>();
+            
+            // Collect all round events with their database timestamps
             while (resultSet.next()) {
                 try {
+                    String dbTimestamp = resultSet.getString("at");
+                    Instant roundTime = parseTimestamp(dbTimestamp);
                     GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
-                    event.setTimestamp(parseTimestamp(resultSet.getString("at")));
+                    
                     if (event instanceof RoundEndEvent roundEndEvent) {
-                        // Determine winner team based on score progression
-                        String winnerTeam = determineWinnerTeam(roundEndEvent);
-                        
-                        // Extract scores from additionalData if available
-                        int ctScore = 0;
-                        int tScore = 0;
-                        Map<String, String> additionalData = roundEndEvent.getAdditionalData();
-                        if (additionalData != null) {
-                            try {
-                                ctScore = Integer.parseInt(additionalData.getOrDefault("ct_score", "0"));
-                                tScore = Integer.parseInt(additionalData.getOrDefault("t_score", "0"));
-                            } catch (NumberFormatException e) {
-                                // Use default values if parsing fails
-                            }
-                        }
-                        
-                        RoundResultDTO round = new RoundResultDTO(
-                            roundNumber++,
-                            winnerTeam,
-                            "unknown", // Win condition not available in current data
-                            roundEndEvent.getTimestamp(),
-                            ctScore, // CT score
-                            tScore   // T score
-                        );
-                        rounds.add(round);
+                        allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
                     }
                 } catch (JsonProcessingException e) {
-                    LOGGER.warn("Failed to parse round end event", e);
+                    LOGGER.warn("Failed to parse RoundEndEvent", e);
                 }
             }
+            
+            LOGGER.info("Found {} total ROUND_END events on this day", allRounds.size());
+            
+            if (allRounds.isEmpty()) {
+                LOGGER.warn("No ROUND_END events found for game ending at {}", gameEndTime);
+                return rounds;
+            }
+            
+            // Group rounds into games by temporal proximity (gaps > 5 minutes = new game)
+            List<List<RoundEndEventWithTime>> gameGroups = groupRoundsByTemporalProximity(allRounds);
+            LOGGER.info("Grouped rounds into {} potential games", gameGroups.size());
+            
+            // Find the game group closest to our GameOver timestamp
+            List<RoundEndEventWithTime> bestMatch = findClosestGameGroup(gameGroups, gameEndTime);
+            
+            if (bestMatch == null || bestMatch.isEmpty()) {
+                LOGGER.warn("No round group found close to game end time {}", gameEndTime);
+                return rounds;
+            }
+            
+            LOGGER.info("Selected game group with {} rounds for game ending at {}", 
+                    bestMatch.size(), gameEndTime);
+            
+            // Convert to RoundResultDTO
+            int roundNumber = 1;
+            for (RoundEndEventWithTime roundWithTime : bestMatch) {
+                RoundEndEvent roundEndEvent = roundWithTime.event();
+                Instant roundTime = roundWithTime.timestamp();
+                
+                // Determine winner team based on score progression
+                String winnerTeam = determineWinnerTeam(roundEndEvent);
+                
+                // Extract scores from additionalData if available
+                int ctScore = 0;
+                int tScore = 0;
+                Map<String, String> additionalData = roundEndEvent.getAdditionalData();
+                if (additionalData != null) {
+                    try {
+                        ctScore = Integer.parseInt(additionalData.getOrDefault("ct_score", "0"));
+                        tScore = Integer.parseInt(additionalData.getOrDefault("t_score", "0"));
+                    } catch (NumberFormatException e) {
+                        // Use default values if parsing fails
+                    }
+                }
+                
+                RoundResultDTO round = new RoundResultDTO(
+                    roundNumber++,
+                    winnerTeam,
+                    "unknown", // Win condition not available in current data
+                    roundTime,
+                    ctScore, // CT score
+                    tScore   // T score
+                );
+                rounds.add(round);
+            }
+            
         } catch (SQLException e) {
             if (isTableNotFoundError(e)) {
                 LOGGER.info("GameEvent table does not exist yet. Returning empty round results.");
                 return rounds;
             }
-            LOGGER.error("Failed to get round results for game between {} and {}", gameStartTime, gameEndTime, e);
+            LOGGER.error("Failed to get round results for game ending at {}", gameEndTime, e);
         }
         
         return rounds;
@@ -462,24 +513,162 @@ public class GameService {
     }
     
     /**
-     * Get player statistics for a game (placeholder implementation)
+     * Get player statistics for a game by querying KillEvent and AssistEvent
      */
     private List<PlayerStatsDTO> getPlayerStatistics(Instant gameStartTime, Instant gameEndTime, List<String> players) {
-        List<PlayerStatsDTO> playerStats = new ArrayList<>();
-        
-        // This is a placeholder implementation
-        // In a real implementation, you'd query KillEvent, AssistEvent, etc. to get actual stats
+        // Create a map to track stats for each player (case-insensitive matching)
+        Map<String, PlayerStatsDTO> statsMap = new HashMap<>();
         for (String player : players) {
-            PlayerStatsDTO stats = new PlayerStatsDTO(
-                player,
-                0, // kills - would be calculated from KillEvent
-                0, // deaths - would be calculated from KillEvent where this player is victim
-                0, // assists - would be calculated from AssistEvent
-                0.0, // rating - would be calculated based on performance
-                "Unknown" // team - would be determined from game events
-            );
-            playerStats.add(stats);
+            String normalizedName = player.trim().toLowerCase();
+            statsMap.put(normalizedName, new PlayerStatsDTO(
+                player.trim(),
+                0, // kills
+                0, // deaths
+                0, // assists
+                0.0, // rating
+                "Unknown" // team
+            ));
         }
+        
+        String startTimeStr = gameStartTime.toString();
+        String endTimeStr = gameEndTime.toString();
+        
+        // Query KillEvent to count kills and deaths
+        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
+                new String[]{"event", "at"}, 
+                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC",
+                GameEventType.KILL.name(), startTimeStr, endTimeStr)) {
+            
+            while (resultSet.next()) {
+                try {
+                    String eventJson = resultSet.getString("event");
+                    Instant eventTime = parseTimestamp(resultSet.getString("at"));
+                    
+                    // Check timestamp first
+                    if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
+                        (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
+                        
+                        // Parse JSON manually to extract player names
+                        JsonNode eventNode = objectMapper.readTree(eventJson);
+                        JsonNode player1Node = eventNode.get("player1");
+                        JsonNode player2Node = eventNode.get("player2");
+                        
+                        // Extract killer name
+                        if (player1Node != null && !player1Node.isNull()) {
+                            JsonNode botNode = player1Node.get("bot");
+                            if (botNode == null || !botNode.asBoolean()) {
+                                JsonNode nameNode = player1Node.get("name");
+                                if (nameNode != null && !nameNode.isNull()) {
+                                    String killerName = nameNode.asText().trim().toLowerCase();
+                                    PlayerStatsDTO stats = statsMap.get(killerName);
+                                    if (stats != null) {
+                                        stats.setKills(stats.getKills() + 1);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Extract victim name
+                        if (player2Node != null && !player2Node.isNull()) {
+                            JsonNode botNode = player2Node.get("bot");
+                            if (botNode == null || !botNode.asBoolean()) {
+                                JsonNode nameNode = player2Node.get("name");
+                                if (nameNode != null && !nameNode.isNull()) {
+                                    String victimName = nameNode.asText().trim().toLowerCase();
+                                    PlayerStatsDTO stats = statsMap.get(victimName);
+                                    if (stats != null) {
+                                        stats.setDeaths(stats.getDeaths() + 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (JsonProcessingException e) {
+                    LOGGER.warn("Failed to parse KillEvent", e);
+                }
+            }
+        } catch (SQLException e) {
+            if (!isTableNotFoundError(e)) {
+                LOGGER.error("Failed to get kill events for game between {} and {}", gameStartTime, gameEndTime, e);
+            }
+        }
+        
+        // Query AssistEvent to count assists
+        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
+                new String[]{"event", "at"}, 
+                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC",
+                GameEventType.ASSIST.name(), startTimeStr, endTimeStr)) {
+            
+            while (resultSet.next()) {
+                try {
+                    String eventJson = resultSet.getString("event");
+                    Instant eventTime = parseTimestamp(resultSet.getString("at"));
+                    
+                    // Check timestamp first
+                    if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
+                        (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
+                        
+                        // Parse JSON manually to extract player name
+                        JsonNode eventNode = objectMapper.readTree(eventJson);
+                        JsonNode player1Node = eventNode.get("player1");
+                        
+                        // Extract assister name
+                        if (player1Node != null && !player1Node.isNull()) {
+                            JsonNode botNode = player1Node.get("bot");
+                            if (botNode == null || !botNode.asBoolean()) {
+                                JsonNode nameNode = player1Node.get("name");
+                                if (nameNode != null && !nameNode.isNull()) {
+                                    String assisterName = nameNode.asText().trim().toLowerCase();
+                                    PlayerStatsDTO stats = statsMap.get(assisterName);
+                                    if (stats != null) {
+                                        stats.setAssists(stats.getAssists() + 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (JsonProcessingException e) {
+                    LOGGER.warn("Failed to parse AssistEvent", e);
+                }
+            }
+        } catch (SQLException e) {
+            if (!isTableNotFoundError(e)) {
+                LOGGER.error("Failed to get assist events for game between {} and {}", gameStartTime, gameEndTime, e);
+            }
+        }
+        
+        // Calculate rating (simple K/D ratio, or 0 if no deaths)
+        for (PlayerStatsDTO stats : statsMap.values()) {
+            double rating = stats.getDeaths() > 0 
+                ? (double) stats.getKills() / stats.getDeaths() 
+                : (stats.getKills() > 0 ? stats.getKills() : 0.0);
+            stats.setRating(rating);
+        }
+        
+        // Return stats in the same order as the players list
+        List<PlayerStatsDTO> playerStats = new ArrayList<>();
+        for (String player : players) {
+            String normalizedName = player.trim().toLowerCase();
+            PlayerStatsDTO stats = statsMap.get(normalizedName);
+            if (stats != null) {
+                playerStats.add(stats);
+            } else {
+                // If player not found in events, add with zero stats
+                playerStats.add(new PlayerStatsDTO(
+                    player.trim(),
+                    0, 0, 0, 0.0, "Unknown"
+                ));
+            }
+        }
+        
+        LOGGER.info("Calculated statistics for {} players in game between {} and {}", 
+                playerStats.size(), gameStartTime, gameEndTime);
+        
+        // Log summary of stats found
+        int totalKills = playerStats.stream().mapToInt(PlayerStatsDTO::getKills).sum();
+        int totalDeaths = playerStats.stream().mapToInt(PlayerStatsDTO::getDeaths).sum();
+        int totalAssists = playerStats.stream().mapToInt(PlayerStatsDTO::getAssists).sum();
+        LOGGER.debug("Total stats found: {} kills, {} deaths, {} assists", totalKills, totalDeaths, totalAssists);
         
         return playerStats;
     }

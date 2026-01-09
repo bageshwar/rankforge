@@ -151,9 +151,9 @@ public class AccoladeStore {
     public List<Accolade> getAccoladesForGame(Instant gameTimestamp) {
         List<Accolade> accolades = new ArrayList<>();
         
-        // Use a time window to find the closest game
-        Instant startTime = gameTimestamp.minusSeconds(10);
-        Instant endTime = gameTimestamp.plusSeconds(10);
+        // Use a tighter time window to find the exact game (2 seconds on each side)
+        Instant startTime = gameTimestamp.minusSeconds(2);
+        Instant endTime = gameTimestamp.plusSeconds(2);
         
         try (ResultSet resultSet = persistenceLayer.query(TABLE_NAME,
                 new String[]{"type", "playerName", "playerId", "value", "position", "score", "gameTimestamp"},
@@ -161,12 +161,13 @@ public class AccoladeStore {
                 startTime.toString(), endTime.toString())) {
             
             while (resultSet.next()) {
-                // Only include accolades that match the exact timestamp (within tolerance)
+                // Only include accolades that match the exact timestamp (within 1 second tolerance)
                 String storedTimestamp = resultSet.getString("gameTimestamp");
                 Instant storedInstant = Instant.parse(storedTimestamp);
                 
-                // Check if this accolade belongs to the requested game (within 5 seconds)
-                if (Math.abs(storedInstant.toEpochMilli() - gameTimestamp.toEpochMilli()) <= 5000) {
+                // Check if this accolade belongs to the requested game (within 1 second)
+                long timeDiff = Math.abs(storedInstant.toEpochMilli() - gameTimestamp.toEpochMilli());
+                if (timeDiff <= 1000) {
                     Accolade accolade = new Accolade(
                             resultSet.getString("type"),
                             resultSet.getString("playerName"),

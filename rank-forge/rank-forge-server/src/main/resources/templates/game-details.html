@@ -485,30 +485,30 @@
             <!-- Player Statistics Section -->
             <div class="section-card">
                 <h2 class="section-title">👥 Player Statistics</h2>
-                <div class="players-grid">
-                    <div class="player-card" th:each="player : ${game.players}">
-                        <div class="player-name" th:text="${player}">Player Name</div>
+                <div th:if="${gameDetails != null and gameDetails.playerStats != null and !gameDetails.playerStats.empty}" class="players-grid">
+                    <div class="player-card" th:each="playerStat : ${gameDetails.playerStats}">
+                        <div class="player-name" th:text="${playerStat.playerName}">Player Name</div>
                         <div class="player-stats">
                             <div class="stat-item">
-                                <span class="stat-number">--</span>
+                                <span class="stat-number" th:text="${playerStat.kills}">0</span>
                                 <span class="stat-label">K</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">--</span>
+                                <span class="stat-number" th:text="${playerStat.deaths}">0</span>
                                 <span class="stat-label">D</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">--</span>
+                                <span class="stat-number" th:text="${playerStat.assists}">0</span>
                                 <span class="stat-label">A</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">--</span>
+                                <span class="stat-number" th:text="${#numbers.formatDecimal(playerStat.rating, 1, 2)}">0.00</span>
                                 <span class="stat-label">Rating</span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div th:if="${game.players.empty}" class="no-data">
+                <div th:if="${gameDetails == null or gameDetails.playerStats == null or gameDetails.playerStats.empty}" class="no-data">
                     <p>No detailed player statistics available for this game.</p>
                 </div>
             </div>
