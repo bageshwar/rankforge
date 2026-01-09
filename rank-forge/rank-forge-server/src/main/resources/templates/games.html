@@ -50,8 +50,17 @@
             margin: 1rem 0;
             background: white;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .games-table tbody {
+            overflow: visible;
+        }
+        
+        .games-table td {
+            position: relative;
+            overflow: visible;
         }
         
         .games-table th,
@@ -107,10 +116,23 @@
             background-color: #f0f0f0;
         }
         
+        .players-summary:has(.no-players) {
+            cursor: default;
+        }
+        
+        .players-summary:has(.no-players):hover {
+            background-color: transparent;
+        }
+        
         .players-count {
             color: #666;
             font-size: 0.9rem;
             font-weight: 500;
+        }
+        
+        .players-count.no-players {
+            color: #999;
+            font-style: italic;
         }
         
         .expand-icon {
@@ -125,17 +147,16 @@
         
         .players-dropdown {
             display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
+            position: fixed;
             background: white;
             border: 1px solid #ddd;
             border-radius: 6px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-            max-height: 200px;
+            z-index: 10000;
+            max-height: 300px;
             overflow-y: auto;
+            min-width: 200px;
+            max-width: 400px;
         }
         
         .players-dropdown.show {
@@ -154,6 +175,23 @@
         
         .player-item:hover {
             background-color: #f8f9fa;
+        }
+        
+        .players-dropdown.no-players-msg {
+            display: block;
+            position: static;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: none;
+            max-height: none;
+            overflow: visible;
+        }
+        
+        .no-players-msg .player-item {
+            color: #999;
+            font-style: italic;
+            text-align: center;
         }
         
         /* Game Details Button */
@@ -321,10 +359,9 @@
             }
             
             .players-dropdown {
-                position: fixed;
-                left: 20px;
-                right: 20px;
-                max-height: 300px;
+                max-height: 250px;
+                min-width: 150px;
+                max-width: calc(100vw - 40px);
             }
             
             .loading-spinner {
@@ -401,12 +438,17 @@
                         <td th:text="${game.formattedDuration}">45 min</td>
                         <td>
                             <div class="players-container">
-                                <div class="players-summary" onclick="togglePlayers(this)">
-                                    <span class="players-count" th:text="${game.players.size()} + ' players'">5 players</span>
-                                    <span class="expand-icon">▼</span>
+                                <div class="players-summary" th:onclick="${game.players != null and !game.players.empty} ? 'togglePlayers(this)' : ''">
+                                    <span class="players-count" 
+                                          th:text="${game.players != null and !game.players.empty} ? (${game.players.size()} + ' players') : 'No players'"
+                                          th:class="${game.players != null and !game.players.empty} ? 'players-count' : 'players-count no-players'">5 players</span>
+                                    <span class="expand-icon" th:if="${game.players != null and !game.players.empty}">▼</span>
                                 </div>
-                                <div class="players-dropdown">
+                                <div class="players-dropdown" th:if="${game.players != null and !game.players.empty}">
                                     <div class="player-item" th:each="player : ${game.players}" th:text="${player}">Player Name</div>
+                                </div>
+                                <div class="players-dropdown no-players-msg" th:if="${game.players == null or game.players.empty}">
+                                    <div class="player-item">Player data not available</div>
                                 </div>
                             </div>
                         </td>
@@ -582,8 +624,13 @@
         // Player list expansion functionality
         function togglePlayers(element) {
             const container = element.parentNode;
-            const dropdown = container.querySelector('.players-dropdown');
+            const dropdown = container.querySelector('.players-dropdown:not(.no-players-msg)');
             const icon = element.querySelector('.expand-icon');
+            
+            // Only proceed if we have a valid dropdown and icon
+            if (!dropdown || !icon) {
+                return;
+            }
             
             // Close other open dropdowns
             document.querySelectorAll('.players-dropdown.show').forEach(otherDropdown => {
@@ -597,8 +644,39 @@
             });
             
             // Toggle current dropdown
+            const isOpening = !dropdown.classList.contains('show');
             dropdown.classList.toggle('show');
             icon.classList.toggle('expanded');
+            
+            // Position dropdown when opening
+            if (isOpening) {
+                const rect = element.getBoundingClientRect();
+                const dropdownRect = dropdown.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+                
+                // Calculate position
+                let top = rect.bottom + window.scrollY + 4; // 4px gap
+                let left = rect.left + window.scrollX;
+                
+                // Adjust if dropdown would go off bottom of viewport
+                if (rect.bottom + dropdownRect.height > viewportHeight) {
+                    top = rect.top + window.scrollY - dropdownRect.height - 4; // Show above instead
+                }
+                
+                // Adjust if dropdown would go off right edge
+                if (left + dropdownRect.width > viewportWidth) {
+                    left = viewportWidth - dropdownRect.width - 10; // 10px margin from edge
+                }
+                
+                // Adjust if dropdown would go off left edge
+                if (left < 10) {
+                    left = 10; // 10px margin from edge
+                }
+                
+                dropdown.style.top = top + 'px';
+                dropdown.style.left = left + 'px';
+            }
         }
         
         // Close dropdowns when clicking outside
@@ -613,6 +691,17 @@
                 });
             }
         });
+        
+        // Close dropdowns when scrolling
+        window.addEventListener('scroll', function() {
+            document.querySelectorAll('.players-dropdown.show').forEach(dropdown => {
+                dropdown.classList.remove('show');
+                const icon = dropdown.parentNode.querySelector('.expand-icon');
+                if (icon) {
+                    icon.classList.remove('expanded');
+                }
+            });
+        }, true);
         
         // Enhanced navigation links with loading
         function enhanceNavigationLinks() {

@@ -11,6 +11,7 @@ public class GameDetailsDTO {
     private int totalRounds;
     private List<PlayerStatsDTO> playerStats;
     private List<RoundResultDTO> rounds;
+    private List<AccoladeDTO> accolades;
     
     public GameDetailsDTO() {}
     
@@ -58,5 +59,13 @@ public class GameDetailsDTO {
     
     public void setRounds(List<RoundResultDTO> rounds) {
         this.rounds = rounds;
+    }
+    
+    public List<AccoladeDTO> getAccolades() {
+        return accolades;
+    }
+    
+    public void setAccolades(List<AccoladeDTO> accolades) {
+        this.accolades = accolades;
     }
 }

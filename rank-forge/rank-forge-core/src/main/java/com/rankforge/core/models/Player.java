@@ -28,6 +28,10 @@ public class Player {
     private String steamId;
     private boolean isBot;
 
+    // Default constructor for Jackson deserialization
+    public Player() {
+    }
+
     public Player(String name, String steamId) {
         this.name = name;
         this.steamId = steamId;

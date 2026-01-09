@@ -1,0 +1,40 @@
+# Local Development Configuration Template
+# 
+# NOTE: This is a template file. The actual application-local.properties file
+# already exists with example values. Edit that file directly with your credentials.
+#
+# SETUP INSTRUCTIONS:
+# 1. Edit src/main/resources/application-local.properties and fill in your actual credentials
+#
+# 3. Run with local profile:
+#    mvn spring-boot:run -Dspring-boot.run.profiles=local
+#    OR
+#    java -jar target/rank-forge-server-1.0-SNAPSHOT.jar --spring.profiles.active=local
+#
+# ALTERNATIVE: Set environment variables instead (no file needed):
+#    export AZURE_SQL_URL="..."
+#    export AZURE_SQL_USERNAME="..."
+#    export AZURE_SQL_PASSWORD="..."
+#    export AWS_ACCESS_KEY_ID="..."
+#    export AWS_SECRET_ACCESS_KEY="..."
+#    export AWS_REGION="us-east-1"
+#    export PIPELINE_API_KEY="..."
+#
+# Note: application-local.properties is gitignored and will not be committed
+
+# Azure SQL Database Configuration
+rankforge.persistence.jdbc.url=jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db-staging;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=300;socketTimeout=300000;queryTimeout=300;
+rankforge.persistence.jdbc.username=your_username_here
+rankforge.persistence.jdbc.password=your_password_here
+
+# Pipeline API Security Configuration
+# API key for securing pipeline endpoints (required)
+# Generate a secure random string for local testing, e.g.: openssl rand -hex 32
+rankforge.api.key=your_api_key_here
+
+# AWS S3 Configuration for log file processing
+# Get these from AWS IAM Console -> Users -> Your User -> Security Credentials -> Access Keys
+# Or from AWS CLI: aws configure list
+rankforge.s3.accessKey=AKIAIOSFODNN7EXAMPLE
+rankforge.s3.secretKey=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+rankforge.s3.region=us-east-1

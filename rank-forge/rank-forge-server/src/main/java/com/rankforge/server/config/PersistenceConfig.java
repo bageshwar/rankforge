@@ -20,6 +20,7 @@ package com.rankforge.server.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,24 +33,15 @@ import java.sql.SQLException;
 
 /**
  * Configuration for persistence layer beans.
- * Supports both SQLite and Firestore persistence based on configuration.
+ * Supports JDBC persistence based on configuration.
  * 
- * Author bageshwar.pn
- * Date [Current Date]
+ * Author bageshwar.pn  
+ * Date 2026
  */
 @Configuration
 public class PersistenceConfig {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PersistenceConfig.class);
-
-    @Value("${rankforge.persistence.sqlite.path:./data}")
-    private String sqlitePath;
-
-    @Value("${rankforge.persistence.firestore.project-id:rankforge}")
-    private String firestoreProjectId;
-
-    @Value("${rankforge.persistence.firestore.database-id:firestore-db}")
-    private String firestoreDatabaseId;
 
     @Value("${rankforge.persistence.jdbc.url}")
     private String jdbcUrl;
@@ -59,28 +51,6 @@ public class PersistenceConfig {
 
     @Value("${rankforge.persistence.jdbc.password}")
     private String jdbcPassword;
-
-
-    /**
-     * SQLite-based persistence layer bean
-     */
-    @Bean
-    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "sqlite", matchIfMissing = true)
-    public PersistenceLayer sqlitePersistenceLayer() throws SQLException {
-        LOGGER.info("Initializing SQLite persistence layer with path: {}", sqlitePath);
-        return new SQLiteBasedPersistenceLayer(sqlitePath);
-    }
-
-    /**
-     * Firestore-based persistence layer bean
-     */
-    @Bean
-    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "firestore")
-    public PersistenceLayer firestorePersistenceLayer() throws SQLException {
-        LOGGER.info("Initializing Firestore persistence layer with project: {}, database: {}", 
-                firestoreProjectId, firestoreDatabaseId);
-        return new FirestoreBasedPersistenceLayer(firestoreProjectId, firestoreDatabaseId);
-    }
 
     /**
      * JDBC persistence layer bean
@@ -96,10 +66,11 @@ public class PersistenceConfig {
 
     /**
      * Jackson ObjectMapper bean for JSON serialization
+     * Configured to support Java 8 time types (Instant, LocalDateTime, etc.)
      */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        return ObjectMapperFactory.createObjectMapper();
     }
 
     /**

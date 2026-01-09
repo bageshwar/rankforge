@@ -31,6 +31,7 @@ public class GameOverEvent extends GameEvent {
     String mode;
     int team1Score;
     int team2Score;
+    Integer duration; // Duration in minutes
 
     // Default constructor for Jackson deserialization
     public GameOverEvent() {}
@@ -42,6 +43,16 @@ public class GameOverEvent extends GameEvent {
         this.mode = mode;
         this.team1Score = team1Score;
         this.team2Score = team2Score;
+    }
+
+    public GameOverEvent(Instant timestamp, Map<String, String> additionalData,
+                         String map, String mode, int team1Score, int team2Score, Integer duration) {
+        super(timestamp, GameEventType.GAME_OVER, additionalData);
+        this.map = map;
+        this.mode = mode;
+        this.team1Score = team1Score;
+        this.team2Score = team2Score;
+        this.duration = duration;
     }
 
     public String getMap() {
@@ -74,5 +85,13 @@ public class GameOverEvent extends GameEvent {
 
     public void setTeam2Score(int team2Score) {
         this.team2Score = team2Score;
+    }
+
+    public Integer getDuration() {
+        return duration;
+    }
+
+    public void setDuration(Integer duration) {
+        this.duration = duration;
     }
 }

@@ -46,11 +46,12 @@ public class ColumnDefinition {
         StringBuilder sql = new StringBuilder(name)
                 .append(" ").append(type.getSqlType());
 
-        if (primaryKey) {
+        if (autoIncrement && primaryKey) {
+            // For H2: Use AUTO_INCREMENT before PRIMARY KEY
+            // Syntax: INTEGER AUTO_INCREMENT PRIMARY KEY
+            sql.append(" AUTO_INCREMENT PRIMARY KEY");
+        } else if (primaryKey) {
             sql.append(" PRIMARY KEY");
-            if (autoIncrement) {
-                sql.append(" AUTOINCREMENT");
-            }
         }
         if (notNull) {
             sql.append(" NOT NULL");

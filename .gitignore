@@ -3,3 +3,19 @@
 **/target
 
 data/**
+
+# Temporary debug/test files
+tmp/
+**/tmp/
+
+# Local configuration files with sensitive credentials
+**/application-local.properties
+**/.env
+**/.env.local
+
+
+serverlog.json
+.vscode/**
+.runPipeline/**
+.vscode/settings.json
+.runPipeline/RankForgeApplication.run.xml

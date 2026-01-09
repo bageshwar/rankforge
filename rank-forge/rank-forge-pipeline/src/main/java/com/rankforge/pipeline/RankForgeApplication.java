@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.interfaces.*;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,8 +46,7 @@ public class RankForgeApplication {
             Files.createDirectories(Paths.get(dataDir));
 
             // Initialize services with batching support
-            ObjectMapper objectMapper = new ObjectMapper();
-            //SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
+            ObjectMapper objectMapper = ObjectMapperFactory.createObjectMapper();
 
             String jdbcUrl = System.getProperty("jdbcUrl");
             String username = System.getProperty("jdbcUsername");
@@ -55,6 +55,7 @@ public class RankForgeApplication {
 
             EventStore eventStore = new DBBasedEventStore(persistenceLayer, objectMapper);
             PlayerStatsStore statsRepo = new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
+            AccoladeStore accoladeStore = new AccoladeStore(persistenceLayer);
             RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
             RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
 
@@ -64,7 +65,7 @@ public class RankForgeApplication {
             // TODO see if there is a better way to latch the listeners other than typecasting
             eventProcessor.addGameEventListener((GameEventListener) eventStore);
             eventProcessor.addGameEventListener((GameEventListener) statsRepo);
-            LogParser logParser = new CS2LogParser(objectMapper, eventStore);
+            LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
 
             GameRankingSystem rankingSystem = new GameRankingSystem(
                     logParser, eventProcessor, eventStore,
