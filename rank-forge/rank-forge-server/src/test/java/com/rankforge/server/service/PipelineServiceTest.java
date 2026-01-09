@@ -19,7 +19,7 @@
 package com.rankforge.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.GameRankingSystem;
 import com.rankforge.pipeline.persistence.PersistenceLayer;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,8 +45,7 @@ class PipelineServiceTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper = ObjectMapperFactory.createObjectMapper();
         pipelineService = new PipelineService(persistenceLayer, objectMapper);
     }
 

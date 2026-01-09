@@ -19,10 +19,10 @@
 package com.rankforge.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rankforge.core.interfaces.*;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,8 +46,7 @@ public class RankForgeApplication {
             Files.createDirectories(Paths.get(dataDir));
 
             // Initialize services with batching support
-            ObjectMapper objectMapper = new ObjectMapper();
-            objectMapper.registerModule(new JavaTimeModule());
+            ObjectMapper objectMapper = ObjectMapperFactory.createObjectMapper();
 
             String jdbcUrl = System.getProperty("jdbcUrl");
             String username = System.getProperty("jdbcUsername");

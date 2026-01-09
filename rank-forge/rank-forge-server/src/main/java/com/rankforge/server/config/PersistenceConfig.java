@@ -19,8 +19,8 @@
 package com.rankforge.server.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,8 +35,8 @@ import java.sql.SQLException;
  * Configuration for persistence layer beans.
  * Supports JDBC persistence based on configuration.
  * 
- * Author bageshwar.pn
- * Date [Current Date]
+ * Author bageshwar.pn  
+ * Date 2026
  */
 @Configuration
 public class PersistenceConfig {
@@ -70,9 +70,7 @@ public class PersistenceConfig {
      */
     @Bean
     public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        return mapper;
+        return ObjectMapperFactory.createObjectMapper();
     }
 
     /**
