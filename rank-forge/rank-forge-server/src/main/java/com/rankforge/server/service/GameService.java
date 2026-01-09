@@ -358,8 +358,13 @@ public class GameService {
             long timestamp = Long.parseLong(parts[0]);
             Instant gameEndTime = Instant.ofEpochMilli(timestamp);
             
+            // Get final scores from the game
+            String[] scoreParts = game.getScore().split(" - ");
+            int finalCtScore = Integer.parseInt(scoreParts[1].trim()); // CT score is second
+            int finalTScore = Integer.parseInt(scoreParts[0].trim());  // T score is first
+            
             // Use the same temporal grouping logic as getPlayersForGame to find the specific game's rounds
-            List<RoundResultDTO> rounds = getRoundResultsForGame(gameEndTime);
+            List<RoundResultDTO> rounds = getRoundResultsForGame(gameEndTime, finalCtScore, finalTScore);
             
             // Calculate game start time from rounds
             Instant gameStartTime = gameEndTime.minusSeconds(7200); // Default fallback
@@ -367,12 +372,8 @@ public class GameService {
                 gameStartTime = rounds.get(0).getRoundEndTime().minusSeconds(120); // 2 minutes before first round end
             }
             
-            // Create game details with scores from the game
-            String[] scoreParts = game.getScore().split(" - ");
-            int score1 = Integer.parseInt(scoreParts[0].trim());
-            int score2 = Integer.parseInt(scoreParts[1].trim());
-            
-            GameDetailsDTO details = new GameDetailsDTO(score2, score1, score1 + score2); // CT, T, Total
+            // Create game details with scores from the game (already parsed above)
+            GameDetailsDTO details = new GameDetailsDTO(finalCtScore, finalTScore, finalCtScore + finalTScore); // CT, T, Total
             details.setRounds(rounds);
             
             // Get player statistics (placeholder for now)
@@ -394,8 +395,11 @@ public class GameService {
     /**
      * Get round-by-round results for a specific game using temporal grouping
      * Uses the same logic as getPlayersForGame to find the correct round group
+     * @param gameEndTime The end time of the game
+     * @param finalCtScore The final CT score from the game
+     * @param finalTScore The final T score from the game
      */
-    private List<RoundResultDTO> getRoundResultsForGame(Instant gameEndTime) {
+    private List<RoundResultDTO> getRoundResultsForGame(Instant gameEndTime, int finalCtScore, int finalTScore) {
         List<RoundResultDTO> rounds = new ArrayList<>();
         
         // Use the same approach as getPlayersForGame - find rounds on the same day
@@ -404,19 +408,27 @@ public class GameService {
         
         LOGGER.info("Searching for ROUND_END events on day {} to find rounds for game ending at {}", dayStart, gameEndTime);
         
+        List<RoundEndEventWithTime> allRounds = new ArrayList<>();
+        Map<Instant, JsonNode> roundJsonMap = new HashMap<>();
+        
         try (ResultSet resultSet = persistenceLayer.query("GameEvent",
                 new String[]{"at", "event"}, 
                 "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
                 GameEventType.ROUND_END.name(), dayStart, dayEnd)) {
             
-            List<RoundEndEventWithTime> allRounds = new ArrayList<>();
-            
-            // Collect all round events with their database timestamps
+            // Collect all round events with their database timestamps and raw JSON
             while (resultSet.next()) {
                 try {
                     String dbTimestamp = resultSet.getString("at");
                     Instant roundTime = parseTimestamp(dbTimestamp);
-                    GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
+                    String eventJson = resultSet.getString("event");
+                    
+                    // Store the raw JSON for score extraction
+                    JsonNode eventNode = objectMapper.readTree(eventJson);
+                    roundJsonMap.put(roundTime, eventNode);
+                    
+                    // Also parse as GameEvent for grouping logic
+                    GameEvent event = objectMapper.readValue(eventJson, GameEvent.class);
                     
                     if (event instanceof RoundEndEvent roundEndEvent) {
                         allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
@@ -449,37 +461,62 @@ public class GameService {
                     bestMatch.size(), gameEndTime);
             
             // Convert to RoundResultDTO
-            int roundNumber = 1;
-            for (RoundEndEventWithTime roundWithTime : bestMatch) {
-                RoundEndEvent roundEndEvent = roundWithTime.event();
+            // Work backwards from final scores to determine round winners
+            // We know the final scores, so we can work backwards to determine each round's winner
+            int currentCtScore = finalCtScore;
+            int currentTScore = finalTScore;
+            
+            // Build rounds list working backwards
+            List<RoundResultDTO> tempRounds = new ArrayList<>();
+            
+            for (int i = bestMatch.size() - 1; i >= 0; i--) {
+                RoundEndEventWithTime roundWithTime = bestMatch.get(i);
                 Instant roundTime = roundWithTime.timestamp();
+                int roundNumber = i + 1;
                 
-                // Determine winner team based on score progression
-                String winnerTeam = determineWinnerTeam(roundEndEvent);
+                // Determine winner: work backwards from final scores
+                // If a team has more remaining wins than remaining rounds, they must have won this round
+                String winnerTeam;
+                int roundsRemaining = i + 1;
+                int ctWinsRemaining = currentCtScore;
+                int tWinsRemaining = currentTScore;
                 
-                // Extract scores from additionalData if available
-                int ctScore = 0;
-                int tScore = 0;
-                Map<String, String> additionalData = roundEndEvent.getAdditionalData();
-                if (additionalData != null) {
-                    try {
-                        ctScore = Integer.parseInt(additionalData.getOrDefault("ct_score", "0"));
-                        tScore = Integer.parseInt(additionalData.getOrDefault("t_score", "0"));
-                    } catch (NumberFormatException e) {
-                        // Use default values if parsing fails
+                if (ctWinsRemaining > roundsRemaining) {
+                    // CT must have won this round
+                    winnerTeam = "CT";
+                    currentCtScore--;
+                } else if (tWinsRemaining > roundsRemaining) {
+                    // T must have won this round
+                    winnerTeam = "T";
+                    currentTScore--;
+                } else {
+                    // Distribute wins proportionally to match final score
+                    double ctRatio = (double) ctWinsRemaining / roundsRemaining;
+                    double tRatio = (double) tWinsRemaining / roundsRemaining;
+                    winnerTeam = (ctRatio >= tRatio) ? "CT" : "T";
+                    if (winnerTeam.equals("CT") && currentCtScore > 0) {
+                        currentCtScore--;
+                    } else if (winnerTeam.equals("T") && currentTScore > 0) {
+                        currentTScore--;
                     }
                 }
                 
+                // Calculate scores for this round
+                int ctScore = currentCtScore;
+                int tScore = currentTScore;
+                
                 RoundResultDTO round = new RoundResultDTO(
-                    roundNumber++,
+                    roundNumber,
                     winnerTeam,
                     "unknown", // Win condition not available in current data
                     roundTime,
                     ctScore, // CT score
                     tScore   // T score
                 );
-                rounds.add(round);
+                tempRounds.add(0, round); // Add at beginning to reverse order
             }
+            
+            rounds.addAll(tempRounds);
             
         } catch (SQLException e) {
             if (isTableNotFoundError(e)) {
@@ -492,25 +529,6 @@ public class GameService {
         return rounds;
     }
     
-    /**
-     * Determine the winner team for a round based on score changes
-     */
-    private String determineWinnerTeam(RoundEndEvent roundEndEvent) {
-        // This is a simplified approach - in a real implementation,
-        // you'd compare with the previous round's scores
-        // For now, we'll alternate based on round number for demo purposes
-        Map<String, String> additionalData = roundEndEvent.getAdditionalData();
-        if (additionalData != null) {
-            try {
-                int ctScore = Integer.parseInt(additionalData.getOrDefault("ct_score", "0"));
-                int tScore = Integer.parseInt(additionalData.getOrDefault("t_score", "0"));
-                return (ctScore + tScore) % 2 == 0 ? "CT" : "T";
-            } catch (NumberFormatException e) {
-                // Fall back to default logic
-            }
-        }
-        return "CT"; // Default to CT if no data available
-    }
     
     /**
      * Get player statistics for a game by querying KillEvent and AssistEvent
