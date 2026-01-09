@@ -372,7 +372,7 @@ public class JdbcBasedPersistenceLayer implements PersistenceLayer {
                 case BLOB -> "VARBINARY(MAX)";
                 case BOOLEAN -> "BIT";
             };
-            default -> columnType.getSqlType(); // Default to original SQLite types
+            default -> columnType.getSqlType();
         };
     }
 
@@ -702,7 +702,7 @@ public class JdbcBasedPersistenceLayer implements PersistenceLayer {
 
     private String buildGenericUpsertQuery(String tableName, Map<String, Object> data, 
                                           String[] uniqueColumns, Set<String> columnsToUpdate) {
-        // For databases that support INSERT OR REPLACE (SQLite, H2)
+        // For databases that support INSERT OR REPLACE (H2)
         if (databaseType == DatabaseType.H2 || databaseType == DatabaseType.HSQLDB) {
             StringBuilder sql = new StringBuilder()
                     .append("MERGE INTO ").append(tableName)

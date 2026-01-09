@@ -46,7 +46,6 @@ public class RankForgeApplication {
 
             // Initialize services with batching support
             ObjectMapper objectMapper = new ObjectMapper();
-            //SQLiteBasedPersistenceLayer persistenceLayer = new SQLiteBasedPersistenceLayer(dataDir);
 
             String jdbcUrl = System.getProperty("jdbcUrl");
             String username = System.getProperty("jdbcUsername");

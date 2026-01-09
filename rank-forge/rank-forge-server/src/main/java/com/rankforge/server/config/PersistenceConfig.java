@@ -32,7 +32,7 @@ import java.sql.SQLException;
 
 /**
  * Configuration for persistence layer beans.
- * Supports both SQLite and Firestore persistence based on configuration.
+ * Supports both Firestore and JDBC persistence based on configuration.
  * 
  * Author bageshwar.pn
  * Date [Current Date]
@@ -41,9 +41,6 @@ import java.sql.SQLException;
 public class PersistenceConfig {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PersistenceConfig.class);
-
-    @Value("${rankforge.persistence.sqlite.path:./data}")
-    private String sqlitePath;
 
     @Value("${rankforge.persistence.firestore.project-id:rankforge}")
     private String firestoreProjectId;
@@ -59,17 +56,6 @@ public class PersistenceConfig {
 
     @Value("${rankforge.persistence.jdbc.password}")
     private String jdbcPassword;
-
-
-    /**
-     * SQLite-based persistence layer bean
-     */
-    @Bean
-    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "sqlite", matchIfMissing = true)
-    public PersistenceLayer sqlitePersistenceLayer() throws SQLException {
-        LOGGER.info("Initializing SQLite persistence layer with path: {}", sqlitePath);
-        return new SQLiteBasedPersistenceLayer(sqlitePath);
-    }
 
     /**
      * Firestore-based persistence layer bean

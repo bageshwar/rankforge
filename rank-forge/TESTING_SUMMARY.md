@@ -62,7 +62,7 @@ We have successfully implemented comprehensive unit tests for the **core busines
 ### Additional Testing Opportunities:
 1. **CS2LogParser**: Create focused regex pattern tests (complex due to state machine)
 2. **Integration Tests**: End-to-end testing of the complete pipeline
-3. **Database Tests**: Test the persistence layer (SQLite integration)
+3. **Database Tests**: Test the persistence layer (JDBC integration)
 4. **Performance Tests**: Load testing for high-volume log processing
 
 ### Test Infrastructure Improvements:
@@ -82,7 +82,7 @@ We have successfully implemented comprehensive unit tests for the **core busines
 
 ### What Needs More Testing:
 - 🔄 **Log Parsing**: Complex regex patterns and JSON parsing
-- 🔄 **Database Layer**: SQLite persistence and data integrity
+- 🔄 **Database Layer**: JDBC persistence and data integrity
 - 🔄 **File Processing**: Log file watching and real-time processing
 - 🔄 **Web Layer**: HTTP API endpoints and responses
 

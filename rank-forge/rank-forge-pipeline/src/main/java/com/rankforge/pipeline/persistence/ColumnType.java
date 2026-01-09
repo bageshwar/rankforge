@@ -30,7 +30,7 @@ public enum ColumnType {
     TEXT_LONG("TEXT"),          // For large text content (JSON, descriptions, etc.)
     REAL("REAL"),
     BLOB("BLOB"),
-    BOOLEAN("INTEGER"); // SQLite doesn't have a native boolean type
+    BOOLEAN("INTEGER");
 
     private final String sqlType;
 
