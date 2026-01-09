@@ -20,9 +20,11 @@ package com.rankforge.server.service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 
@@ -35,17 +37,18 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * 
  * To run: mvn test -Dtest=S3ServiceIntegrationTest -Dspring.profiles.active=local
  * 
- * Note: This test uses TestPropertySource to override database config with empty values
- * to avoid database connection requirements for S3-only testing
+ * Note: This test excludes PersistenceConfig to avoid database connection requirements
+ * for S3-only testing. Uses a minimal Spring context with only S3Service.
  */
-@SpringBootTest
-@ActiveProfiles("local")
-@TestPropertySource(properties = {
-    "rankforge.persistence.jdbc.url=",
-    "rankforge.persistence.jdbc.username=",
-    "rankforge.persistence.jdbc.password=",
-    "rankforge.persistence.type="
+@SpringBootTest(classes = {
+    com.rankforge.server.service.S3Service.class
+}, properties = {
+    "rankforge.persistence.type=none"
 })
+@ActiveProfiles("local")
+@ComponentScan(basePackages = "com.rankforge.server.service",
+               excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, 
+                                                      pattern = "com\\.rankforge\\.server\\.config\\..*"))
 class S3ServiceIntegrationTest {
 
     @Autowired(required = false)

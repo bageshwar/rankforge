@@ -4,6 +4,10 @@
 
 data/**
 
+# Temporary debug/test files
+tmp/
+**/tmp/
+
 # Local configuration files with sensitive credentials
 **/application-local.properties
 **/.env

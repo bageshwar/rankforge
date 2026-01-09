@@ -33,6 +33,8 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.timeout;
 
 /**
  * Unit tests for LogProcessingService
@@ -88,7 +90,7 @@ class LogProcessingServiceTest {
     void testProcessLogFileAsync_WithS3Error_HandlesGracefully() throws IOException {
         String s3Path = "s3://test-bucket/invalid/path.json";
 
-        when(s3Service.downloadFileAsLines(s3Path))
+        lenient().when(s3Service.downloadFileAsLines(s3Path))
                 .thenThrow(new IOException("File not found in S3"));
 
         // Should not throw exception, but log error (async processing)
@@ -98,6 +100,16 @@ class LogProcessingServiceTest {
             String jobId = futureJobId.join();
             assertNotNull(jobId);
         });
+        
+        // Wait a bit for async execution
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Verify the stubbing was used (in async context)
+        verify(s3Service, timeout(1000)).downloadFileAsLines(s3Path);
     }
 
     @Test
@@ -105,8 +117,8 @@ class LogProcessingServiceTest {
         String s3Path = "s3://test-bucket/path/to/log.json";
         List<String> mockLines = Arrays.asList("invalid json line");
 
-        when(s3Service.downloadFileAsLines(s3Path)).thenReturn(mockLines);
-        when(pipelineService.createGameRankingSystem()).thenReturn(gameRankingSystem);
+        lenient().when(s3Service.downloadFileAsLines(s3Path)).thenReturn(mockLines);
+        lenient().when(pipelineService.createGameRankingSystem()).thenReturn(gameRankingSystem);
 
         // Processing errors should be caught and logged, not thrown
         assertDoesNotThrow(() -> {
@@ -115,5 +127,16 @@ class LogProcessingServiceTest {
             String jobId = futureJobId.join();
             assertNotNull(jobId);
         });
+        
+        // Wait a bit for async execution
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Verify the stubbings were used (in async context)
+        verify(s3Service, timeout(1000)).downloadFileAsLines(s3Path);
+        verify(pipelineService, timeout(1000)).createGameRankingSystem();
     }
 }
