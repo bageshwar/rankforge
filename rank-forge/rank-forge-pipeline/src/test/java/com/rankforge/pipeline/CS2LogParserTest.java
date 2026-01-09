@@ -19,6 +19,7 @@
 package com.rankforge.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rankforge.core.events.*;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.models.Player;
@@ -62,6 +63,7 @@ class CS2LogParserTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
         parser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
         mockLines = new ArrayList<>();
     }

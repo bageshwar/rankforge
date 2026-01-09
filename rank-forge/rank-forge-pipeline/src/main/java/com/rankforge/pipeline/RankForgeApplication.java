@@ -19,6 +19,7 @@
 package com.rankforge.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rankforge.core.interfaces.*;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
@@ -46,6 +47,7 @@ public class RankForgeApplication {
 
             // Initialize services with batching support
             ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new JavaTimeModule());
 
             String jdbcUrl = System.getProperty("jdbcUrl");
             String username = System.getProperty("jdbcUsername");

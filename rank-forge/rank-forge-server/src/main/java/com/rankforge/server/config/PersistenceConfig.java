@@ -19,6 +19,7 @@
 package com.rankforge.server.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.*;
 import org.slf4j.Logger;
@@ -65,10 +66,13 @@ public class PersistenceConfig {
 
     /**
      * Jackson ObjectMapper bean for JSON serialization
+     * Configured to support Java 8 time types (Instant, LocalDateTime, etc.)
      */
     @Bean
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        return mapper;
     }
 
     /**
