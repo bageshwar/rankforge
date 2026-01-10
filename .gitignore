@@ -46,3 +46,5 @@ rank-forge-ui/.vscode/
 # OS
 .DS_Store
 Thumbs.db
+cursor-help-log.log
+rank-forge/log-for-cursor.log

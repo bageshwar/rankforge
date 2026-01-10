@@ -386,6 +386,10 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Second pass: persist all other events
         int otherEventCount = 0;
+        int eventsWithRoundRef = 0;
+        int eventsWithoutRoundRef = 0;
+        Map<Long, Integer> eventsPerRound = new HashMap<>();
+        
         for (GameEventEntity entity : entitiesToSave) {
             if (!(entity instanceof RoundStartEventEntity)) {
                 // Ensure game reference is managed
@@ -400,14 +404,32 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     // roundStart should have been persisted in the first pass
                     // Verify it has an ID and is managed
                     if (roundStart.getId() == null) {
-                        logger.warn("RoundStart has null ID for event type {}", entity.getGameEventType());
+                        logger.warn("PERSIST_ROUND: RoundStart has null ID for event type {} at {}", 
+                                entity.getGameEventType(), entity.getTimestamp());
+                        eventsWithoutRoundRef++;
+                    } else {
+                        eventsWithRoundRef++;
+                        eventsPerRound.merge(roundStart.getId(), 1, Integer::sum);
+                        
+                        if (!entityManager.contains(roundStart)) {
+                            // Re-attach if detached
+                            logger.debug("PERSIST_ROUND: Re-attaching detached roundStart ID {} for event {}", 
+                                    roundStart.getId(), entity.getGameEventType());
+                            RoundStartEventEntity managedRoundStart = entityManager.merge(roundStart);
+                            entity.setRoundStart(managedRoundStart);
+                        }
                     }
-                    if (!entityManager.contains(roundStart)) {
-                        // Re-attach if detached
-                        RoundStartEventEntity managedRoundStart = entityManager.merge(roundStart);
-                        entity.setRoundStart(managedRoundStart);
+                } else {
+                    eventsWithoutRoundRef++;
+                    // Log which event types don't have round reference
+                    if (entity.getGameEventType() != null) {
+                        String eventType = entity.getGameEventType().name();
+                        // Only warn for event types that SHOULD have a round reference
+                        if (!eventType.equals("GAME_OVER") && !eventType.equals("GAME_PROCESSED")) {
+                            logger.debug("PERSIST_ROUND: Event {} at {} has NO roundStart reference", 
+                                    eventType, entity.getTimestamp());
+                        }
                     }
-                    // else: roundStart is already managed, entity already has reference
                 }
                 
                 entityManager.persist(entity);
@@ -418,6 +440,9 @@ public class JpaEventStore implements EventStore, GameEventListener {
         if (!entitiesToSave.isEmpty()) {
             logger.info("Persisted {} game events ({} round starts, {} other events)", 
                     entitiesToSave.size(), roundStartCount, otherEventCount);
+            logger.info("PERSIST_ROUND: Events with roundStart: {}, without: {}", 
+                    eventsWithRoundRef, eventsWithoutRoundRef);
+            logger.info("PERSIST_ROUND: Events per round: {}", eventsPerRound);
         }
         
         // 3. Persist all accolades using EntityManager (same persistence context)

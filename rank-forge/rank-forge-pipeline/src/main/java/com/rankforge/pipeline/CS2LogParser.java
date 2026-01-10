@@ -312,7 +312,7 @@ public class CS2LogParser implements LogParser {
         // rewind back team1+team2 score rounds to start the tracking
         int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
         int indexToStart = this.roundStartLineIndices.get(roundToStart);
-        this.matchProcessingIndex = currentIndex;
+        this.matchProcessingIndex = currentIndex-1;
         this.roundStartLineIndices.clear();
         logger.info("In game over, moving pointer back {} rounds to {}, game over at {}, duration: {} min", 
                 (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex, duration);
