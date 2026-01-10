@@ -1,5 +1,6 @@
 package com.rankforge.server.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
@@ -7,6 +8,8 @@ import java.util.List;
  */
 public class GameDetailsDTO {
     private int ctScore;
+    
+    @JsonProperty("tScore")
     private int tScore;
     private int totalRounds;
     private List<PlayerStatsDTO> playerStats;
@@ -29,10 +32,12 @@ public class GameDetailsDTO {
         this.ctScore = ctScore;
     }
     
+    @JsonProperty("tScore")
     public int getTScore() {
         return tScore;
     }
     
+    @JsonProperty("tScore")
     public void setTScore(int tScore) {
         this.tScore = tScore;
     }

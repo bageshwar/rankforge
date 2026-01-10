@@ -66,6 +66,48 @@ export interface GameDetailsDTO {
   accolades?: AccoladeDTO[];
 }
 
+// Player Profile Types
+export interface RatingHistoryPoint {
+  gameDate: string;
+  rank: number;
+  killDeathRatio: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  gameNumber: number;
+}
+
+export interface PlayerAccoladeDTO {
+  type: string;
+  typeDescription: string;
+  value: number;
+  position: number;
+  score: number;
+  gameDate: string;
+  gameId: number;
+}
+
+export interface PlayerProfileDTO {
+  playerId: string;
+  playerName: string;
+  currentRank: number;
+  totalKills: number;
+  totalDeaths: number;
+  totalAssists: number;
+  killDeathRatio: number;
+  headshotKills: number;
+  headshotPercentage: number;
+  totalRoundsPlayed: number;
+  clutchesWon: number;
+  totalDamageDealt: number;
+  totalGamesPlayed: number;
+  ratingHistory: RatingHistoryPoint[];
+  accolades: PlayerAccoladeDTO[];
+  accoladesByType: Record<string, number>;
+  mostFrequentAccolade: string;
+  totalAccolades: number;
+}
+
 // Rankings API
 export const rankingsApi = {
   getAll: async (): Promise<PlayerRankingDTO[]> => {
@@ -138,6 +180,32 @@ export const gamesApi = {
 
   health: async (): Promise<string> => {
     const response = await apiClient.get<string>('/games/health');
+    return response.data;
+  },
+};
+
+// Players API
+export const playersApi = {
+  getProfile: async (playerId: string): Promise<PlayerProfileDTO | null> => {
+    try {
+      const encodedId = encodeURIComponent(playerId);
+      const response = await apiClient.get<PlayerProfileDTO>(`/players/${encodedId}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  getAll: async (): Promise<PlayerProfileDTO[]> => {
+    const response = await apiClient.get<PlayerProfileDTO[]>('/players');
+    return response.data;
+  },
+
+  health: async (): Promise<string> => {
+    const response = await apiClient.get<string>('/players/health');
     return response.data;
   },
 };

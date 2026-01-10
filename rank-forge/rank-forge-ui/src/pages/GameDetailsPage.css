@@ -21,7 +21,7 @@
 .game-header {
   background: linear-gradient(135deg, var(--color-accent-blue), var(--color-accent-blue-secondary));
   color: var(--color-text-primary);
-  padding: 2.5rem;
+  padding: 2rem;
   border-radius: 16px;
   margin-bottom: 2rem;
   text-align: center;
@@ -29,15 +29,43 @@
 }
 
 .game-title {
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 0.75rem 0;
+}
+
+.header-score {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.header-score-ct {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #4caf50;
+  text-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+}
+
+.header-score-divider {
+  font-size: 2.5rem;
+  font-weight: 300;
+  opacity: 0.6;
+}
+
+.header-score-t {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #ff9800;
+  text-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
 }
 
 .game-meta {
   display: flex;
   justify-content: center;
-  gap: 3rem;
+  gap: 2.5rem;
   flex-wrap: wrap;
 }
 
@@ -47,267 +75,223 @@
 
 .meta-label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  opacity: 0.8;
-  margin-bottom: 0.5rem;
+  opacity: 0.7;
+  margin-bottom: 0.2rem;
 }
 
 .meta-value {
   display: block;
-  font-size: 1.3rem;
+  font-size: 1rem;
   font-weight: 600;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
 }
 
 .section-card {
-  padding: 2rem;
-  border-radius: 16px;
-  position: relative;
-}
-
-.section-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 1.5rem 0;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-}
-
-.players-grid {
-  display: grid;
-  gap: 1rem;
-}
-
-.player-card {
-  background: rgba(255, 255, 255, 0.03);
+  padding: 1.5rem;
   border-radius: 12px;
-  padding: 1.25rem;
-  border-left: 4px solid var(--color-accent-blue);
-  transition: all 0.3s ease;
-}
-
-.player-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(4px);
-}
-
-.player-name {
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 1rem;
-  font-size: 1.1rem;
-}
-
-.player-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  gap: 0.75rem;
-}
-
-.stat-item {
-  text-align: center;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 0.75rem;
-  border-radius: 8px;
-}
-
-.stat-number {
-  display: block;
-  font-weight: 700;
-  color: var(--color-accent-blue);
-  font-size: 1.2rem;
-  margin-bottom: 0.25rem;
-}
-
-.stat-label {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.team-section {
   margin-bottom: 1.5rem;
 }
 
-.team-header {
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
+.section-title {
+  font-size: 1.25rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 }
 
-.team-ct {
-  background: rgba(76, 175, 80, 0.2);
-  border-left: 4px solid var(--color-team-ct);
+/* Player Statistics Table */
+.player-stats-section {
+  overflow: hidden;
 }
 
-.team-t {
-  background: rgba(255, 152, 0, 0.2);
-  border-left: 4px solid var(--color-team-t);
+.stats-table-container {
+  overflow-x: auto;
 }
 
-.total-rounds {
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table thead {
+  background: rgba(74, 144, 226, 0.15);
+}
+
+.stats-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-accent-blue);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.stats-table th:not(:first-child) {
   text-align: center;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 1.5rem;
-  border-radius: 12px;
-  margin-top: 1.5rem;
+  width: 60px;
 }
 
-.total-rounds .stat-number {
-  font-size: 2rem;
-  display: block;
-  margin-bottom: 0.5rem;
+.stats-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
 }
 
-.total-rounds .stat-label {
-  font-size: 0.9rem;
+.stats-table tbody tr:hover {
+  background: rgba(74, 144, 226, 0.08);
 }
 
+.stats-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.player-name-cell {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.kills-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #4caf50;
+}
+
+.deaths-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #f44336;
+}
+
+.assists-cell {
+  text-align: center;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.rating-cell {
+  text-align: center;
+  font-weight: 600;
+  color: var(--color-accent-blue);
+}
+
+/* Round Timeline */
 .rounds-section {
-  grid-column: 1 / -1;
+  overflow: hidden;
 }
 
 .rounds-description {
   color: var(--color-text-tertiary);
-  margin-bottom: 1.5rem;
-  font-size: 0.95rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
 }
 
 .rounds-timeline {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: 0.5rem;
 }
 
 .round-badge {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--color-text-primary);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
+  cursor: default;
+  transition: transform 0.2s ease;
 }
 
 .round-badge.ct-win {
   background: var(--color-team-ct);
-  box-shadow: 0 0 15px rgba(76, 175, 80, 0.4);
 }
 
 .round-badge.t-win {
   background: var(--color-team-t);
-  box-shadow: 0 0 15px rgba(255, 152, 0, 0.4);
 }
 
 .round-badge:hover {
-  transform: scale(1.15);
-  box-shadow: 0 0 25px currentColor;
+  transform: scale(1.1);
 }
 
+/* Accolades */
 .accolades-section {
-  grid-column: 1 / -1;
-}
-
-.accolades-description {
-  color: var(--color-text-tertiary);
-  margin-bottom: 1.5rem;
-  font-size: 0.95rem;
+  overflow: hidden;
 }
 
 .accolades-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
 }
 
 .accolade-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  border-radius: 12px;
-  padding: 1.5rem;
-  border-left: 4px solid var(--color-warning);
-  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--color-warning);
+  transition: all 0.2s ease;
+  overflow: hidden;
 }
 
 .accolade-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  border-left-color: var(--color-accent-orange);
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateX(2px);
 }
 
-.accolade-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
+.accolade-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.accolade-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .accolade-type {
   font-weight: 600;
   color: var(--color-text-primary);
-  font-size: 1rem;
-}
-
-.accolade-position {
-  background: var(--color-warning);
-  color: var(--color-dark-primary);
-  font-weight: 700;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .accolade-player {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-accent-blue);
-  margin-bottom: 1rem;
-  font-size: 1.1rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.accolade-stats {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.accolade-stat {
-  display: flex;
-  flex-direction: column;
-}
-
-.accolade-stat .stat-label {
-  color: var(--color-text-tertiary);
-  font-size: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
-.accolade-stat .stat-value {
-  font-weight: 600;
-  color: var(--color-text-primary);
+.accolade-value {
+  font-weight: 700;
+  color: var(--color-warning);
   font-size: 1rem;
 }
 
 .no-data {
   text-align: center;
-  padding: 3rem;
+  padding: 2rem;
   color: var(--color-text-tertiary);
   font-style: italic;
 }
@@ -323,12 +307,16 @@
 }
 
 @media (max-width: 768px) {
-  .content-grid {
-    grid-template-columns: 1fr;
+  .score-display {
+    gap: 1rem;
   }
 
-  .game-meta {
-    gap: 1.5rem;
+  .team-score {
+    padding: 1rem 1.5rem;
+  }
+
+  .team-count {
+    font-size: 2rem;
   }
 
   .rounds-timeline {
@@ -336,12 +324,12 @@
   }
 
   .round-badge {
-    width: 40px;
-    height: 40px;
-    font-size: 0.9rem;
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
   }
 
   .accolades-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
