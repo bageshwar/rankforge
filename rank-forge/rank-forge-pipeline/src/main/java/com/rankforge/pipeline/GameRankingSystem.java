@@ -103,7 +103,7 @@ public class GameRankingSystem {
                     }
                 }
 
-                logger.debug("Adding event {} to batch at index {}", response.getGameEvent().getGameEventType(), i);
+                //logger.debug("Adding event {} to batch at index {}", response.getGameEvent().getGameEventType(), i);
                 eventProcessor.processEvent(response.getGameEvent());
                 eventStore.store(response.getGameEvent());
                 
