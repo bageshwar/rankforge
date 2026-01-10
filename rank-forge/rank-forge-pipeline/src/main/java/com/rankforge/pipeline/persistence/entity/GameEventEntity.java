@@ -53,13 +53,13 @@ public abstract class GameEventEntity {
     @Column(name = "player2", length = 255)
     private String player2;
     
-    // Managed relationship to GameEntity - JPA handles FK via cascade
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    // Managed relationship to GameEntity - FK set before batch persist
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gameId")
     private GameEntity game;
     
-    // Managed relationship to RoundStartEventEntity - JPA handles FK via cascade
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    // Managed relationship to RoundStartEventEntity - FK set before batch persist
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "roundStartEventId")
     private RoundStartEventEntity roundStart;
     

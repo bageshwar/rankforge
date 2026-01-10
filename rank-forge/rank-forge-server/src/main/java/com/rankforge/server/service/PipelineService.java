@@ -28,6 +28,9 @@ import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +57,9 @@ public class PipelineService {
     private final GameRepository gameRepository;
     private final ObjectMapper objectMapper;
     private final EventProcessingContext eventProcessingContext;
+    
+    @PersistenceUnit
+    private EntityManagerFactory entityManagerFactory;
     
     @Value("${rankforge.persistence.type:jpa}")
     private String persistenceType;
@@ -82,9 +88,19 @@ public class PipelineService {
     public GameRankingSystem createGameRankingSystem() {
         logger.debug("Creating pipeline components with server JPA configuration");
         
+        // Create a new EntityManager for this processing job
+        // This is needed because @PersistenceContext provides a thread-bound proxy
+        // that doesn't work across different thread pools (like ForkJoinPool)
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        logger.debug("Created EntityManager for processing job: {}", entityManager != null);
+        
         // Create stores using JPA repositories and shared context
-        EventStore eventStore = new JpaEventStore(gameEventRepository, accoladeRepository,
+        JpaEventStore jpaEventStore = new JpaEventStore(gameEventRepository, accoladeRepository,
                 gameRepository, objectMapper, eventProcessingContext);
+        // Inject EntityManager for direct persistence operations
+        jpaEventStore.setEntityManager(entityManager);
+        EventStore eventStore = jpaEventStore;
+        
         PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         

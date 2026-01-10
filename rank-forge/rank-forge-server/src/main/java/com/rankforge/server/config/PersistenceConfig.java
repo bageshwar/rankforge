@@ -120,6 +120,8 @@ public class PersistenceConfig {
     
     /**
      * JPA EventStore bean
+     * Note: This bean is used for queries. For actual game processing, 
+     * PipelineService creates its own JpaEventStore with an EntityManager.
      */
     @Bean
     public EventStore jpaEventStore(GameEventRepository gameEventRepository, 

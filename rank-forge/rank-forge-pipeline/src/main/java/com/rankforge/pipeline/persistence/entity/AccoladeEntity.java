@@ -55,8 +55,8 @@ public class AccoladeEntity {
     @Column(name = "created_at")
     private Instant createdAt;
     
-    // Managed relationship to GameEntity - JPA handles FK via cascade
-    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    // Managed relationship to GameEntity - FK set before batch persist
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gameId", nullable = false)
     private GameEntity game;
     

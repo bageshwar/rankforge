@@ -27,6 +27,8 @@ import com.rankforge.pipeline.persistence.entity.*;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +51,7 @@ public class JpaEventStore implements EventStore, GameEventListener {
     private final GameRepository gameRepository;
     private final ObjectMapper objectMapper; // Used for reading legacy data and RoundEndEvent players
     private final EventProcessingContext context;
+    private EntityManager entityManager;
     
     public JpaEventStore(GameEventRepository repository, AccoladeRepository accoladeRepository,
                          GameRepository gameRepository, ObjectMapper objectMapper, 
@@ -58,6 +61,15 @@ public class JpaEventStore implements EventStore, GameEventListener {
         this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
         this.context = context;
+    }
+    
+    /**
+     * Sets the EntityManager for direct persistence operations.
+     * Called by Spring via @PersistenceContext or explicitly from config.
+     */
+    @PersistenceContext
+    public void setEntityManager(EntityManager entityManager) {
+        this.entityManager = entityManager;
     }
     
     /**
@@ -280,35 +292,36 @@ public class JpaEventStore implements EventStore, GameEventListener {
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
         try {
-            // 1. First, persist GameEntity to get its ID
-            GameEntity game = context.getCurrentGame();
-            if (game != null && gameRepository != null) {
-                GameEntity savedGame = gameRepository.save(game);
-                logger.info("Persisted GameEntity with ID {} for game on map {}", 
-                        savedGame.getId(), savedGame.getMap());
+            // Validate EntityManager is available
+            if (entityManager == null) {
+                throw new IllegalStateException("EntityManager is not available. " +
+                        "Ensure JpaEventStore is properly configured with an EntityManager.");
+            }
+            
+            // Check if we need to manage the transaction ourselves
+            // This happens when JpaEventStore is created manually (not via Spring DI)
+            // and the @Transactional annotation is not intercepted by Spring's proxy
+            boolean managedTransaction = false;
+            if (!entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().begin();
+                managedTransaction = true;
+                logger.debug("Started manual transaction for game persistence");
+            }
+            
+            try {
+                persistGameData();
                 
-                // Update all references to point to the saved entity (with ID)
-                // This ensures FK references are correctly set
-                updateGameReferences(savedGame);
+                if (managedTransaction) {
+                    entityManager.getTransaction().commit();
+                    logger.debug("Committed manual transaction for game persistence");
+                }
+            } catch (Exception e) {
+                if (managedTransaction && entityManager.getTransaction().isActive()) {
+                    entityManager.getTransaction().rollback();
+                    logger.debug("Rolled back manual transaction due to error");
+                }
+                throw e;
             }
-            
-            // 2. Create copies of lists to persist (avoid mutation after clear)
-            List<GameEventEntity> entitiesToSave = new ArrayList<>(context.getPendingEntities());
-            List<AccoladeEntity> accoladesToSave = new ArrayList<>(context.getPendingAccolades());
-            
-            // 3. Persist all game events
-            if (!entitiesToSave.isEmpty()) {
-                repository.saveAll(entitiesToSave);
-                logger.info("Persisted {} game events", entitiesToSave.size());
-            }
-            
-            // 4. Persist all accolades
-            if (!accoladesToSave.isEmpty()) {
-                accoladeRepository.saveAll(accoladesToSave);
-                logger.info("Persisted {} accolades", accoladesToSave.size());
-            }
-            
-            context.clear();
         } catch (Exception e) {
             logger.error("Failed to persist game data", e);
             throw new RuntimeException("Failed to persist game data", e);
@@ -316,10 +329,127 @@ public class JpaEventStore implements EventStore, GameEventListener {
     }
     
     /**
+     * Internal method that performs the actual persistence of game data.
+     * Should be called within a transaction context.
+     */
+    private void persistGameData() {
+        // Use EntityManager directly to ensure all entities stay in the same persistence context
+        // This avoids the "detached entity" issue when repository calls create boundaries
+        
+        // 1. First, persist or merge GameEntity to get its ID
+        GameEntity game = context.getCurrentGame();
+        if (game != null) {
+            // Use merge instead of persist to handle both new and detached entities
+            // If game.id is null, merge behaves like persist
+            // If game.id is set (detached entity), merge re-attaches it
+            if (game.getId() == null) {
+                entityManager.persist(game);
+            } else {
+                game = entityManager.merge(game);
+            }
+            entityManager.flush(); // Flush to get the generated ID
+            logger.info("Persisted GameEntity with ID {} for game on map {}", 
+                    game.getId(), game.getMap());
+            
+            // Update all references to point to the managed entity
+            // Important: must use the returned entity from merge
+            updateGameReferences(game);
+        }
+        
+        // 2. Persist all game events using EntityManager (same persistence context)
+        // First pass: persist RoundStartEventEntity instances to get their IDs
+        // This is needed because other events may reference them
+        List<GameEventEntity> entitiesToSave = context.getPendingEntities();
+        Map<RoundStartEventEntity, RoundStartEventEntity> roundStartMap = new HashMap<>();
+        
+        logger.debug("Persisting {} total events for game", entitiesToSave.size());
+        
+        int roundStartCount = 0;
+        for (GameEventEntity entity : entitiesToSave) {
+            if (entity instanceof RoundStartEventEntity roundStart) {
+                // Ensure game reference is managed
+                if (game != null && !entityManager.contains(game)) {
+                    game = entityManager.merge(game);
+                }
+                roundStart.setGame(game);
+                entityManager.persist(roundStart);
+                roundStartMap.put(roundStart, roundStart); // Track for reference updates
+                roundStartCount++;
+            }
+        }
+        
+        // Flush to get RoundStartEventEntity IDs assigned
+        if (!roundStartMap.isEmpty()) {
+            entityManager.flush();
+            logger.debug("Flushed {} RoundStartEventEntity instances", roundStartCount);
+        }
+        
+        // Second pass: persist all other events
+        int otherEventCount = 0;
+        for (GameEventEntity entity : entitiesToSave) {
+            if (!(entity instanceof RoundStartEventEntity)) {
+                // Ensure game reference is managed
+                if (game != null && !entityManager.contains(game)) {
+                    game = entityManager.merge(game);
+                }
+                entity.setGame(game);
+                
+                // Ensure roundStart reference is set and managed (if applicable)
+                RoundStartEventEntity roundStart = entity.getRoundStart();
+                if (roundStart != null) {
+                    // roundStart should have been persisted in the first pass
+                    // Verify it has an ID and is managed
+                    if (roundStart.getId() == null) {
+                        logger.warn("RoundStart has null ID for event type {}", entity.getGameEventType());
+                    }
+                    if (!entityManager.contains(roundStart)) {
+                        // Re-attach if detached
+                        RoundStartEventEntity managedRoundStart = entityManager.merge(roundStart);
+                        entity.setRoundStart(managedRoundStart);
+                    }
+                    // else: roundStart is already managed, entity already has reference
+                }
+                
+                entityManager.persist(entity);
+                otherEventCount++;
+            }
+        }
+        
+        if (!entitiesToSave.isEmpty()) {
+            logger.info("Persisted {} game events ({} round starts, {} other events)", 
+                    entitiesToSave.size(), roundStartCount, otherEventCount);
+        }
+        
+        // 3. Persist all accolades using EntityManager (same persistence context)
+        List<AccoladeEntity> accoladesToSave = context.getPendingAccolades();
+        for (AccoladeEntity accolade : accoladesToSave) {
+            // Check if the game reference is managed; if not, re-attach it
+            GameEntity accoladeGame = accolade.getGame();
+            if (accoladeGame != null && accoladeGame.getId() != null && !entityManager.contains(accoladeGame)) {
+                accolade.setGame(entityManager.merge(accoladeGame));
+            }
+            entityManager.persist(accolade);
+        }
+        if (!accoladesToSave.isEmpty()) {
+            logger.info("Persisted {} accolades", accoladesToSave.size());
+        }
+        
+        // Flush all pending changes to database
+        entityManager.flush();
+        logger.debug("Final flush complete");
+        
+        context.clear();
+    }
+    
+    /**
      * Updates all pending entities and accolades to reference the saved GameEntity.
-     * This is necessary because the saved entity has an ID assigned by the database.
+     * This is necessary because the saved entity has an ID assigned by the database
+     * and is now a managed entity in the persistence context.
      */
     private void updateGameReferences(GameEntity savedGame) {
+        // Also update the context's current game reference to the managed entity
+        context.setCurrentGame(savedGame);
+        
         for (GameEventEntity entity : context.getPendingEntities()) {
             entity.setGame(savedGame);
         }

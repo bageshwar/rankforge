@@ -19,20 +19,37 @@
 package com.rankforge.server.controller.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rankforge.core.events.GameEventType;
+import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
+import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.server.dto.ProcessLogRequest;
 import com.rankforge.server.dto.ProcessLogResponse;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -54,16 +71,43 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PipelineApiIntegrationTest {
+
+    private static final String TEST_S3_PATH = "s3://cs2serverdata/cs2_log_2026-01-07.json";
+    private static final String STAGING_DB_IDENTIFIER = "staging";
+    
+    // Expected counts from the test log file
+    private static final int EXPECTED_GAMES = 2;
+    private static final int EXPECTED_ROUND_START_EVENTS = 40;
+    private static final int EXPECTED_ACCOLADES = 21;
+    
+    // Static flag to ensure tables are only cleared ONCE across all test runs
+    private static boolean tablesCleared = false;
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private GameRepository gameRepository;
+    
+    @Autowired
+    private GameEventRepository gameEventRepository;
+    
+    @Autowired
+    private AccoladeRepository accoladeRepository;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Value("${rankforge.api.key:}")
     private String configuredApiKey;
+    
+    @Value("${spring.datasource.url:}")
+    private String datasourceUrl;
 
     /**
      * Gets the API key from application-local.properties file
@@ -101,6 +145,78 @@ class PipelineApiIntegrationTest {
         // Default test key (should be configured in application-local.properties)
         // Note: This is a fallback for tests - actual API key should be in application-local.properties
         return "test-api-key-placeholder";
+    }
+    
+    /**
+     * Validates that the test is running against a staging database.
+     * FAILS the test if connected to a non-staging database to prevent data loss.
+     */
+    private void assertStagingDatabase() {
+        assertNotNull(datasourceUrl, "Database URL must be configured");
+        assertFalse(datasourceUrl.isEmpty(), "Database URL must not be empty");
+        
+        String lowerUrl = datasourceUrl.toLowerCase();
+        assertTrue(lowerUrl.contains(STAGING_DB_IDENTIFIER),
+                "SAFETY CHECK FAILED: Tests must run against a staging database!\n" +
+                "Current database URL: " + datasourceUrl + "\n" +
+                "Expected database URL to contain: '" + STAGING_DB_IDENTIFIER + "'\n" +
+                "This check prevents accidental data loss in production databases.");
+        
+        System.out.println("✓ Staging database check passed: " + extractDatabaseName(datasourceUrl));
+    }
+    
+    /**
+     * Extracts database name from JDBC URL for logging.
+     */
+    private String extractDatabaseName(String url) {
+        // Try to extract database name from various JDBC URL formats
+        if (url.contains("database=")) {
+            int start = url.indexOf("database=") + 9;
+            int end = url.indexOf(";", start);
+            return end > start ? url.substring(start, end) : url.substring(start);
+        }
+        return url;
+    }
+    
+    /**
+     * Clears all data from RankForge tables for a clean test start.
+     * Uses DELETE instead of DROP to preserve schema (Hibernate ddl-auto=update won't recreate dropped tables).
+     * Order matters due to foreign key constraints.
+     * Uses a static flag to ensure this only runs ONCE per JVM session.
+     */
+    private void clearAllTables() {
+        // Safety check: only clear tables once per test run
+        if (tablesCleared) {
+            System.out.println("ℹ️  Tables already cleared in this test run - skipping");
+            return;
+        }
+        
+        System.out.println("🗑️  Clearing all tables for clean test start...");
+        
+        // Delete data in order respecting foreign key constraints
+        // Child tables first, then parent tables
+        String[] tablesToClear = {
+            "PlayerStats",      // References Game
+            "Accolade",         // References Game  
+            "GameEvent",        // References Game and itself (roundStartEventId)
+            "Game"              // Parent table
+        };
+        
+        for (String table : tablesToClear) {
+            try {
+                // Use DELETE to clear data while preserving schema
+                // Check if table exists first (SQL Server syntax)
+                String sql = "IF OBJECT_ID('" + table + "', 'U') IS NOT NULL DELETE FROM " + table;
+                jdbcTemplate.execute(sql);
+                System.out.println("  ✓ Cleared table: " + table);
+            } catch (Exception e) {
+                System.out.println("  ⚠ Could not clear table " + table + ": " + e.getMessage());
+            }
+        }
+        
+        // Mark as done so it won't run again
+        tablesCleared = true;
+        System.out.println("✓ Table cleanup complete.");
     }
 
     @Test
@@ -258,5 +374,296 @@ class PipelineApiIntegrationTest {
         assertEquals("processing", response.getStatus());
         
         System.out.println("⚠️  Note: Job " + response.getJobId() + " will fail during async processing (expected for invalid S3 path)");
+    }
+
+    // ========================================================================
+    // E2E Database Validation Tests
+    // ========================================================================
+    
+    @Nested
+    @DisplayName("E2E Database Validation Tests")
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class DatabaseValidationTests {
+        
+        /**
+         * Runs before all tests in this nested class.
+         * Validates staging database and drops all tables for a clean start.
+         */
+        @BeforeAll
+        void setupBeforeAllTests() {
+            System.out.println("\n" + "=".repeat(70));
+            System.out.println("🔧 E2E Database Validation Tests - Setup");
+            System.out.println("=".repeat(70));
+            
+            // CRITICAL: Verify we're on staging database
+            assertStagingDatabase();
+            
+            // Clear all table data for a completely clean start
+            // Uses DELETE instead of DROP to preserve schema
+            clearAllTables();
+            
+            System.out.println("=".repeat(70) + "\n");
+        }
+        
+        /**
+         * Processes log file and waits for completion, then validates all database records.
+         * This is the main E2E test that validates:
+         * - 40 round events (ROUND_START)
+         * - 40 distinct round references across all events
+         * - 2 games with 21 accolades
+         * - All entity references are correctly set
+         */
+        @Test
+        @DisplayName("E2E: Process log file and validate all database records")
+        void processLogFileAndValidateDatabaseRecords() throws Exception {
+            String apiKey = getApiKey();
+            assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
+                    "API key must be configured in application-local.properties");
+            
+            // Verify we're on staging (redundant but safe)
+            assertStagingDatabase();
+            
+            // Trigger log processing
+            ProcessLogRequest request = new ProcessLogRequest(TEST_S3_PATH);
+            String responseContent = mockMvc.perform(post("/api/pipeline/process")
+                            .header("X-API-Key", apiKey)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isAccepted())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            
+            ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
+            System.out.println("🚀 Started log processing job: " + response.getJobId());
+            
+            // Wait for async processing to complete (poll database)
+            // Using 90 seconds timeout to accommodate database latency
+            boolean processingComplete = waitForProcessingComplete(90, TimeUnit.SECONDS);
+            assertTrue(processingComplete, "Processing should complete within timeout");
+            
+            // Now run all validations
+            validateGameCount();
+            validateRoundStartEventCount();
+            validateAccoladeCount();
+            validateAllGameReferences();
+            validateAllRoundStartReferences();
+            validateDistinctRoundReferences();
+            
+            System.out.println("✅ All E2E database validations passed!");
+        }
+        
+        @Test
+        @DisplayName("Validate: Exactly 2 games are persisted")
+        void validateGameCount() {
+            List<GameEntity> games = gameRepository.findAll();
+            assertEquals(EXPECTED_GAMES, games.size(), 
+                    "Should have exactly " + EXPECTED_GAMES + " games in database");
+            
+            // Validate game fields are populated
+            for (GameEntity game : games) {
+                assertNotNull(game.getId(), "Game should have an ID");
+                assertNotNull(game.getMap(), "Game should have a map");
+                assertNotNull(game.getGameOverTimestamp(), "Game should have a gameOverTimestamp");
+                assertNotNull(game.getTeam1Score(), "Game should have team1Score");
+                assertNotNull(game.getTeam2Score(), "Game should have team2Score");
+                
+                System.out.println("  ✓ Game ID " + game.getId() + ": " + game.getMap() + 
+                        " (" + game.getTeam1Score() + " - " + game.getTeam2Score() + ")");
+            }
+        }
+        
+        @Test
+        @DisplayName("Validate: Exactly 40 ROUND_START events are persisted")
+        void validateRoundStartEventCount() {
+            List<GameEventEntity> roundStartEvents = gameEventRepository.findByGameEventType(GameEventType.ROUND_START);
+            assertEquals(EXPECTED_ROUND_START_EVENTS, roundStartEvents.size(),
+                    "Should have exactly " + EXPECTED_ROUND_START_EVENTS + " ROUND_START events");
+            
+            System.out.println("  ✓ Found " + roundStartEvents.size() + " ROUND_START events");
+        }
+        
+        @Test
+        @DisplayName("Validate: Exactly 21 accolades are persisted")
+        void validateAccoladeCount() {
+            List<AccoladeEntity> accolades = accoladeRepository.findAll();
+            assertEquals(EXPECTED_ACCOLADES, accolades.size(),
+                    "Should have exactly " + EXPECTED_ACCOLADES + " accolades");
+            
+            // Group by game for reporting
+            var accoladesByGame = accolades.stream()
+                    .collect(Collectors.groupingBy(a -> a.getGame().getId()));
+            
+            System.out.println("  ✓ Found " + accolades.size() + " accolades across " + 
+                    accoladesByGame.size() + " games");
+            accoladesByGame.forEach((gameId, gameAccolades) -> 
+                    System.out.println("    - Game " + gameId + ": " + gameAccolades.size() + " accolades"));
+        }
+        
+        @Test
+        @DisplayName("Validate: All game events have valid game reference")
+        void validateAllGameReferences() {
+            List<GameEventEntity> allEvents = gameEventRepository.findAll();
+            assertFalse(allEvents.isEmpty(), "Should have events in database");
+            
+            int eventsWithoutGame = 0;
+            for (GameEventEntity event : allEvents) {
+                if (event.getGame() == null) {
+                    eventsWithoutGame++;
+                    System.out.println("  ✗ Event ID " + event.getId() + " (" + 
+                            event.getGameEventType() + ") has no game reference!");
+                }
+            }
+            
+            assertEquals(0, eventsWithoutGame, 
+                    "All events should have a game reference. Found " + eventsWithoutGame + " without.");
+            
+            System.out.println("  ✓ All " + allEvents.size() + " events have valid game references");
+        }
+        
+        @Test
+        @DisplayName("Validate: All in-round events have valid roundStart reference")
+        void validateAllRoundStartReferences() {
+            List<GameEventEntity> allEvents = gameEventRepository.findAll();
+            
+            // Events that should have roundStart reference (everything except ROUND_START, GAME_OVER, GAME_PROCESSED)
+            Set<GameEventType> typesWithoutRoundStart = Set.of(
+                    GameEventType.ROUND_START,
+                    GameEventType.GAME_OVER,
+                    GameEventType.GAME_PROCESSED
+            );
+            
+            int eventsChecked = 0;
+            int eventsWithoutRoundStart = 0;
+            
+            for (GameEventEntity event : allEvents) {
+                if (!typesWithoutRoundStart.contains(event.getGameEventType())) {
+                    eventsChecked++;
+                    if (event.getRoundStart() == null) {
+                        eventsWithoutRoundStart++;
+                        System.out.println("  ✗ Event ID " + event.getId() + " (" + 
+                                event.getGameEventType() + ") has no roundStart reference!");
+                    }
+                }
+            }
+            
+            assertEquals(0, eventsWithoutRoundStart,
+                    "All in-round events should have roundStart reference. Found " + 
+                    eventsWithoutRoundStart + " without.");
+            
+            System.out.println("  ✓ All " + eventsChecked + " in-round events have valid roundStart references");
+        }
+        
+        @Test
+        @DisplayName("Validate: 40 distinct roundStartEventId values across all events")
+        void validateDistinctRoundReferences() {
+            List<GameEventEntity> allEvents = gameEventRepository.findAll();
+            
+            // Collect all distinct roundStart IDs (excluding nulls)
+            Set<Long> distinctRoundStartIds = allEvents.stream()
+                    .filter(e -> e.getRoundStart() != null)
+                    .map(e -> e.getRoundStart().getId())
+                    .collect(Collectors.toSet());
+            
+            assertEquals(EXPECTED_ROUND_START_EVENTS, distinctRoundStartIds.size(),
+                    "Should have " + EXPECTED_ROUND_START_EVENTS + " distinct roundStartEventId values");
+            
+            // Verify each distinct ID corresponds to a ROUND_START event
+            List<GameEventEntity> roundStartEvents = gameEventRepository.findByGameEventType(GameEventType.ROUND_START);
+            Set<Long> roundStartEventIds = roundStartEvents.stream()
+                    .map(GameEventEntity::getId)
+                    .collect(Collectors.toSet());
+            
+            // All referenced roundStart IDs should be in the set of actual ROUND_START events
+            Set<Long> invalidReferences = new HashSet<>(distinctRoundStartIds);
+            invalidReferences.removeAll(roundStartEventIds);
+            
+            assertTrue(invalidReferences.isEmpty(),
+                    "All roundStartEventId references should point to actual ROUND_START events. " +
+                    "Invalid references: " + invalidReferences);
+            
+            System.out.println("  ✓ Found " + distinctRoundStartIds.size() + 
+                    " distinct roundStartEventId references, all valid");
+        }
+        
+        @Test
+        @DisplayName("Validate: All accolades have valid game reference")
+        void validateAllAccoladeGameReferences() {
+            List<AccoladeEntity> accolades = accoladeRepository.findAll();
+            
+            int accoladesWithoutGame = 0;
+            for (AccoladeEntity accolade : accolades) {
+                if (accolade.getGame() == null) {
+                    accoladesWithoutGame++;
+                    System.out.println("  ✗ Accolade ID " + accolade.getId() + " (" + 
+                            accolade.getType() + ") has no game reference!");
+                }
+            }
+            
+            assertEquals(0, accoladesWithoutGame,
+                    "All accolades should have a game reference. Found " + accoladesWithoutGame + " without.");
+            
+            System.out.println("  ✓ All " + accolades.size() + " accolades have valid game references");
+        }
+        
+        @Test
+        @DisplayName("Validate: Events are correctly distributed across games")
+        void validateEventDistributionAcrossGames() {
+            List<GameEntity> games = gameRepository.findAll();
+            assumeTrue(games.size() >= EXPECTED_GAMES, "Need at least " + EXPECTED_GAMES + " games");
+            
+            for (GameEntity game : games) {
+                List<GameEventEntity> gameEvents = gameEventRepository.findByGameId(game.getId());
+                List<GameEventEntity> roundStarts = gameEventRepository.findByGameIdAndGameEventType(
+                        game.getId(), GameEventType.ROUND_START);
+                List<AccoladeEntity> gameAccolades = accoladeRepository.findByGameId(game.getId());
+                
+                assertFalse(gameEvents.isEmpty(), 
+                        "Game " + game.getId() + " should have events");
+                assertFalse(roundStarts.isEmpty(), 
+                        "Game " + game.getId() + " should have ROUND_START events");
+                assertFalse(gameAccolades.isEmpty(), 
+                        "Game " + game.getId() + " should have accolades");
+                
+                System.out.println("  ✓ Game " + game.getId() + " (" + game.getMap() + "): " +
+                        gameEvents.size() + " events, " + 
+                        roundStarts.size() + " rounds, " +
+                        gameAccolades.size() + " accolades");
+            }
+        }
+        
+        /**
+         * Waits for processing to complete by polling the database for expected game count.
+         */
+        private boolean waitForProcessingComplete(long timeout, TimeUnit unit) throws InterruptedException {
+            long endTime = System.currentTimeMillis() + unit.toMillis(timeout);
+            int pollCount = 0;
+            
+            while (System.currentTimeMillis() < endTime) {
+                pollCount++;
+                long gameCount = gameRepository.count();
+                
+                if (gameCount >= EXPECTED_GAMES) {
+                    // Also check that accolades are present (processing is truly complete)
+                    long accoladeCount = accoladeRepository.count();
+                    if (accoladeCount >= EXPECTED_ACCOLADES) {
+                        System.out.println("  ✓ Processing complete after " + pollCount + " polls. " +
+                                "Found " + gameCount + " games and " + accoladeCount + " accolades.");
+                        return true;
+                    }
+                }
+                
+                if (pollCount % 10 == 0) {
+                    System.out.println("  ... waiting for processing (poll " + pollCount + 
+                            ", games: " + gameCount + ")");
+                }
+                
+                Thread.sleep(500);
+            }
+            
+            System.out.println("  ✗ Timeout waiting for processing. Games: " + gameRepository.count() + 
+                    ", Accolades: " + accoladeRepository.count());
+            return false;
+        }
     }
 }
