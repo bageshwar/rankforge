@@ -20,16 +20,16 @@ package com.rankforge.pipeline.persistence.repository;
 
 import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
 import java.util.List;
 
 /**
- * Repository for Accolade entities
+ * Repository for Accolade entities.
+ * Note: Post-hoc linking methods have been removed - entity references are now set directly
+ * via EventProcessingContext before persistence.
  * Author bageshwar.pn
  * Date 2026
  */
@@ -37,30 +37,8 @@ import java.util.List;
 public interface AccoladeRepository extends JpaRepository<AccoladeEntity, Long> {
     
     /**
-     * Find accolades by game timestamp range
-     */
-    @Query("SELECT a FROM AccoladeEntity a WHERE a.gameTimestamp BETWEEN :start AND :end ORDER BY a.gameTimestamp ASC")
-    List<AccoladeEntity> findByGameTimestampBetween(
-            @Param("start") Instant start,
-            @Param("end") Instant end
-    );
-    
-    /**
      * Find accolades by game ID
      */
-    @Query("SELECT a FROM AccoladeEntity a WHERE a.gameId = :gameId ORDER BY a.position ASC")
+    @Query("SELECT a FROM AccoladeEntity a WHERE a.game.id = :gameId ORDER BY a.position ASC")
     List<AccoladeEntity> findByGameId(@Param("gameId") Long gameId);
-    
-    /**
-     * Find accolades by game timestamp (for migration compatibility)
-     */
-    @Query("SELECT a FROM AccoladeEntity a WHERE a.gameTimestamp = :gameTimestamp ORDER BY a.position ASC")
-    List<AccoladeEntity> findByGameTimestamp(@Param("gameTimestamp") Instant gameTimestamp);
-    
-    /**
-     * Bulk update: Set gameId for accolades matching game timestamp
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE AccoladeEntity a SET a.gameId = :gameId WHERE a.gameTimestamp = :gameTimestamp")
-    int updateAccoladesGameId(@Param("gameId") Long gameId, @Param("gameTimestamp") Instant gameTimestamp);
 }

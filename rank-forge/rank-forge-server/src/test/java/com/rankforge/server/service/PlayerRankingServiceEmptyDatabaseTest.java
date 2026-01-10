@@ -50,7 +50,7 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetAllPlayerRankings_WhenPlayerStatsTableDoesNotExist_ReturnsEmptyList() {
         // Mock empty repository result (simulating empty database)
-        when(playerStatsRepository.findAllByOrderByRankAsc()).thenReturn(Collections.emptyList());
+        when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
@@ -63,7 +63,7 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetAllPlayerRankings_WhenRepositoryThrowsException_ReturnsEmptyList() {
         // Mock repository throwing exception
-        when(playerStatsRepository.findAllByOrderByRankAsc())
+        when(playerStatsRepository.findLatestStatsForAllPlayers())
                 .thenThrow(new RuntimeException("Database connection error"));
 
         // Should catch exception and return empty list
@@ -77,7 +77,7 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetTopPlayerRankings_WhenDatabaseIsEmpty_ReturnsEmptyList() {
         // Mock empty repository result
-        when(playerStatsRepository.findAllByOrderByRankAsc()).thenReturn(Collections.emptyList());
+        when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
@@ -90,7 +90,7 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetAllPlayerRankings_WhenOtherExceptionOccurs_ReturnsEmptyList() {
         // Mock a different exception (not empty result)
-        when(playerStatsRepository.findAllByOrderByRankAsc())
+        when(playerStatsRepository.findLatestStatsForAllPlayers())
                 .thenThrow(new RuntimeException("Connection timeout"));
 
         // Should catch exception and return empty list

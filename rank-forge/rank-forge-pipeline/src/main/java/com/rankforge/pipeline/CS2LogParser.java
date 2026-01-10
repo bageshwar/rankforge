@@ -306,8 +306,8 @@ public class CS2LogParser implements LogParser {
             logger.warn("Failed to parse duration from game over event", e);
         }
         
-        // Parse and store accolades from log lines
-        parseAndStoreAccolades(lines, currentIndex, timestamp);
+        // Parse and queue accolades from log lines (will be linked to GameEntity later)
+        parseAndQueueAccolades(lines, currentIndex);
         
         // rewind back team1+team2 score rounds to start the tracking
         int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
@@ -327,10 +327,12 @@ public class CS2LogParser implements LogParser {
     }
     
     /**
-     * Parse accolades from log lines after game over event and store them in the database
+     * Parse accolades from log lines after game over event and queue them for batch persistence.
+     * Accolades are added to the EventProcessingContext and will be linked to GameEntity
+     * when it's created during GAME_OVER event processing.
      * Uses regex pattern matching similar to other event parsers (KILL_PATTERN, ASSIST_PATTERN, etc.)
      */
-    private void parseAndStoreAccolades(List<String> lines, int gameOverIndex, Instant gameTimestamp) {
+    private void parseAndQueueAccolades(List<String> lines, int gameOverIndex) {
         List<AccoladeStore.Accolade> accolades = new ArrayList<>();
         
         try {
@@ -375,15 +377,15 @@ public class CS2LogParser implements LogParser {
                 i--;
             }
             
-            // Store accolades in database table (not in additionalData)
+            // Queue accolades for deferred persistence (will be linked to GameEntity later)
             if (!accolades.isEmpty()) {
-                accoladeStore.storeAccolades(gameTimestamp, accolades);
-                logger.info("Parsed and stored {} accolades for game over event at {}", accolades.size(), gameTimestamp);
+                accoladeStore.queueAccolades(accolades);
+                logger.info("Parsed and queued {} accolades for game over event", accolades.size());
             } else {
-                logger.debug("No accolades found for game over event at {}", gameTimestamp);
+                logger.debug("No accolades found for game over event");
             }
         } catch (Exception e) {
-            logger.warn("Failed to parse and store accolades", e);
+            logger.warn("Failed to parse and queue accolades", e);
         }
     }
 

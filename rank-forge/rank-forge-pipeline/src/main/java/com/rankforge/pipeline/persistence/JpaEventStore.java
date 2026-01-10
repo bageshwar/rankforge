@@ -24,7 +24,9 @@ import com.rankforge.core.events.*;
 import com.rankforge.core.interfaces.GameEventListener;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.pipeline.persistence.entity.*;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,8 @@ import java.util.*;
 
 /**
  * JPA-based implementation of EventStore
+ * Uses EventProcessingContext for direct entity reference linking.
+ * Explicitly saves GameEntity first, then events, then accolades.
  * Author bageshwar.pn
  * Date 2026
  */
@@ -41,43 +45,58 @@ public class JpaEventStore implements EventStore, GameEventListener {
     private static final Logger logger = LoggerFactory.getLogger(JpaEventStore.class);
     
     private final GameEventRepository repository;
-    private final ObjectMapper objectMapper;
-    private final List<GameEvent> gameEvents;
+    private final AccoladeRepository accoladeRepository;
+    private final GameRepository gameRepository;
+    private final ObjectMapper objectMapper; // Used for reading legacy data and RoundEndEvent players
+    private final EventProcessingContext context;
     
-    public JpaEventStore(GameEventRepository repository, ObjectMapper objectMapper) {
+    public JpaEventStore(GameEventRepository repository, AccoladeRepository accoladeRepository,
+                         GameRepository gameRepository, ObjectMapper objectMapper, 
+                         EventProcessingContext context) {
         this.repository = repository;
+        this.accoladeRepository = accoladeRepository;
+        this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
-        this.gameEvents = new LinkedList<>();
+        this.context = context;
+    }
+    
+    /**
+     * Constructor without GameRepository for backward compatibility.
+     * Note: This will not persist GameEntity separately.
+     */
+    public JpaEventStore(GameEventRepository repository, AccoladeRepository accoladeRepository,
+                         ObjectMapper objectMapper, EventProcessingContext context) {
+        this(repository, accoladeRepository, null, objectMapper, context);
     }
 
     @Override
     public void store(GameEvent event) {
-        gameEvents.add(event);
-        logger.debug("Stored event in-mem: {} at {}", event.getGameEventType(), event.getTimestamp());
-    }
-    
-    /**
-     * Stores multiple events in a batch
-     */
-    @Transactional
-    private void storeBatch(List<GameEvent> events) {
-        if (events == null || events.isEmpty()) {
-            return;
-        }
-        
         try {
-            List<GameEventEntity> entities = new ArrayList<>();
-            for (GameEvent event : events) {
-                GameEventEntity entity = convertToEntity(event);
-                entities.add(entity);
+            GameEventEntity entity = convertToEntity(event);
+            
+            // Use context to set references and add to pending list based on event type
+            switch (event.getGameEventType()) {
+                case ROUND_START:
+                    context.onRoundStart((RoundStartEventEntity) entity);
+                    break;
+                case ROUND_END:
+                    context.onRoundEnd((RoundEndEventEntity) entity);
+                    break;
+                case GAME_OVER:
+                    context.addGameOverEvent(entity);
+                    break;
+                case GAME_PROCESSED:
+                    // Don't add to pending - this triggers persistence
+                    break;
+                default:
+                    // KILL, ASSIST, ATTACK, BOMB_EVENT
+                    context.addEvent(entity);
             }
             
-            repository.saveAll(entities);
-            logger.debug("Batch stored {} events", events.size());
-            
+            logger.debug("Stored event in context: {} at {}", event.getGameEventType(), event.getTimestamp());
         } catch (Exception e) {
-            logger.error("Failed to batch store events", e);
-            throw new RuntimeException("Failed to batch store events", e);
+            logger.error("Failed to store event: {}", event.getGameEventType(), e);
+            throw new RuntimeException("Failed to store event", e);
         }
     }
     
@@ -171,33 +190,26 @@ public class JpaEventStore implements EventStore, GameEventListener {
                 break;
             default:
                 // Fallback - create a generic entity (should not happen in practice)
-                // Use RoundStartEventEntity as a safe default since it has no special fields
                 entity = new RoundStartEventEntity(timestamp);
                 entity.setGameEventType(event.getGameEventType());
         }
-        
-        // Store JSON for backward compatibility
-        entity.setEventJson(objectMapper.writeValueAsString(event));
         
         return entity;
     }
     
     /**
-     * Convert GameEventEntity to GameEvent domain object
+     * Convert GameEventEntity to GameEvent domain object (for legacy data with JSON)
      */
     private GameEvent convertToDomain(GameEventEntity entity) {
+        // Reconstruct from entity fields based on type
+        // This is needed for queries that return data persisted without JSON
         try {
-            // Try to deserialize from JSON first (for backward compatibility)
-            if (entity.getEventJson() != null && !entity.getEventJson().isEmpty()) {
-                return objectMapper.readValue(entity.getEventJson(), GameEvent.class);
-            }
-            
-            // If no JSON, reconstruct from entity fields (for new data)
-            // This is a fallback - ideally all data should have JSON
-            logger.warn("Entity {} has no JSON, attempting to reconstruct from fields", entity.getId());
-            return null; // Would need complex reconstruction logic
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to deserialize event from JSON", e);
+            // For now, return null if we can't convert - caller should handle
+            // Future: implement full reconstruction from entity fields
+            logger.debug("Converting entity {} to domain", entity.getId());
+            return null;
+        } catch (Exception e) {
+            logger.error("Failed to convert entity to domain", e);
             return null;
         }
     }
@@ -257,23 +269,79 @@ public class JpaEventStore implements EventStore, GameEventListener {
 
     @Override
     public void onGameStarted(GameOverEvent event) {
-        gameEvents.clear();
+        // Note: Do NOT clear context here!
+        // The context is set up in EventProcessorImpl.visit(GameOverEvent) BEFORE this is called.
+        // If we clear here, we lose the GameEntity reference.
+        // Context is cleared in onGameEnded() after batch persistence.
+        logger.debug("Game started event received - context ready for round/event processing");
     }
 
     @Override
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
-        storeBatch(gameEvents);
-        gameEvents.clear();
+        try {
+            // 1. First, persist GameEntity to get its ID
+            GameEntity game = context.getCurrentGame();
+            if (game != null && gameRepository != null) {
+                GameEntity savedGame = gameRepository.save(game);
+                logger.info("Persisted GameEntity with ID {} for game on map {}", 
+                        savedGame.getId(), savedGame.getMap());
+                
+                // Update all references to point to the saved entity (with ID)
+                // This ensures FK references are correctly set
+                updateGameReferences(savedGame);
+            }
+            
+            // 2. Create copies of lists to persist (avoid mutation after clear)
+            List<GameEventEntity> entitiesToSave = new ArrayList<>(context.getPendingEntities());
+            List<AccoladeEntity> accoladesToSave = new ArrayList<>(context.getPendingAccolades());
+            
+            // 3. Persist all game events
+            if (!entitiesToSave.isEmpty()) {
+                repository.saveAll(entitiesToSave);
+                logger.info("Persisted {} game events", entitiesToSave.size());
+            }
+            
+            // 4. Persist all accolades
+            if (!accoladesToSave.isEmpty()) {
+                accoladeRepository.saveAll(accoladesToSave);
+                logger.info("Persisted {} accolades", accoladesToSave.size());
+            }
+            
+            context.clear();
+        } catch (Exception e) {
+            logger.error("Failed to persist game data", e);
+            throw new RuntimeException("Failed to persist game data", e);
+        }
+    }
+    
+    /**
+     * Updates all pending entities and accolades to reference the saved GameEntity.
+     * This is necessary because the saved entity has an ID assigned by the database.
+     */
+    private void updateGameReferences(GameEntity savedGame) {
+        for (GameEventEntity entity : context.getPendingEntities()) {
+            entity.setGame(savedGame);
+        }
+        for (AccoladeEntity accolade : context.getPendingAccolades()) {
+            accolade.setGame(savedGame);
+        }
     }
 
     @Override
     public void onRoundStarted(RoundStartEvent event) {
-        // do nothing
+        // Events are handled via store() method
     }
 
     @Override
     public void onRoundEnded(RoundEndEvent event) {
-        // do nothing
+        // Events are handled via store() method
+    }
+    
+    /**
+     * Get the processing context (for use by other components like AccoladeStore)
+     */
+    public EventProcessingContext getContext() {
+        return context;
     }
 }

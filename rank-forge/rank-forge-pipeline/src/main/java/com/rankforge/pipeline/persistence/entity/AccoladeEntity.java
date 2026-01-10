@@ -34,9 +34,6 @@ public class AccoladeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "gameTimestamp", nullable = false)
-    private Instant gameTimestamp;
-    
     @Column(name = "type", nullable = false, length = 255)
     private String type;
     
@@ -58,11 +55,9 @@ public class AccoladeEntity {
     @Column(name = "created_at")
     private Instant createdAt;
     
-    @Column(name = "gameId")
-    private Long gameId; // Foreign key to GameEntity
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "gameId", insertable = false, updatable = false)
+    // Managed relationship to GameEntity - JPA handles FK via cascade
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    @JoinColumn(name = "gameId", nullable = false)
     private GameEntity game;
     
     // Default constructor
@@ -77,14 +72,6 @@ public class AccoladeEntity {
     
     public void setId(Long id) {
         this.id = id;
-    }
-    
-    public Instant getGameTimestamp() {
-        return gameTimestamp;
-    }
-    
-    public void setGameTimestamp(Instant gameTimestamp) {
-        this.gameTimestamp = gameTimestamp;
     }
     
     public String getType() {
@@ -141,14 +128,6 @@ public class AccoladeEntity {
     
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
-    }
-    
-    public Long getGameId() {
-        return gameId;
-    }
-    
-    public void setGameId(Long gameId) {
-        this.gameId = gameId;
     }
     
     public GameEntity getGame() {
