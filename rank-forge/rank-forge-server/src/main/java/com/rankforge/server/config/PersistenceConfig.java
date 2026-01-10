@@ -28,6 +28,7 @@ import com.rankforge.pipeline.persistence.JpaEventStore;
 import com.rankforge.pipeline.persistence.JpaPlayerStatsStore;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,10 +124,12 @@ public class PersistenceConfig {
     @Bean
     public EventStore jpaEventStore(GameEventRepository gameEventRepository, 
                                      AccoladeRepository accoladeRepository,
+                                     GameRepository gameRepository,
                                      ObjectMapper objectMapper,
                                      EventProcessingContext eventProcessingContext) {
-        LOGGER.info("Initializing JPA EventStore with EventProcessingContext");
-        return new JpaEventStore(gameEventRepository, accoladeRepository, objectMapper, eventProcessingContext);
+        LOGGER.info("Initializing JPA EventStore with EventProcessingContext and GameRepository");
+        return new JpaEventStore(gameEventRepository, accoladeRepository, gameRepository, 
+                objectMapper, eventProcessingContext);
     }
     
     /**

@@ -24,6 +24,7 @@ import com.rankforge.pipeline.GameRankingSystem;
 import com.rankforge.pipeline.persistence.EventProcessingContext;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,9 @@ class PipelineServiceTest {
     @Mock
     private AccoladeRepository accoladeRepository;
 
+    @Mock
+    private GameRepository gameRepository;
+
     private EventProcessingContext eventProcessingContext;
     private ObjectMapper objectMapper;
     private PipelineService pipelineService;
@@ -58,7 +62,7 @@ class PipelineServiceTest {
         objectMapper = ObjectMapperFactory.createObjectMapper();
         eventProcessingContext = new EventProcessingContext();
         pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, 
-                accoladeRepository, objectMapper, eventProcessingContext);
+                accoladeRepository, gameRepository, objectMapper, eventProcessingContext);
     }
 
     @Test

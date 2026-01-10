@@ -26,6 +26,7 @@ import com.rankforge.pipeline.*;
 import com.rankforge.pipeline.persistence.*;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,7 @@ public class PipelineService {
     private final GameEventRepository gameEventRepository;
     private final PlayerStatsRepository playerStatsRepository;
     private final AccoladeRepository accoladeRepository;
+    private final GameRepository gameRepository;
     private final ObjectMapper objectMapper;
     private final EventProcessingContext eventProcessingContext;
     
@@ -60,11 +62,13 @@ public class PipelineService {
     public PipelineService(GameEventRepository gameEventRepository,
                           PlayerStatsRepository playerStatsRepository,
                           AccoladeRepository accoladeRepository,
+                          GameRepository gameRepository,
                           ObjectMapper objectMapper,
                           EventProcessingContext eventProcessingContext) {
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.accoladeRepository = accoladeRepository;
+        this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
         this.eventProcessingContext = eventProcessingContext;
     }
@@ -79,8 +83,8 @@ public class PipelineService {
         logger.debug("Creating pipeline components with server JPA configuration");
         
         // Create stores using JPA repositories and shared context
-        EventStore eventStore = new JpaEventStore(gameEventRepository, accoladeRepository, 
-                objectMapper, eventProcessingContext);
+        EventStore eventStore = new JpaEventStore(gameEventRepository, accoladeRepository,
+                gameRepository, objectMapper, eventProcessingContext);
         PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
