@@ -26,6 +26,7 @@ import com.rankforge.pipeline.*;
 import com.rankforge.pipeline.persistence.*;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +51,9 @@ public class PipelineService {
     private final GameEventRepository gameEventRepository;
     private final PlayerStatsRepository playerStatsRepository;
     private final AccoladeRepository accoladeRepository;
+    private final GameRepository gameRepository;
     private final ObjectMapper objectMapper;
+    private final GameLinkingService gameLinkingService;
     
     @Value("${rankforge.persistence.type:jpa}")
     private String persistenceType;
@@ -59,11 +62,15 @@ public class PipelineService {
     public PipelineService(GameEventRepository gameEventRepository,
                           PlayerStatsRepository playerStatsRepository,
                           AccoladeRepository accoladeRepository,
-                          ObjectMapper objectMapper) {
+                          GameRepository gameRepository,
+                          ObjectMapper objectMapper,
+                          GameLinkingService gameLinkingService) {
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.accoladeRepository = accoladeRepository;
+        this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
+        this.gameLinkingService = gameLinkingService;
     }
 
     /**
@@ -84,8 +91,11 @@ public class PipelineService {
         RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
         RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
         
+        // Use the injected GameLinkingService (Spring-managed bean with @Transactional support)
+        
         // Create event processor
-        EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService);
+        EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService, 
+                gameRepository, gameEventRepository, gameLinkingService);
         
         // Wire event listeners
         eventProcessor.addGameEventListener((GameEventListener) eventStore);

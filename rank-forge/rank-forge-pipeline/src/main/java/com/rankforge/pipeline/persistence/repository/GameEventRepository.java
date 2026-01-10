@@ -20,7 +20,9 @@ package com.rankforge.pipeline.persistence.repository;
 
 import com.rankforge.core.events.GameEventType;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -64,4 +66,70 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
      * Find events by type and exact timestamp
      */
     List<GameEventEntity> findByGameEventTypeAndTimestamp(GameEventType type, Instant timestamp);
+    
+    /**
+     * Find events by game ID
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.gameId = :gameId AND e.gameEventType != 'GAME_OVER' ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find events by round ID
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.roundId = :roundId ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByRoundId(@Param("roundId") Long roundId);
+    
+    /**
+     * Find events by game ID and event type
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.gameId = :gameId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByGameIdAndGameEventType(
+            @Param("gameId") Long gameId,
+            @Param("eventType") GameEventType eventType
+    );
+    
+    /**
+     * Find events by round ID and event type
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.roundId = :roundId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByRoundIdAndGameEventType(
+            @Param("roundId") Long roundId,
+            @Param("eventType") GameEventType eventType
+    );
+    
+    /**
+     * Find round end events by game ID
+     */
+    @Query("SELECT e FROM RoundEndEventEntity e WHERE e.gameId = :gameId ORDER BY e.timestamp ASC")
+    List<RoundEndEventEntity> findRoundEndEventsByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find events between timestamps
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.timestamp BETWEEN :startTime AND :endTime ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findEventsBetweenTimestamps(
+            @Param("startTime") Instant startTime,
+            @Param("endTime") Instant endTime
+    );
+    
+    /**
+     * Bulk update: Set gameId for multiple events (excluding GAME_OVER)
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE GameEventEntity e SET e.gameId = :gameId WHERE e.id IN :eventIds AND e.gameEventType != 'GAME_OVER'")
+    int updateEventsGameId(@Param("gameId") Long gameId, @Param("eventIds") List<Long> eventIds);
+    
+    /**
+     * Bulk update: Set roundId for multiple events
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE GameEventEntity e SET e.roundId = :roundId WHERE e.id IN :eventIds")
+    int updateEventsRoundId(@Param("roundId") Long roundId, @Param("eventIds") List<Long> eventIds);
+    
+    /**
+     * Bulk update: Set gameId for multiple round end events
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE RoundEndEventEntity r SET r.gameId = :gameId WHERE r.id IN :roundIds")
+    int updateRoundsGameId(@Param("gameId") Long gameId, @Param("roundIds") List<Long> roundIds);
 }

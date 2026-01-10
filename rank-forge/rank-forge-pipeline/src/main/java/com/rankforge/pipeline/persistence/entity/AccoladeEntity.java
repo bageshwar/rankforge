@@ -58,6 +58,13 @@ public class AccoladeEntity {
     @Column(name = "created_at")
     private Instant createdAt;
     
+    @Column(name = "gameId")
+    private Long gameId; // Foreign key to GameEntity
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gameId", insertable = false, updatable = false)
+    private GameEntity game;
+    
     // Default constructor
     public AccoladeEntity() {
         this.createdAt = Instant.now();
@@ -134,5 +141,21 @@ public class AccoladeEntity {
     
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+    
+    public Long getGameId() {
+        return gameId;
+    }
+    
+    public void setGameId(Long gameId) {
+        this.gameId = gameId;
+    }
+    
+    public GameEntity getGame() {
+        return game;
+    }
+    
+    public void setGame(GameEntity game) {
+        this.game = game;
     }
 }

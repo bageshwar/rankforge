@@ -56,6 +56,20 @@ public abstract class GameEventEntity {
     @Column(name = "player2", length = 255)
     private String player2;
     
+    @Column(name = "gameId")
+    private Long gameId; // Foreign key to GameEntity
+    
+    @Column(name = "roundId")
+    private Long roundId; // Foreign key to RoundEndEventEntity (the round this event belongs to)
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gameId", insertable = false, updatable = false)
+    private GameEntity game;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "roundId", insertable = false, updatable = false)
+    private RoundEndEventEntity round;
+    
     // Default constructor
     public GameEventEntity() {
         this.createdAt = Instant.now();
@@ -122,5 +136,37 @@ public abstract class GameEventEntity {
     
     public void setPlayer2(String player2) {
         this.player2 = player2;
+    }
+    
+    public Long getGameId() {
+        return gameId;
+    }
+    
+    public void setGameId(Long gameId) {
+        this.gameId = gameId;
+    }
+    
+    public Long getRoundId() {
+        return roundId;
+    }
+    
+    public void setRoundId(Long roundId) {
+        this.roundId = roundId;
+    }
+    
+    public GameEntity getGame() {
+        return game;
+    }
+    
+    public void setGame(GameEntity game) {
+        this.game = game;
+    }
+    
+    public RoundEndEventEntity getRound() {
+        return round;
+    }
+    
+    public void setRound(RoundEndEventEntity round) {
+        this.round = round;
     }
 }

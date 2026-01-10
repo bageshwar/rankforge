@@ -44,11 +44,12 @@
             <version>${spring.boot.version}</version>
         </dependency>
 
-        <!-- Spring Boot Starter Thymeleaf for frontend -->
+        <!-- Spring Boot Starter Thymeleaf (optional - kept for compatibility, React SPA is now the frontend) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
             <version>${spring.boot.version}</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- Spring Boot Starter Validation -->
@@ -104,6 +105,75 @@
 
     <build>
         <plugins>
+            <!-- Frontend Maven Plugin - Build React UI -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.15.0</version>
+                <configuration>
+                    <workingDirectory>${project.parent.basedir}/rank-forge-ui</workingDirectory>
+                    <installDirectory>${project.parent.basedir}/rank-forge-ui</installDirectory>
+                </configuration>
+                <executions>
+                    <!-- Install Node and npm -->
+                    <execution>
+                        <id>install node and npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <configuration>
+                            <nodeVersion>v20.19.0</nodeVersion>
+                            <npmVersion>10.8.2</npmVersion>
+                        </configuration>
+                    </execution>
+                    <!-- Install npm dependencies -->
+                    <execution>
+                        <id>npm install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <!-- Build React app -->
+                    <execution>
+                        <id>npm run build</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Copy React build to static resources -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-react-build</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/classes/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.parent.basedir}/rank-forge-ui/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

@@ -1,0 +1,322 @@
+/* CSS-Based Background Patterns for CS2 Theme */
+
+/* Base tactical pattern overlay */
+.tactical-pattern {
+  position: relative;
+}
+
+.tactical-pattern::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.02) 2px,
+      rgba(255, 255, 255, 0.02) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 255, 255, 0.02) 2px,
+      rgba(255, 255, 255, 0.02) 4px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Noise texture overlay */
+.noise-texture {
+  position: relative;
+}
+
+.noise-texture::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Home Page Background */
+.bg-home {
+  position: relative;
+  background: linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 30%, #0d0d0d 100%);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-home::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(74, 144, 226, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(255, 107, 53, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-home::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.015) 40px,
+      rgba(255, 255, 255, 0.015) 41px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.015) 40px,
+      rgba(255, 255, 255, 0.015) 41px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Rankings Page Background */
+.bg-rankings {
+  position: relative;
+  background: linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%);
+  min-height: 100vh;
+}
+
+.bg-rankings::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    var(--color-accent-orange) 20%,
+    var(--color-accent-orange) 80%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bg-rankings::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%,
+    var(--color-accent-blue) 20%,
+    var(--color-accent-blue) 80%,
+    transparent 100%
+  );
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Games Page Background */
+.bg-games {
+  position: relative;
+  background: linear-gradient(90deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%);
+  min-height: 100vh;
+}
+
+.bg-games::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%,
+    var(--color-accent-blue) 20%,
+    var(--color-accent-orange) 50%,
+    var(--color-accent-blue) 80%,
+    transparent 100%
+  );
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bg-games::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 60px,
+      rgba(74, 144, 226, 0.02) 60px,
+      rgba(74, 144, 226, 0.02) 61px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Game Details Page Background */
+.bg-game-details {
+  position: relative;
+  background: 
+    linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%),
+    radial-gradient(circle at 30% 30%, rgba(76, 175, 80, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(255, 152, 0, 0.05) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+.bg-game-details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 20px,
+      rgba(255, 255, 255, 0.01) 20px,
+      rgba(255, 255, 255, 0.01) 21px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Animated particle effects */
+@keyframes particle-float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(20px, -20px) scale(1.2);
+    opacity: 0.1;
+  }
+}
+
+.particle-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.particle-effect::before {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--color-accent-blue);
+  border-radius: 50%;
+  animation: particle-float 8s ease-in-out infinite;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.particle-effect::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: var(--color-accent-orange);
+  border-radius: 50%;
+  animation: particle-float 10s ease-in-out infinite reverse;
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Card backgrounds with tactical overlay */
+.card-bg {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.01) 8px,
+      rgba(255, 255, 255, 0.01) 9px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Glow effects */
+.glow-orange {
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+/* Hover glow effects */
+.hover-glow:hover {
+  box-shadow: 0 0 30px rgba(74, 144, 226, 0.5);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Industrial gradient overlay */
+.industrial-overlay {
+  position: relative;
+}
+
+.industrial-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, transparent 50%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}

@@ -26,9 +26,14 @@ import com.rankforge.core.events.GameEventType;
 import com.rankforge.core.events.GameOverEvent;
 import com.rankforge.core.events.RoundEndEvent;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
+import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.AccoladeDTO;
 import com.rankforge.server.dto.GameDTO;
@@ -42,6 +47,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -58,16 +64,22 @@ public class GameService {
     private final GameEventRepository gameEventRepository;
     private final PlayerStatsRepository playerStatsRepository;
     private final AccoladeStore accoladeStore;
+    private final GameRepository gameRepository;
+    private final AccoladeRepository accoladeRepository;
     
     @Autowired
     public GameService(ObjectMapper objectMapper, 
                        GameEventRepository gameEventRepository,
                        PlayerStatsRepository playerStatsRepository,
-                       AccoladeStore accoladeStore) {
+                       AccoladeStore accoladeStore,
+                       GameRepository gameRepository,
+                       AccoladeRepository accoladeRepository) {
         this.objectMapper = objectMapper;
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.accoladeStore = accoladeStore;
+        this.gameRepository = gameRepository;
+        this.accoladeRepository = accoladeRepository;
     }
 
     /**
@@ -75,32 +87,33 @@ public class GameService {
      */
     public List<GameDTO> getAllGames() {
         try {
-            List<GameOverEvent> gameOverEvents = getGameOverEventsFromDatabase();
+            List<GameEntity> gameEntities = gameRepository.findAll();
             Map<String, String> playerIdToNameCache = new HashMap<>();
             
             List<GameDTO> games = new ArrayList<>();
-            LOGGER.info("Processing {} GameOver events from database", gameOverEvents.size());
+            LOGGER.info("Processing {} games from database", gameEntities.size());
             
-            for (GameOverEvent gameOverEvent : gameOverEvents) {
+            for (GameEntity gameEntity : gameEntities) {
                 long start = System.currentTimeMillis();
-                // Use temporal boundaries to find players for this game
-                List<String> players = getPlayersForGame(gameOverEvent, playerIdToNameCache);
                 
-                // Extract duration from GameOverEvent field
-                String duration = gameOverEvent.getDuration() != null 
-                    ? String.valueOf(gameOverEvent.getDuration()) 
+                // Get players for this game using gameId
+                List<String> players = getPlayersForGameByGameId(gameEntity.getId(), playerIdToNameCache);
+                
+                // Extract duration
+                String duration = gameEntity.getDuration() != null 
+                    ? String.valueOf(gameEntity.getDuration()) 
                     : null;
                 
                 // Generate a unique identifier for this game based on timestamp and map
-                String gameId = gameOverEvent.getTimestamp().toEpochMilli() + "_" + gameOverEvent.getMap();
+                String gameId = gameEntity.getGameOverTimestamp().toEpochMilli() + "_" + gameEntity.getMap();
                 
                 GameDTO gameDTO = new GameDTO(
                         gameId,
-                        gameOverEvent.getTimestamp(),
-                        gameOverEvent.getMap(),
-                        gameOverEvent.getMode(),
-                        gameOverEvent.getTeam1Score(),
-                        gameOverEvent.getTeam2Score(),
+                        gameEntity.getGameOverTimestamp(),
+                        gameEntity.getMap(),
+                        gameEntity.getMode(),
+                        gameEntity.getTeam1Score(),
+                        gameEntity.getTeam2Score(),
                         players,
                         duration
                 );
@@ -115,6 +128,56 @@ public class GameService {
                     
         } catch (Exception e) {
             LOGGER.error("Failed to retrieve games", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Get players for a game using gameId (new approach using foreign keys)
+     */
+    private List<String> getPlayersForGameByGameId(Long gameId, Map<String, String> playerIdToNameCache) {
+        Map<String, String> normalizedToOriginal = new HashMap<>();
+        
+        try {
+            // Get all rounds for this game
+            List<RoundEndEventEntity> rounds = gameEventRepository.findRoundEndEventsByGameId(gameId);
+            
+            LOGGER.info("Found {} rounds for game {}", rounds.size(), gameId);
+            
+            // Extract players from rounds
+            for (RoundEndEventEntity roundEntity : rounds) {
+                String playersJson = roundEntity.getPlayersJson();
+                if (playersJson != null) {
+                    try {
+                        JsonNode playersNode = objectMapper.readTree(playersJson);
+                        if (playersNode.isObject()) {
+                            playersNode.fieldNames().forEachRemaining(playerId -> {
+                                if (playerId != null && !playerId.isEmpty() && !"0".equals(playerId)) {
+                                    String playerName = getPlayerNameById(playerIdToNameCache, playerId);
+                                    if (playerName != null && !playerName.trim().isEmpty()) {
+                                        String trimmedName = playerName.trim();
+                                        String normalizedKey = trimmedName.toLowerCase();
+                                        if (!normalizedToOriginal.containsKey(normalizedKey)) {
+                                            normalizedToOriginal.put(normalizedKey, trimmedName);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    } catch (JsonProcessingException e) {
+                        LOGGER.warn("Failed to parse players JSON for round {}", roundEntity.getId(), e);
+                    }
+                }
+            }
+            
+            List<String> playerList = new ArrayList<>(normalizedToOriginal.values());
+            playerList.sort(String.CASE_INSENSITIVE_ORDER);
+            
+            LOGGER.info("Found {} unique players for game {}", playerList.size(), gameId);
+            return playerList;
+            
+        } catch (Exception e) {
+            LOGGER.error("Failed to get players for game {}", gameId, e);
             return new ArrayList<>();
         }
     }
@@ -349,11 +412,6 @@ public class GameService {
      * Get detailed game statistics and round information
      */
     public GameDetailsDTO getGameDetails(String gameId) {
-        GameDTO game = getGameById(gameId);
-        if (game == null) {
-            return null;
-        }
-        
         // Parse game ID to get timestamp and map
         String[] parts = gameId.split("_");
         if (parts.length < 2) {
@@ -364,30 +422,44 @@ public class GameService {
             long timestamp = Long.parseLong(parts[0]);
             Instant gameEndTime = Instant.ofEpochMilli(timestamp);
             
-            // Get final scores from the game
-            String[] scoreParts = game.getScore().split(" - ");
-            int finalCtScore = Integer.parseInt(scoreParts[1].trim()); // CT score is second
-            int finalTScore = Integer.parseInt(scoreParts[0].trim());  // T score is first
-            
-            // Use the same temporal grouping logic as getPlayersForGame to find the specific game's rounds
-            List<RoundResultDTO> rounds = getRoundResultsForGame(gameEndTime, finalCtScore, finalTScore);
-            
-            // Calculate game start time from rounds
-            Instant gameStartTime = gameEndTime.minusSeconds(7200); // Default fallback
-            if (!rounds.isEmpty()) {
-                gameStartTime = rounds.get(0).getRoundEndTime().minusSeconds(120); // 2 minutes before first round end
+            // Find GameEntity by gameOverTimestamp
+            Optional<GameEntity> gameEntityOpt = gameRepository.findByGameOverTimestamp(gameEndTime);
+            if (gameEntityOpt.isEmpty()) {
+                LOGGER.warn("GameEntity not found for timestamp {}", gameEndTime);
+                return null;
             }
             
-            // Create game details with scores from the game (already parsed above)
-            GameDetailsDTO details = new GameDetailsDTO(finalCtScore, finalTScore, finalCtScore + finalTScore); // CT, T, Total
+            GameEntity gameEntity = gameEntityOpt.get();
+            Long dbGameId = gameEntity.getId();
+            
+            // Get rounds using gameId foreign key
+            List<RoundResultDTO> rounds = getRoundResultsForGameByGameId(dbGameId, 
+                    gameEntity.getTeam1Score(), gameEntity.getTeam2Score());
+            
+            // Use game entity's start time
+            Instant gameStartTime = gameEntity.getStartTime();
+            if (gameStartTime == null) {
+                gameStartTime = gameEndTime.minusSeconds(7200); // Fallback
+            }
+            
+            // Create game details with scores from the game entity
+            GameDetailsDTO details = new GameDetailsDTO(
+                    gameEntity.getTeam1Score(), 
+                    gameEntity.getTeam2Score(), 
+                    gameEntity.getTeam1Score() + gameEntity.getTeam2Score()
+            );
             details.setRounds(rounds);
             
-            // Get player statistics (placeholder for now)
-            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, game.getPlayers());
+            // Get players for the game
+            Map<String, String> playerIdToNameCache = new HashMap<>();
+            List<String> players = getPlayersForGameByGameId(dbGameId, playerIdToNameCache);
+            
+            // Get player statistics
+            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, players);
             details.setPlayerStats(playerStats);
             
-            // Extract accolades from GameOverEvent
-            List<AccoladeDTO> accolades = extractAccolades(gameEndTime);
+            // Get accolades using gameId
+            List<AccoladeDTO> accolades = extractAccoladesByGameId(dbGameId);
             details.setAccolades(accolades);
             
             return details;
@@ -395,111 +467,62 @@ public class GameService {
         } catch (NumberFormatException e) {
             LOGGER.error("Failed to parse game ID: {}", gameId, e);
             return null;
+        } catch (Exception e) {
+            LOGGER.error("Failed to get game details for game ID: {}", gameId, e);
+            return null;
         }
     }
     
     /**
-     * Get round-by-round results for a specific game using temporal grouping
-     * Uses the same logic as getPlayersForGame to find the correct round group
-     * @param gameEndTime The end time of the game
+     * Get round-by-round results for a specific game using gameId foreign key
+     * @param gameId The database game ID
      * @param finalCtScore The final CT score from the game
      * @param finalTScore The final T score from the game
      */
-    private List<RoundResultDTO> getRoundResultsForGame(Instant gameEndTime, int finalCtScore, int finalTScore) {
+    private List<RoundResultDTO> getRoundResultsForGameByGameId(Long gameId, int finalCtScore, int finalTScore) {
         List<RoundResultDTO> rounds = new ArrayList<>();
         
-        // Use the same approach as getPlayersForGame - find rounds on the same day
-        String dayStart = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).toString();
-        String dayEnd = gameEndTime.truncatedTo(java.time.temporal.ChronoUnit.DAYS).plusSeconds(86400).toString();
-        
-        LOGGER.info("Searching for ROUND_END events on day {} to find rounds for game ending at {}", dayStart, gameEndTime);
-        
-        List<RoundEndEventWithTime> allRounds = new ArrayList<>();
-        Map<Instant, JsonNode> roundJsonMap = new HashMap<>();
+        LOGGER.info("Searching for rounds for game ID {}", gameId);
         
         try {
-            Instant dayStartInstant = Instant.parse(dayStart);
-            Instant dayEndInstant = Instant.parse(dayEnd);
+            // Get rounds using gameId foreign key
+            List<RoundEndEventEntity> roundEntities = gameEventRepository.findRoundEndEventsByGameId(gameId);
             
-            List<GameEventEntity> entities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
-                    GameEventType.ROUND_END, dayStartInstant, dayEndInstant);
+            LOGGER.info("Found {} rounds for game {}", roundEntities.size(), gameId);
             
-            // Collect all round events with their database timestamps and raw JSON
-            for (GameEventEntity entity : entities) {
-                try {
-                    Instant roundTime = entity.getTimestamp();
-                    String eventJson = entity.getEventJson();
-                    
-                    if (eventJson != null) {
-                        // Store the raw JSON for score extraction
-                        JsonNode eventNode = objectMapper.readTree(eventJson);
-                        roundJsonMap.put(roundTime, eventNode);
-                        
-                        // Also parse as GameEvent for grouping logic
-                        GameEvent event = objectMapper.readValue(eventJson, GameEvent.class);
-                        
-                        if (event instanceof RoundEndEvent roundEndEvent) {
-                            allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
-                        }
-                    }
-                } catch (JsonProcessingException e) {
-                    LOGGER.warn("Failed to parse RoundEndEvent", e);
-                }
-            }
-            
-            LOGGER.info("Found {} total ROUND_END events on this day", allRounds.size());
-            
-            if (allRounds.isEmpty()) {
-                LOGGER.warn("No ROUND_END events found for game ending at {}", gameEndTime);
+            if (roundEntities.isEmpty()) {
                 return rounds;
             }
             
-            // Group rounds into games by temporal proximity (gaps > 5 minutes = new game)
-            List<List<RoundEndEventWithTime>> gameGroups = groupRoundsByTemporalProximity(allRounds);
-            LOGGER.info("Grouped rounds into {} potential games", gameGroups.size());
+            // Sort rounds by timestamp
+            roundEntities.sort((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()));
             
-            // Find the game group closest to our GameOver timestamp
-            List<RoundEndEventWithTime> bestMatch = findClosestGameGroup(gameGroups, gameEndTime);
-            
-            if (bestMatch == null || bestMatch.isEmpty()) {
-                LOGGER.warn("No round group found close to game end time {}", gameEndTime);
-                return rounds;
-            }
-            
-            LOGGER.info("Selected game group with {} rounds for game ending at {}", 
-                    bestMatch.size(), gameEndTime);
-            
-            // Convert to RoundResultDTO
             // Work backwards from final scores to determine round winners
-            // We know the final scores, so we can work backwards to determine each round's winner
             int currentCtScore = finalCtScore;
             int currentTScore = finalTScore;
             
             // Build rounds list working backwards
             List<RoundResultDTO> tempRounds = new ArrayList<>();
             
-            for (int i = bestMatch.size() - 1; i >= 0; i--) {
-                RoundEndEventWithTime roundWithTime = bestMatch.get(i);
-                Instant roundTime = roundWithTime.timestamp();
+            for (int i = roundEntities.size() - 1; i >= 0; i--) {
+                RoundEndEventEntity roundEntity = roundEntities.get(i);
+                Instant roundTime = roundEntity.getTimestamp();
                 int roundNumber = i + 1;
                 
                 // Determine winner: work backwards from final scores
-                // If a team has more remaining wins than remaining rounds, they must have won this round
                 String winnerTeam;
                 int roundsRemaining = i + 1;
                 int ctWinsRemaining = currentCtScore;
                 int tWinsRemaining = currentTScore;
                 
                 if (ctWinsRemaining > roundsRemaining) {
-                    // CT must have won this round
                     winnerTeam = "CT";
                     currentCtScore--;
                 } else if (tWinsRemaining > roundsRemaining) {
-                    // T must have won this round
                     winnerTeam = "T";
                     currentTScore--;
                 } else {
-                    // Distribute wins proportionally to match final score
+                    // Distribute wins proportionally
                     double ctRatio = (double) ctWinsRemaining / roundsRemaining;
                     double tRatio = (double) tWinsRemaining / roundsRemaining;
                     winnerTeam = (ctRatio >= tRatio) ? "CT" : "T";
@@ -510,31 +533,21 @@ public class GameService {
                     }
                 }
                 
-                // Calculate scores for this round
-                int ctScore = currentCtScore;
-                int tScore = currentTScore;
-                
                 RoundResultDTO round = new RoundResultDTO(
                     roundNumber,
                     winnerTeam,
-                    "unknown", // Win condition not available in current data
+                    "unknown",
                     roundTime,
-                    ctScore, // CT score
-                    tScore   // T score
+                    currentCtScore,
+                    currentTScore
                 );
-                tempRounds.add(0, round); // Add at beginning to reverse order
+                tempRounds.add(0, round);
             }
             
             rounds.addAll(tempRounds);
             
-        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
-            // Table doesn't exist yet - this is expected for empty databases
-            LOGGER.debug("GameEvent table does not exist yet, returning empty rounds list", e);
-        } catch (org.springframework.dao.DataAccessException e) {
-            // Other database access exceptions
-            LOGGER.warn("Database access error while retrieving round results", e);
         } catch (Exception e) {
-            LOGGER.error("Failed to get round results for game ending at {}", gameEndTime, e);
+            LOGGER.error("Failed to get round results for game ID {}", gameId, e);
         }
         
         return rounds;
@@ -774,6 +787,36 @@ public class GameService {
             
         } catch (Exception e) {
             LOGGER.warn("Failed to extract accolades", e);
+        }
+        
+        return accolades;
+    }
+    
+    /**
+     * Extract accolades for a game using gameId
+     */
+    private List<AccoladeDTO> extractAccoladesByGameId(Long gameId) {
+        List<AccoladeDTO> accolades = new ArrayList<>();
+        
+        try {
+            List<AccoladeEntity> accoladeEntities = accoladeRepository.findByGameId(gameId);
+            
+            for (AccoladeEntity entity : accoladeEntities) {
+                AccoladeDTO accoladeDTO = new AccoladeDTO(
+                        entity.getType(),
+                        entity.getPlayerName(),
+                        entity.getPlayerId(),
+                        entity.getValue(),
+                        entity.getPosition(),
+                        entity.getScore()
+                );
+                accolades.add(accoladeDTO);
+            }
+            
+            LOGGER.info("Extracted {} accolades for game ID {}", accolades.size(), gameId);
+            
+        } catch (Exception e) {
+            LOGGER.warn("Failed to extract accolades for game ID {}", gameId, e);
         }
         
         return accolades;

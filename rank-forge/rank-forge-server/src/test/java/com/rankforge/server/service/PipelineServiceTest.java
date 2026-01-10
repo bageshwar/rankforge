@@ -21,8 +21,10 @@ package com.rankforge.server.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.GameRankingSystem;
+import com.rankforge.pipeline.persistence.GameLinkingService;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,13 +50,19 @@ class PipelineServiceTest {
     @Mock
     private AccoladeRepository accoladeRepository;
 
+    @Mock
+    private GameRepository gameRepository;
+
+    @Mock
+    private GameLinkingService gameLinkingService;
+
     private ObjectMapper objectMapper;
     private PipelineService pipelineService;
 
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, accoladeRepository, objectMapper);
+        pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, accoladeRepository, gameRepository, objectMapper, gameLinkingService);
     }
 
     @Test

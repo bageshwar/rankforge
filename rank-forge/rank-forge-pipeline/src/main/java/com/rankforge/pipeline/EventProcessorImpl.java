@@ -23,6 +23,7 @@ import com.rankforge.core.events.AttackEvent;
 import com.rankforge.core.events.BombEvent;
 import com.rankforge.core.events.GameActionEvent;
 import com.rankforge.core.events.GameEvent;
+import com.rankforge.core.events.GameEventType;
 import com.rankforge.core.events.GameEventVisitor;
 import com.rankforge.core.events.GameOverEvent;
 import com.rankforge.core.events.GameProcessedEvent;
@@ -35,11 +36,19 @@ import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.pipeline.persistence.GameLinkingService;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
+import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This class processes the incoming GameEvent
@@ -51,10 +60,23 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final PlayerStatsStore statsRepo;
     private final RankingService rankingService;
     private final List<GameEventListener> eventListeners;
+    private final GameRepository gameRepository;
+    private final GameEventRepository gameEventRepository;
+    private final GameLinkingService gameLinkingService;
+    
+    // Store game info for linking after events are persisted
+    private Long pendingGameId;
+    private GameOverEvent pendingGameOverEvent;
+    private Instant pendingGameStartTime;
 
-    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService) {
+    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
+                              GameRepository gameRepository, GameEventRepository gameEventRepository,
+                              GameLinkingService gameLinkingService) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
+        this.gameRepository = gameRepository;
+        this.gameEventRepository = gameEventRepository;
+        this.gameLinkingService = gameLinkingService;
         this.eventListeners = new ArrayList<>();
     }
 
@@ -101,7 +123,36 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     @Override
     public void visit(GameProcessedEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         logger.info("Processed game at {}", event.getTimestamp());
+        
+        // First, save events to database (via listeners like JpaEventStore)
         this.onGameEnded(event);
+        
+        // Now link events to game AFTER they've been persisted
+        // Events are now in the database, so linking queries will find them
+        if (pendingGameId != null && pendingGameOverEvent != null) {
+            try {
+                logger.info("Linking events to game {} after persistence", pendingGameId);
+                gameLinkingService.linkGameToEvents(
+                        pendingGameOverEvent, 
+                        pendingGameId, 
+                        pendingGameStartTime, 
+                        pendingGameOverEvent.getTimestamp()
+                );
+                
+                // Clear pending game info
+                pendingGameId = null;
+                pendingGameOverEvent = null;
+                pendingGameStartTime = null;
+            } catch (Exception e) {
+                logger.error("Failed to link events to game {} after persistence", pendingGameId, e);
+                // Clear pending info even on error to avoid stale state
+                pendingGameId = null;
+                pendingGameOverEvent = null;
+                pendingGameStartTime = null;
+            }
+        } else {
+            logger.warn("GAME_PROCESSED event received but no pending game info to link");
+        }
     }
 
     @Override
@@ -188,7 +239,88 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
 
     @Override
     public void visit(GameOverEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        logger.info("Processing GAME_OVER event at {} on map {}", event.getTimestamp(), event.getMap());
+        
+        try {
+            // Create GameEntity from GameOverEvent
+            GameEntity gameEntity = new GameEntity();
+            gameEntity.setGameOverTimestamp(event.getTimestamp());
+            gameEntity.setMap(event.getMap());
+            gameEntity.setMode(event.getMode());
+            gameEntity.setTeam1Score(event.getTeam1Score());
+            gameEntity.setTeam2Score(event.getTeam2Score());
+            gameEntity.setDuration(event.getDuration());
+            gameEntity.setEndTime(event.getTimestamp());
+            
+            // Calculate startTime from rounds
+            // Find N most recent rounds where N = team1Score + team2Score
+            int totalRounds = event.getTeam1Score() + event.getTeam2Score();
+            Instant gameStartTime = calculateGameStartTime(event.getTimestamp(), totalRounds);
+            gameEntity.setStartTime(gameStartTime);
+            
+            // Save GameEntity
+            gameEntity = gameRepository.save(gameEntity);
+            Long gameId = gameEntity.getId();
+            logger.info("Created GameEntity with ID {} for game ending at {}", gameId, event.getTimestamp());
+            
+            // Try to find and link GameOverEventEntity ID
+            // The event might not be saved yet, so we'll query by timestamp
+            List<GameEventEntity> gameOverEvents = gameEventRepository.findByGameEventTypeAndTimestamp(
+                    GameEventType.GAME_OVER, event.getTimestamp());
+            if (!gameOverEvents.isEmpty()) {
+                gameEntity.setGameOverEventId(gameOverEvents.get(0).getId());
+                gameRepository.save(gameEntity);
+            }
+            
+            // Store game info for linking AFTER events are persisted (during GAME_PROCESSED)
+            // Events are still in-memory at this point, so we can't link them yet
+            pendingGameId = gameId;
+            pendingGameOverEvent = event;
+            pendingGameStartTime = gameStartTime;
+            logger.info("Stored game info for linking after events are persisted: gameId={}", gameId);
+            
+        } catch (Exception e) {
+            logger.error("Failed to create GameEntity for GAME_OVER event at {}", 
+                    event.getTimestamp(), e);
+            // Continue processing even if game creation fails
+        }
+        
         this.onGameStarted(event);
+    }
+    
+    /**
+     * Calculate game start time by finding the earliest round timestamp
+     * Uses N most recent rounds where N = totalRounds
+     */
+    private Instant calculateGameStartTime(Instant gameEndTime, int totalRounds) {
+        // Use a time window (e.g., 2 hours before game over) to limit search
+        Instant searchStart = gameEndTime.minusSeconds(7200); // 2 hours before
+        
+        List<GameEventEntity> roundEvents = gameEventRepository.findByGameEventTypeAndTimestampBetween(
+                GameEventType.ROUND_END, searchStart, gameEndTime);
+        
+        // Sort by timestamp descending and take the N most recent
+        List<RoundEndEventEntity> rounds = roundEvents.stream()
+                .filter(e -> e instanceof RoundEndEventEntity)
+                .map(e -> (RoundEndEventEntity) e)
+                .sorted((a, b) -> b.getTimestamp().compareTo(a.getTimestamp())) // Descending
+                .limit(totalRounds)
+                .collect(Collectors.toList());
+        
+        if (rounds.isEmpty()) {
+            // Fallback: estimate start time (2 hours before end)
+            logger.warn("No rounds found, using fallback start time calculation");
+            return gameEndTime.minusSeconds(7200);
+        }
+        
+        // Find the earliest round timestamp
+        Instant earliestRound = rounds.stream()
+                .map(RoundEndEventEntity::getTimestamp)
+                .min(Instant::compareTo)
+                .orElse(gameEndTime.minusSeconds(7200));
+        
+        // Start time is approximately 2 minutes before first round end
+        return earliestRound.minusSeconds(120);
     }
 
     @Override

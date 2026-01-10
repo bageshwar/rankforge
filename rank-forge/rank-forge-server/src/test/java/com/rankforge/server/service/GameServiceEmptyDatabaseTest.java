@@ -21,7 +21,9 @@ package com.rankforge.server.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -51,19 +54,25 @@ class GameServiceEmptyDatabaseTest {
     @Mock
     private AccoladeStore accoladeStore;
 
+    @Mock
+    private GameRepository gameRepository;
+
+    @Mock
+    private AccoladeRepository accoladeRepository;
+
     private GameService gameService;
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, accoladeStore);
+        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, accoladeStore, gameRepository, accoladeRepository);
     }
 
     @Test
     void testGetAllGames_WhenGameEventTableDoesNotExist_ReturnsEmptyList() {
         // Mock empty repository result (simulating empty database)
-        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
@@ -76,7 +85,7 @@ class GameServiceEmptyDatabaseTest {
     @Test
     void testGetAllGames_WhenRepositoryThrowsException_ReturnsEmptyList() {
         // Mock repository throwing exception
-        when(gameEventRepository.findByGameEventType(any()))
+        when(gameRepository.findAll())
                 .thenThrow(new RuntimeException("Database connection error"));
 
         // Should catch exception and return empty list
@@ -90,7 +99,7 @@ class GameServiceEmptyDatabaseTest {
     @Test
     void testGetRecentGames_WhenDatabaseIsEmpty_ReturnsEmptyList() {
         // Mock empty repository result
-        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
@@ -103,7 +112,7 @@ class GameServiceEmptyDatabaseTest {
     @Test
     void testGetGameById_WhenDatabaseIsEmpty_ReturnsNull() {
         // Mock empty repository result
-        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
 
         // Should return null without throwing exception
         assertDoesNotThrow(() -> {
@@ -115,19 +124,19 @@ class GameServiceEmptyDatabaseTest {
     @Test
     void testGetGameDetails_WhenDatabaseIsEmpty_ReturnsNull() {
         // Mock empty repository result
-        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        when(gameRepository.findByGameOverTimestamp(any())).thenReturn(Optional.empty());
 
         // Should return null without throwing exception
         assertDoesNotThrow(() -> {
-            var result = gameService.getGameDetails("some-game-id");
+            var result = gameService.getGameDetails("1234567890_de_dust2");
             assertNull(result, "Should return null when database is empty");
         });
     }
 
     @Test
     void testGetAllGames_WhenPlayerStatsRepositoryThrowsException_StillReturnsGames() {
-        // Mock successful GameEvent query but PlayerStats repository throws exception
-        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        // Mock successful GameRepository query but PlayerStats repository throws exception
+        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
         when(playerStatsRepository.findByPlayerId(anyString()))
                 .thenThrow(new RuntimeException("PlayerStats error"));
 

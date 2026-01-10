@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* CS2 Color Palette */
+  --color-dark-primary: #0d0d0d;
+  --color-dark-secondary: #1a1a1a;
+  --color-dark-tertiary: #2d2d2d;
+  --color-dark-quaternary: #3a3a3a;
+  
+  --color-accent-orange: #ff6b35;
+  --color-accent-orange-secondary: #ff8c42;
+  --color-accent-blue: #4a90e2;
+  --color-accent-blue-secondary: #357abd;
+  
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #e0e0e0;
+  --color-text-tertiary: #b0b0b0;
+  
+  --color-success: #4caf50;
+  --color-warning: #ff9800;
+  --color-error: #f44336;
+  
+  --color-team-ct: #4caf50;
+  --color-team-t: #ff9800;
+}
+
+body {
+  font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-dark-primary);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-dark-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-tertiary);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dark-quaternary);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--color-accent-blue);
+  color: var(--color-text-primary);
+}
+
+/* Links */
+a {
+  color: var(--color-accent-blue);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-accent-blue-secondary);
+}
+
+/* Buttons */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Inputs */
+input, textarea, select {
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background-color: var(--color-dark-tertiary);
+  border: 1px solid var(--color-dark-quaternary);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-accent-blue);
+  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+/* Utility Classes */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mt-4 { margin-top: 2rem; }
+
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 2rem; }
+
+/* Loading Spinner */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  border: 3px solid var(--color-dark-tertiary);
+  border-top: 3px solid var(--color-accent-blue);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}

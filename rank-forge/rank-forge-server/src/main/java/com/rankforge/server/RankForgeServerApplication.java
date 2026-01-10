@@ -27,7 +27,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * Author bageshwar.pn
  * Date 2024
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.rankforge.server", "com.rankforge.pipeline.persistence"})
 @EnableAsync
 public class RankForgeServerApplication {
 

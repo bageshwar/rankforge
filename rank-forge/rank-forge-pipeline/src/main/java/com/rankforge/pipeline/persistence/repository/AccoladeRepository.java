@@ -20,6 +20,7 @@ package com.rankforge.pipeline.persistence.repository;
 
 import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -43,4 +44,23 @@ public interface AccoladeRepository extends JpaRepository<AccoladeEntity, Long> 
             @Param("start") Instant start,
             @Param("end") Instant end
     );
+    
+    /**
+     * Find accolades by game ID
+     */
+    @Query("SELECT a FROM AccoladeEntity a WHERE a.gameId = :gameId ORDER BY a.position ASC")
+    List<AccoladeEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find accolades by game timestamp (for migration compatibility)
+     */
+    @Query("SELECT a FROM AccoladeEntity a WHERE a.gameTimestamp = :gameTimestamp ORDER BY a.position ASC")
+    List<AccoladeEntity> findByGameTimestamp(@Param("gameTimestamp") Instant gameTimestamp);
+    
+    /**
+     * Bulk update: Set gameId for accolades matching game timestamp
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE AccoladeEntity a SET a.gameId = :gameId WHERE a.gameTimestamp = :gameTimestamp")
+    int updateAccoladesGameId(@Param("gameId") Long gameId, @Param("gameTimestamp") Instant gameTimestamp);
 }
