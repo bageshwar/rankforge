@@ -120,12 +120,14 @@ public class PlayerRankingService {
     
     /**
      * Retrieves all player statistics from the database
+     * Gets the latest stats for each player (most recent gameTimestamp)
      */
     private List<PlayerStats> getAllPlayerStatsFromDatabase() {
         List<PlayerStats> playerStatsList = new ArrayList<>();
         
         try {
-            List<PlayerStatsEntity> entities = playerStatsRepository.findAllByOrderByRankAsc();
+            // Get latest stats for all players (one record per player)
+            List<PlayerStatsEntity> entities = playerStatsRepository.findLatestStatsForAllPlayers();
             
             for (PlayerStatsEntity entity : entities) {
                 PlayerStats stats = convertToDomain(entity);
@@ -135,7 +137,7 @@ public class PlayerRankingService {
             LOGGER.error("Failed to retrieve player statistics", e);
         }
 
-        LOGGER.info("Retrieved {} player statistics from database", playerStatsList.size());
+        LOGGER.info("Retrieved {} player statistics from database (latest stats per player)", playerStatsList.size());
         return playerStatsList;
     }
     

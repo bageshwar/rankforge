@@ -34,8 +34,11 @@ public class PlayerStatsEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "playerId", nullable = false, unique = true, length = 255)
+    @Column(name = "playerId", nullable = false, length = 255)
     private String playerId;
+    
+    @Column(name = "gameTimestamp", nullable = false)
+    private Instant gameTimestamp;
     
     @Column(name = "kills", nullable = false)
     private Integer kills = 0;
@@ -179,5 +182,13 @@ public class PlayerStatsEntity {
     
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+    
+    public Instant getGameTimestamp() {
+        return gameTimestamp;
+    }
+    
+    public void setGameTimestamp(Instant gameTimestamp) {
+        this.gameTimestamp = gameTimestamp;
     }
 }

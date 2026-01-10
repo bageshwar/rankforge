@@ -91,27 +91,53 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     
     /**
      * Stores multiple player stats in batches
+     * Always inserts new records to track progression over time
+     * Each record is associated with a game timestamp for historical tracking
      */
     @Transactional
-    private void storeBatch(Collection<PlayerStats> stats) {
+    private void storeBatch(Collection<PlayerStats> stats, Instant gameTimestamp) {
         if (stats == null || stats.isEmpty()) {
             return;
         }
         
         try {
-            List<PlayerStatsEntity> entities = new ArrayList<>();
+            // Deduplicate by playerId within the batch - keep the latest stats for each player in this game
+            Map<String, PlayerStats> uniqueStats = new HashMap<>();
             for (PlayerStats stat : stats) {
-                PlayerStatsEntity entity = convertToEntity(stat);
-                entity.setLastUpdated(Instant.now());
-                entities.add(entity);
+                if (stat.getPlayerId() != null) {
+                    // If player already in map, keep the one with later lastUpdated
+                    PlayerStats existing = uniqueStats.get(stat.getPlayerId());
+                    if (existing == null || 
+                        (stat.getLastUpdated() != null && 
+                         (existing.getLastUpdated() == null || stat.getLastUpdated().isAfter(existing.getLastUpdated())))) {
+                        uniqueStats.put(stat.getPlayerId(), stat);
+                    }
+                }
             }
             
-            // Use saveAll which will handle upsert logic
-            repository.saveAll(entities);
-            logger.info("Batch stored {} player stats", entities.size());
+            if (uniqueStats.isEmpty()) {
+                return;
+            }
+            
+            List<PlayerStatsEntity> entitiesToSave = new ArrayList<>();
+            
+            // Always create new entities for historical tracking
+            for (PlayerStats stat : uniqueStats.values()) {
+                PlayerStatsEntity entity = convertToEntity(stat);
+                entity.setGameTimestamp(gameTimestamp);
+                entity.setLastUpdated(stat.getLastUpdated() != null ? stat.getLastUpdated() : Instant.now());
+                entitiesToSave.add(entity);
+            }
+            
+            // Always insert new records (never update) to track progression
+            repository.saveAll(entitiesToSave);
+            logger.info("Batch stored {} player stats for game at {} (historical records)", 
+                    entitiesToSave.size(), 
+                    gameTimestamp);
             
         } catch (Exception e) {
             logger.error("Failed to batch store PlayerStats", e);
+            throw e; // Re-throw to let caller handle
         }
     }
 
@@ -155,7 +181,8 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     @Override
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
-        storeBatch(playerStatsMap.values());
+        Instant gameTimestamp = event.getTimestamp();
+        storeBatch(playerStatsMap.values(), gameTimestamp);
         playerStatsMap.clear();
     }
 

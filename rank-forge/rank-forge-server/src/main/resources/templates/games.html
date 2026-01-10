@@ -147,12 +147,16 @@
         
         .players-dropdown {
             display: none;
-            position: fixed;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            margin-bottom: 0;
             background: white;
             border: 1px solid #ddd;
             border-radius: 6px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10000;
+            z-index: 1000;
             max-height: 300px;
             overflow-y: auto;
             min-width: 200px;
@@ -440,8 +444,10 @@
                             <div class="players-container">
                                 <div class="players-summary" th:onclick="${game.players != null and !game.players.empty} ? 'togglePlayers(this)' : ''">
                                     <span class="players-count" 
-                                          th:text="${game.players != null and !game.players.empty} ? (${game.players.size()} + ' players') : 'No players'"
-                                          th:class="${game.players != null and !game.players.empty} ? 'players-count' : 'players-count no-players'">5 players</span>
+                                          th:if="${game.players != null and !game.players.empty}"
+                                          th:text="${#lists.size(game.players) + ' players'}">5 players</span>
+                                    <span class="players-count no-players" 
+                                          th:if="${game.players == null or game.players.empty}">No players</span>
                                     <span class="expand-icon" th:if="${game.players != null and !game.players.empty}">▼</span>
                                 </div>
                                 <div class="players-dropdown" th:if="${game.players != null and !game.players.empty}">
@@ -644,38 +650,40 @@
             });
             
             // Toggle current dropdown
-            const isOpening = !dropdown.classList.contains('show');
             dropdown.classList.toggle('show');
             icon.classList.toggle('expanded');
             
-            // Position dropdown when opening
-            if (isOpening) {
+            // Position dropdown when opening - adjust if needed to stay in viewport
+            if (dropdown.classList.contains('show')) {
                 const rect = element.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
                 const dropdownRect = dropdown.getBoundingClientRect();
                 const viewportHeight = window.innerHeight;
                 const viewportWidth = window.innerWidth;
                 
-                // Calculate position
-                let top = rect.bottom + window.scrollY + 4; // 4px gap
-                let left = rect.left + window.scrollX;
+                // Reset positioning
+                dropdown.style.top = '';
+                dropdown.style.left = '';
+                dropdown.style.bottom = '';
+                dropdown.style.right = '';
                 
-                // Adjust if dropdown would go off bottom of viewport
-                if (rect.bottom + dropdownRect.height > viewportHeight) {
-                    top = rect.top + window.scrollY - dropdownRect.height - 4; // Show above instead
+                // Check if dropdown would go off bottom of viewport
+                const spaceBelow = viewportHeight - rect.bottom;
+                const spaceAbove = rect.top;
+                
+                if (spaceBelow < dropdownRect.height && spaceAbove > spaceBelow) {
+                    // Show above instead
+                    dropdown.style.top = 'auto';
+                    dropdown.style.bottom = '100%';
+                    dropdown.style.marginTop = '0';
+                    dropdown.style.marginBottom = '4px';
                 }
                 
-                // Adjust if dropdown would go off right edge
-                if (left + dropdownRect.width > viewportWidth) {
-                    left = viewportWidth - dropdownRect.width - 10; // 10px margin from edge
+                // Check if dropdown would go off right edge
+                if (containerRect.right + dropdownRect.width > viewportWidth) {
+                    dropdown.style.left = 'auto';
+                    dropdown.style.right = '0';
                 }
-                
-                // Adjust if dropdown would go off left edge
-                if (left < 10) {
-                    left = 10; // 10px margin from edge
-                }
-                
-                dropdown.style.top = top + 'px';
-                dropdown.style.left = left + 'px';
             }
         }
         
@@ -692,15 +700,25 @@
             }
         });
         
-        // Close dropdowns when scrolling
+        // Close dropdowns when scrolling (only if dropdown would be far off-screen)
+        let scrollTimeout;
         window.addEventListener('scroll', function() {
-            document.querySelectorAll('.players-dropdown.show').forEach(dropdown => {
-                dropdown.classList.remove('show');
-                const icon = dropdown.parentNode.querySelector('.expand-icon');
-                if (icon) {
-                    icon.classList.remove('expanded');
-                }
-            });
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(function() {
+                document.querySelectorAll('.players-dropdown.show').forEach(dropdown => {
+                    const container = dropdown.parentNode;
+                    const containerRect = container.getBoundingClientRect();
+                    
+                    // Only close if the container is significantly off-screen
+                    if (containerRect.bottom < -50 || containerRect.top > window.innerHeight + 50) {
+                        dropdown.classList.remove('show');
+                        const icon = container.querySelector('.expand-icon');
+                        if (icon) {
+                            icon.classList.remove('expanded');
+                        }
+                    }
+                });
+            }, 100);
         }, true);
         
         // Enhanced navigation links with loading
