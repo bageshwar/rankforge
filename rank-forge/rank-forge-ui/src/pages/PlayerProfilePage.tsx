@@ -7,12 +7,7 @@ import { playersApi } from '../services/api';
 import type { PlayerProfileDTO, RatingHistoryPoint } from '../services/api';
 import './PlayerProfilePage.css';
 
-// Extract numeric part from Steam ID (e.g., "[U:1:123456789]" -> "123456789")
-const extractSteamId = (fullId: string): string => {
-  if (!fullId) return '';
-  const match = fullId.match(/\[U:\d+:(\d+)\]/);
-  return match ? match[1] : fullId;
-};
+import { extractSteamId } from '../utils/steamId';
 
 export const PlayerProfilePage = () => {
   const { playerId } = useParams<{ playerId: string }>();

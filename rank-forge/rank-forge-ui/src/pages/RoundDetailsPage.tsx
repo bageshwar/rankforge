@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { gamesApi } from '../services/api';
+import { extractSteamId } from '../utils/steamId';
 import type { RoundDetailsDTO, RoundEventDTO } from '../services/api';
 import './RoundDetailsPage.css';
 
@@ -264,14 +265,14 @@ export const RoundDetailsPage = () => {
                     {event.eventType === 'KILL' && (
                       <>
                         <Link 
-                          to={`/players/${encodeURIComponent(event.player1Name || event.player1Id || '')}`}
+                          to={`/players/${extractSteamId(event.player1Id)}`}
                           className="player-link attacker"
                         >
                           {event.player1Name || event.player1Id || 'Unknown'}
                         </Link>
                         <span className="kill-arrow">→</span>
                         <Link 
-                          to={`/players/${encodeURIComponent(event.player2Name || event.player2Id || '')}`}
+                          to={`/players/${extractSteamId(event.player2Id)}`}
                           className="player-link victim"
                         >
                           {event.player2Name || event.player2Id || 'Unknown'}
@@ -282,14 +283,14 @@ export const RoundDetailsPage = () => {
                     {event.eventType === 'ASSIST' && (
                       <>
                         <Link 
-                          to={`/players/${encodeURIComponent(event.player1Name || event.player1Id || '')}`}
+                          to={`/players/${extractSteamId(event.player1Id)}`}
                           className="player-link assister"
                         >
                           {event.player1Name || event.player1Id || 'Unknown'}
                         </Link>
                         <span className="assist-text">assisted killing</span>
                         <Link 
-                          to={`/players/${encodeURIComponent(event.player2Name || event.player2Id || '')}`}
+                          to={`/players/${extractSteamId(event.player2Id)}`}
                           className="player-link victim"
                         >
                           {event.player2Name || event.player2Id || 'Unknown'}
@@ -297,9 +298,9 @@ export const RoundDetailsPage = () => {
                       </>
                     )}
                     
-                    {event.eventType === 'BOMB_EVENT' && event.player1Name && (
+                    {event.eventType === 'BOMB_EVENT' && event.player1Id && (
                       <Link 
-                        to={`/players/${encodeURIComponent(event.player1Name || event.player1Id || '')}`}
+                        to={`/players/${extractSteamId(event.player1Id)}`}
                         className="player-link bomber"
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
@@ -337,7 +338,7 @@ export const RoundDetailsPage = () => {
               .map((kill, idx) => (
                 <div key={kill.id || idx} className={`kill-feed-item ${kill.isHeadshot ? 'headshot' : ''}`}>
                   <Link 
-                    to={`/players/${encodeURIComponent(kill.player1Name || kill.player1Id || '')}`}
+                    to={`/players/${extractSteamId(kill.player1Id)}`}
                     className="killer-name"
                   >
                     {kill.player1Name || kill.player1Id || 'Unknown'}
@@ -347,7 +348,7 @@ export const RoundDetailsPage = () => {
                     <span className="weapon-name">{formatWeaponName(kill.weapon)}</span>
                   </div>
                   <Link 
-                    to={`/players/${encodeURIComponent(kill.player2Name || kill.player2Id || '')}`}
+                    to={`/players/${extractSteamId(kill.player2Id)}`}
                     className="victim-name"
                   >
                     {kill.player2Name || kill.player2Id || 'Unknown'}
