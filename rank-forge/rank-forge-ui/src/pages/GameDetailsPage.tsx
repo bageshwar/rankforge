@@ -4,8 +4,31 @@ import { format } from 'date-fns';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { gamesApi } from '../services/api';
+import { extractSteamId } from '../utils/steamId';
 import type { GameDTO, GameDetailsDTO } from '../services/api';
 import './GameDetailsPage.css';
+
+// Map accolade types to icons
+const getAccoladeIcon = (typeDescription: string): string => {
+  const type = typeDescription.toLowerCase();
+  
+  if (type.includes('5 kills') || type.includes('5k')) return '💀';
+  if (type.includes('4 kills') || type.includes('4k')) return '🎯';
+  if (type.includes('3 kills') || type.includes('3k')) return '🔫';
+  if (type.includes('first kill')) return '⚡';
+  if (type.includes('death')) return '☠️';
+  if (type.includes('assist')) return '🤝';
+  if (type.includes('headshot')) return '🎯';
+  if (type.includes('flash')) return '💡';
+  if (type.includes('burn') || type.includes('fire')) return '🔥';
+  if (type.includes('cash') || type.includes('money') || type.includes('spent')) return '💰';
+  if (type.includes('weapon') || type.includes('unique')) return '🗡️';
+  if (type.includes('mvp')) return '⭐';
+  if (type.includes('damage')) return '💥';
+  if (type.includes('clutch')) return '🏆';
+  
+  return '🎖️'; // Default medal icon
+};
 
 export const GameDetailsPage = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -84,142 +107,133 @@ export const GameDetailsPage = () => {
 
       <div className="game-header">
         <h1 className="game-title">🎮 {game.map}</h1>
+        
+        {/* Score Display */}
+        {gameDetails && (
+          <div className="header-score">
+            <span className="header-score-ct">{gameDetails.ctScore}</span>
+            <span className="header-score-divider">:</span>
+            <span className="header-score-t">{gameDetails.tScore}</span>
+          </div>
+        )}
+        
         <div className="game-meta">
           <div className="meta-item">
             <span className="meta-label">Date & Time</span>
             <span className="meta-value">{formatDate(game.gameDate)}</span>
           </div>
           <div className="meta-item">
-            <span className="meta-label">Mode</span>
-            <span className="meta-value">{game.mode}</span>
-          </div>
-          <div className="meta-item">
-            <span className="meta-label">Final Score</span>
-            <span className="meta-value">{game.score}</span>
-          </div>
-          <div className="meta-item">
             <span className="meta-label">Duration</span>
             <span className="meta-value">{game.formattedDuration}</span>
           </div>
+          {gameDetails && (
+            <div className="meta-item">
+              <span className="meta-label">Rounds</span>
+              <span className="meta-value">{gameDetails.totalRounds}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="content-grid">
-        {/* Player Statistics */}
-        <div className="section-card card-bg">
-          <h2 className="section-title">👥 Player Statistics</h2>
-          {gameDetails?.playerStats && gameDetails.playerStats.length > 0 ? (
-            <div className="players-grid">
-              {gameDetails.playerStats.map((player, idx) => (
-                <div key={idx} className="player-card">
-                  <div className="player-name">{player.playerName}</div>
-                  <div className="player-stats">
-                    <div className="stat-item">
-                      <span className="stat-number">{player.kills}</span>
-                      <span className="stat-label">K</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-number">{player.deaths}</span>
-                      <span className="stat-label">D</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-number">{player.assists}</span>
-                      <span className="stat-label">A</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-number">
-                        {player.rating.toFixed(2)}
-                      </span>
-                      <span className="stat-label">Rating</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="no-data">No detailed player statistics available.</div>
-          )}
-        </div>
-
-        {/* Game Summary */}
-        <div className="section-card card-bg">
-          <h2 className="section-title">📊 Game Summary</h2>
-          {gameDetails ? (
-            <>
-              <div className="team-section">
-                <div className="team-header team-ct">
-                  Counter-Terrorists: <span>{gameDetails.ctScore}</span> rounds
-                </div>
-              </div>
-              <div className="team-section">
-                <div className="team-header team-t">
-                  Terrorists: <span>{gameDetails.tScore}</span> rounds
-                </div>
-              </div>
-              <div className="total-rounds">
-                <span className="stat-number">{gameDetails.totalRounds}</span>
-                <span className="stat-label">Total Rounds Played</span>
-              </div>
-            </>
-          ) : (
-            <div className="no-data">Game summary data is being processed...</div>
-          )}
-        </div>
-
-        {/* Round Timeline */}
-        {gameDetails?.rounds && gameDetails.rounds.length > 0 && (
-          <div className="section-card card-bg rounds-section">
-            <h2 className="section-title">⏱️ Round Timeline</h2>
-            <p className="rounds-description">
-              Round-by-round results (Green = CT Win, Orange = T Win)
-            </p>
-            <div className="rounds-timeline">
-              {gameDetails.rounds.map((round, idx) => (
-                <div
-                  key={idx}
-                  className={`round-badge ${
-                    round.winnerTeam === 'CT' ? 'ct-win' : 't-win'
-                  }`}
-                  title={`Round ${idx + 1}: ${round.winnerTeam} Win`}
-                >
-                  {idx + 1}
-                </div>
-              ))}
-            </div>
+      {/* Round Timeline */}
+      {gameDetails?.rounds && gameDetails.rounds.length > 0 && (
+        <div className="section-card card-bg rounds-section">
+          <h2 className="section-title">⏱️ Round Timeline</h2>
+          <p className="rounds-description">
+            Round-by-round results (Green = CT Win, Orange = T Win) • Click a round for details
+          </p>
+          <div className="rounds-timeline">
+            {gameDetails.rounds.map((round, idx) => (
+              <Link
+                key={idx}
+                to={`/games/${gameId}/rounds/${idx + 1}`}
+                className={`round-badge ${
+                  round.winnerTeam === 'CT' ? 'ct-win' : 't-win'
+                }`}
+                title={`Round ${idx + 1}: ${round.winnerTeam} Win - Click for details`}
+              >
+                {idx + 1}
+              </Link>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Accolades */}
-        {gameDetails?.accolades && gameDetails.accolades.length > 0 && (
-          <div className="section-card card-bg accolades-section">
-            <h2 className="section-title">🏆 Match Accolades</h2>
-            <p className="accolades-description">
-              Player achievements and awards from this match
-            </p>
-            <div className="accolades-grid">
-              {gameDetails.accolades.map((accolade, idx) => (
+      {/* Player Statistics - Tabular */}
+      <div className="section-card card-bg player-stats-section">
+        <h2 className="section-title">👥 Player Statistics</h2>
+        {gameDetails?.playerStats && gameDetails.playerStats.length > 0 ? (
+          <div className="stats-table-container">
+            <table className="stats-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>K</th>
+                  <th>D</th>
+                  <th>A</th>
+                  <th>K/D</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gameDetails.playerStats.map((player, idx) => {
+                  const steamId = extractSteamId(player.playerId);
+                  return (
+                    <tr key={idx}>
+                      <td className="player-name-cell">
+                        {steamId ? (
+                          <Link to={`/players/${steamId}`} className="player-profile-link">
+                            {player.playerName}
+                          </Link>
+                        ) : (
+                          player.playerName
+                        )}
+                      </td>
+                      <td className="kills-cell">{player.kills}</td>
+                      <td className="deaths-cell">{player.deaths}</td>
+                      <td className="assists-cell">{player.assists}</td>
+                      <td className="rating-cell">
+                        {player.deaths > 0 
+                          ? (player.kills / player.deaths).toFixed(2) 
+                          : player.kills.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="no-data">No player statistics available.</div>
+        )}
+      </div>
+
+      {/* Accolades */}
+      {gameDetails?.accolades && gameDetails.accolades.length > 0 && (
+        <div className="section-card card-bg accolades-section">
+          <h2 className="section-title">🏆 Match Accolades</h2>
+          <div className="accolades-grid">
+            {gameDetails.accolades.map((accolade, idx) => {
+              const steamId = extractSteamId(accolade.playerId);
+              return (
                 <div key={idx} className="accolade-card">
-                  <div className="accolade-header">
-                    <span className="accolade-type">{accolade.typeDescription}</span>
-                    <span className="accolade-position">#{accolade.position}</span>
-                  </div>
-                  <div className="accolade-player">{accolade.playerName}</div>
-                  <div className="accolade-stats">
-                    <div className="accolade-stat">
-                      <span className="stat-label">Value:</span>
-                      <span className="stat-value">{accolade.value.toFixed(1)}</span>
-                    </div>
-                    <div className="accolade-stat">
-                      <span className="stat-label">Score:</span>
-                      <span className="stat-value">{accolade.score.toFixed(1)}</span>
-                    </div>
+                  <div className="accolade-icon">{getAccoladeIcon(accolade.typeDescription)}</div>
+                  <div className="accolade-content">
+                    <div className="accolade-type">{accolade.typeDescription}</div>
+                    {steamId ? (
+                      <Link to={`/players/${steamId}`} className="accolade-player-link">
+                        {accolade.playerName}
+                      </Link>
+                    ) : (
+                      <div className="accolade-player">{accolade.playerName}</div>
+                    )}
+                    <div className="accolade-value">{accolade.value.toFixed(0)}</div>
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </PageContainer>
   );
 };

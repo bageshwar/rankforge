@@ -19,6 +19,7 @@
 package com.rankforge.core.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /**
@@ -35,12 +36,16 @@ public class ObjectMapperFactory {
      * Creates a new ObjectMapper instance with standard configuration.
      * This includes:
      * - JavaTimeModule for Java 8 time type support (Instant, LocalDateTime, etc.)
+     * - Dates serialized as ISO-8601 strings (not numeric timestamps)
      * 
      * @return A new configured ObjectMapper instance
      */
     public static ObjectMapper createObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
+        // Serialize dates as ISO-8601 strings, not numeric timestamps
+        // This ensures JavaScript can parse them correctly with new Date()
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return mapper;
     }
 }

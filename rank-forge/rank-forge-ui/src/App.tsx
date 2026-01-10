@@ -5,6 +5,8 @@ import { HomePage } from './pages/HomePage';
 import { RankingsPage } from './pages/RankingsPage';
 import { GamesPage } from './pages/GamesPage';
 import { GameDetailsPage } from './pages/GameDetailsPage';
+import { RoundDetailsPage } from './pages/RoundDetailsPage';
+import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import './App.css';
 
 function App() {
@@ -16,8 +18,10 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/rankings" element={<RankingsPage />} />
+            <Route path="/players/:playerId" element={<PlayerProfilePage />} />
             <Route path="/games" element={<GamesPage />} />
             <Route path="/games/:gameId" element={<GameDetailsPage />} />
+            <Route path="/games/:gameId/rounds/:roundNumber" element={<RoundDetailsPage />} />
           </Routes>
         </main>
         <Footer />

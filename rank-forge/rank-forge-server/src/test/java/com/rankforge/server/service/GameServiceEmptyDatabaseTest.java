@@ -118,14 +118,14 @@ class GameServiceEmptyDatabaseTest {
     }
 
     @Test
-    void testGetGameDetails_WhenDatabaseIsEmpty_ReturnsNull() {
-        // Mock empty repository result
-        when(gameRepository.findByGameOverTimestamp(any())).thenReturn(Optional.empty());
+    void testGetGameDetails_WhenGameNotFound_ReturnsNull() {
+        // Mock empty repository result - GameService.getGameDetails uses findById not findByGameOverTimestamp
+        when(gameRepository.findById(any())).thenReturn(Optional.empty());
 
-        // Should return null without throwing exception
+        // Should return null without throwing exception (passing a valid numeric ID)
         assertDoesNotThrow(() -> {
-            var result = gameService.getGameDetails("1234567890_de_dust2");
-            assertNull(result, "Should return null when database is empty");
+            var result = gameService.getGameDetails("123");
+            assertNull(result, "Should return null when game is not found");
         });
     }
 

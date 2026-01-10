@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { rankingsApi } from '../services/api';
 import type { PlayerRankingDTO } from '../services/api';
 import './RankingsPage.css';
+
+import { extractSteamId } from '../utils/steamId';
 
 export const RankingsPage = () => {
   const [rankings, setRankings] = useState<PlayerRankingDTO[]>([]);
@@ -103,6 +106,7 @@ export const RankingsPage = () => {
             <tr>
               <th className="rank-col">Rank</th>
               <th className="player-col">Player</th>
+              <th className="stat-col">ELO</th>
               <th className="stat-col">K/D</th>
               <th className="stat-col">Kills</th>
               <th className="stat-col">Deaths</th>
@@ -114,23 +118,29 @@ export const RankingsPage = () => {
             </tr>
           </thead>
           <tbody>
-            {rankings.map((player) => (
+            {rankings.map((player, index) => {
+              const position = index + 1;
+              const rankClass = position === 1 ? 'rank-gold' : position === 2 ? 'rank-silver' : position === 3 ? 'rank-bronze' : '';
+              return (
               <tr
                 key={player.playerId}
-                className={`player-row ${player.rank <= 3 ? 'top-player' : ''}`}
+                className={`player-row ${rankClass}`}
               >
                 <td className="rank-cell">
-                  <span className="rank-number">{player.rank}</span>
-                  {getRankIcon(player.rank) && (
-                    <span className="rank-icon">{getRankIcon(player.rank)}</span>
+                  <span className={`rank-number ${rankClass}`}>{position}</span>
+                  {position <= 3 && (
+                    <span className={`rank-icon ${rankClass}`}>{getRankIcon(position)}</span>
                   )}
                 </td>
                 <td className="player-cell">
-                  <div className="player-info">
-                    <span className="player-name">{player.playerName}</span>
-                    <span className="player-id">{player.playerId}</span>
-                  </div>
+                  <Link to={`/players/${extractSteamId(player.playerId)}`} className="player-link">
+                    <div className="player-info">
+                      <span className="player-name">{player.playerName}</span>
+                      <span className="player-id">{extractSteamId(player.playerId)}</span>
+                    </div>
+                  </Link>
                 </td>
+                <td className="stat-cell elo-score">{formatNumber(player.rank, 0)}</td>
                 <td className="stat-cell kd-ratio">{formatNumber(player.killDeathRatio)}</td>
                 <td className="stat-cell">{player.kills}</td>
                 <td className="stat-cell">{player.deaths}</td>
@@ -144,7 +154,8 @@ export const RankingsPage = () => {
                   {formatNumber(player.damageDealt, 0)}
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

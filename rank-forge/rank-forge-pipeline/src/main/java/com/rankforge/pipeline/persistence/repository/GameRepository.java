@@ -20,33 +20,15 @@ package com.rankforge.pipeline.persistence.repository;
 
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-
 /**
- * Repository for Game entities
+ * Repository for Game entities.
+ * All game fetching is done by ID - timestamp-based scanning has been removed.
  * Author bageshwar.pn
  * Date 2026
  */
 @Repository
 public interface GameRepository extends JpaRepository<GameEntity, Long> {
-    
-    /**
-     * Find game by game over timestamp
-     */
-    Optional<GameEntity> findByGameOverTimestamp(Instant timestamp);
-    
-    /**
-     * Find games by game over timestamp range
-     */
-    @Query("SELECT g FROM GameEntity g WHERE g.gameOverTimestamp BETWEEN :start AND :end ORDER BY g.gameOverTimestamp DESC")
-    List<GameEntity> findByGameOverTimestampBetween(
-            @Param("start") Instant start,
-            @Param("end") Instant end
-    );
+    // Uses JpaRepository's built-in findById(Long id), findAll(), etc.
 }

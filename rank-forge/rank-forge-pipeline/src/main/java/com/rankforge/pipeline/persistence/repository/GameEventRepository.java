@@ -45,26 +45,8 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
     List<GameEventEntity> findByGameEventType(GameEventType type);
     
     /**
-     * Find events by type and timestamp range
-     */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.gameEventType = :type AND e.timestamp BETWEEN :start AND :end ORDER BY e.timestamp ASC")
-    List<GameEventEntity> findByGameEventTypeAndTimestampBetween(
-            @Param("type") GameEventType type,
-            @Param("start") Instant start,
-            @Param("end") Instant end
-    );
-    
-    /**
-     * Find events by timestamp range
-     */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.timestamp BETWEEN :start AND :end ORDER BY e.timestamp ASC")
-    List<GameEventEntity> findByTimestampBetween(
-            @Param("start") Instant start,
-            @Param("end") Instant end
-    );
-    
-    /**
      * Find events by type and exact timestamp
+     * Used for deduplication check in CS2LogParser
      */
     List<GameEventEntity> findByGameEventTypeAndTimestamp(GameEventType type, Instant timestamp);
     
@@ -103,13 +85,4 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
      */
     @Query("SELECT e FROM RoundEndEventEntity e WHERE e.game.id = :gameId ORDER BY e.timestamp ASC")
     List<RoundEndEventEntity> findRoundEndEventsByGameId(@Param("gameId") Long gameId);
-    
-    /**
-     * Find events between timestamps
-     */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.timestamp BETWEEN :startTime AND :endTime ORDER BY e.timestamp ASC")
-    List<GameEventEntity> findEventsBetweenTimestamps(
-            @Param("startTime") Instant startTime,
-            @Param("endTime") Instant endTime
-    );
 }

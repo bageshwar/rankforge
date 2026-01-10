@@ -25,7 +25,7 @@ export interface PlayerRankingDTO {
 }
 
 export interface GameDTO {
-  gameId: string;
+  id: number;  // Database ID from Game table
   gameDate: string;
   map: string;
   mode: string;
@@ -42,6 +42,7 @@ export interface RoundDTO {
 
 export interface PlayerStatDTO {
   playerName: string;
+  playerId: string;
   kills: number;
   deaths: number;
   assists: number;
@@ -52,6 +53,7 @@ export interface AccoladeDTO {
   typeDescription: string;
   position: number;
   playerName: string;
+  playerId: string;
   value: number;
   score: number;
 }
@@ -64,6 +66,82 @@ export interface GameDetailsDTO {
   playerStats?: PlayerStatDTO[];
   rounds?: RoundDTO[];
   accolades?: AccoladeDTO[];
+}
+
+export interface RoundEventDTO {
+  id: number;
+  eventType: 'KILL' | 'ASSIST' | 'ATTACK' | 'BOMB_EVENT';
+  timestamp: string;
+  timeOffsetMs: number;
+  player1Id?: string;
+  player1Name?: string;
+  player2Id?: string;
+  player2Name?: string;
+  weapon?: string;
+  isHeadshot?: boolean;
+  damage?: number;
+  armorDamage?: number;
+  hitGroup?: string;
+  bombEventType?: string;
+  assistType?: string;
+}
+
+export interface RoundDetailsDTO {
+  gameId: number;
+  roundNumber: number;
+  winnerTeam: 'CT' | 'T';
+  roundStartTime: string;
+  roundEndTime: string;
+  durationMs: number;
+  events: RoundEventDTO[];
+  totalKills: number;
+  totalAssists: number;
+  headshotKills: number;
+  bombPlanted: boolean;
+  bombDefused: boolean;
+  bombExploded: boolean;
+}
+
+// Player Profile Types
+export interface RatingHistoryPoint {
+  gameDate: string;
+  rank: number;
+  killDeathRatio: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  gameNumber: number;
+}
+
+export interface PlayerAccoladeDTO {
+  type: string;
+  typeDescription: string;
+  value: number;
+  position: number;
+  score: number;
+  gameDate: string;
+  gameId: number;
+}
+
+export interface PlayerProfileDTO {
+  playerId: string;
+  playerName: string;
+  currentRank: number;
+  totalKills: number;
+  totalDeaths: number;
+  totalAssists: number;
+  killDeathRatio: number;
+  headshotKills: number;
+  headshotPercentage: number;
+  totalRoundsPlayed: number;
+  clutchesWon: number;
+  totalDamageDealt: number;
+  totalGamesPlayed: number;
+  ratingHistory: RatingHistoryPoint[];
+  accolades: PlayerAccoladeDTO[];
+  accoladesByType: Record<string, number>;
+  mostFrequentAccolade: string;
+  totalAccolades: number;
 }
 
 // Rankings API
@@ -136,8 +214,46 @@ export const gamesApi = {
     }
   },
 
+  getRoundDetails: async (gameId: string, roundNumber: number): Promise<RoundDetailsDTO | null> => {
+    try {
+      const response = await apiClient.get<RoundDetailsDTO>(`/games/${gameId}/rounds/${roundNumber}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
   health: async (): Promise<string> => {
     const response = await apiClient.get<string>('/games/health');
+    return response.data;
+  },
+};
+
+// Players API
+export const playersApi = {
+  getProfile: async (playerId: string): Promise<PlayerProfileDTO | null> => {
+    try {
+      const encodedId = encodeURIComponent(playerId);
+      const response = await apiClient.get<PlayerProfileDTO>(`/players/${encodedId}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  getAll: async (): Promise<PlayerProfileDTO[]> => {
+    const response = await apiClient.get<PlayerProfileDTO[]>('/players');
+    return response.data;
+  },
+
+  health: async (): Promise<string> => {
+    const response = await apiClient.get<string>('/players/health');
     return response.data;
   },
 };

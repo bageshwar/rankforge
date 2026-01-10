@@ -105,18 +105,41 @@ public class AccoladeStore {
      * Queue accolades for deferred persistence.
      * Accolades are parsed before GameEntity exists, so we add them to context
      * and set the game reference when GameEntity is created.
+     * 
+     * Important: Accolades in CS2 logs use local session indices (like "0", "1") instead of
+     * Steam IDs. We resolve the actual Steam ID using the player name -> Steam ID mapping
+     * that was built during event processing.
      */
     public void queueAccolades(List<Accolade> accolades) {
         if (accolades == null || accolades.isEmpty()) {
             return;
         }
         
+        int resolvedCount = 0;
+        int unresolvedCount = 0;
+        
         for (Accolade accolade : accolades) {
             AccoladeEntity entity = convertToEntity(accolade);
+            
+            // Try to resolve the Steam ID from player name
+            // The log format only gives us local session index (e.g., "0", "1"), not Steam ID
+            String resolvedSteamId = context.getSteamIdByPlayerName(accolade.getPlayerName());
+            if (resolvedSteamId != null) {
+                entity.setPlayerId(resolvedSteamId);
+                resolvedCount++;
+                logger.debug("Resolved accolade player '{}' to Steam ID: {}", 
+                        accolade.getPlayerName(), resolvedSteamId);
+            } else {
+                unresolvedCount++;
+                logger.warn("Could not resolve Steam ID for accolade player: '{}' (keeping original ID: {})", 
+                        accolade.getPlayerName(), accolade.getPlayerId());
+            }
+            
             context.addAccolade(entity);
         }
         
-        logger.debug("Queued {} accolades for deferred persistence", accolades.size());
+        logger.info("Queued {} accolades for deferred persistence (resolved: {}, unresolved: {})", 
+                accolades.size(), resolvedCount, unresolvedCount);
     }
     
     /**

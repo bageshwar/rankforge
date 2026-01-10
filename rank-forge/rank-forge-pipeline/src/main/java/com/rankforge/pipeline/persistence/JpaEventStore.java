@@ -86,6 +86,10 @@ public class JpaEventStore implements EventStore, GameEventListener {
         try {
             GameEventEntity entity = convertToEntity(event);
             
+            // Register player name -> Steam ID mappings for events with player info
+            // This is used later to resolve accolade player IDs
+            registerPlayerMappings(event);
+            
             // Use context to set references and add to pending list based on event type
             switch (event.getGameEventType()) {
                 case ROUND_START:
@@ -109,6 +113,27 @@ public class JpaEventStore implements EventStore, GameEventListener {
         } catch (Exception e) {
             logger.error("Failed to store event: {}", event.getGameEventType(), e);
             throw new RuntimeException("Failed to store event", e);
+        }
+    }
+    
+    /**
+     * Register player name to Steam ID mappings from game action events.
+     * This builds a lookup table used to resolve accolade player IDs.
+     */
+    private void registerPlayerMappings(GameEvent event) {
+        if (event instanceof GameActionEvent gameActionEvent) {
+            if (gameActionEvent.getPlayer1() != null) {
+                context.registerPlayer(
+                    gameActionEvent.getPlayer1().getName(),
+                    gameActionEvent.getPlayer1().getSteamId()
+                );
+            }
+            if (gameActionEvent.getPlayer2() != null) {
+                context.registerPlayer(
+                    gameActionEvent.getPlayer2().getName(),
+                    gameActionEvent.getPlayer2().getSteamId()
+                );
+            }
         }
     }
     
@@ -255,28 +280,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
             logger.error("Failed to get GameOver events", e);
         }
         return gameOverEvents;
-    }
-
-    @Override
-    public List<GameEvent> getEventsBetween(GameEventType eventType, Instant startTime, Instant endTime) {
-        List<GameEvent> events = new ArrayList<>();
-        try {
-            List<GameEventEntity> entities = repository.findByGameEventTypeAndTimestampBetween(eventType, startTime, endTime);
-            for (GameEventEntity entity : entities) {
-                GameEvent event = convertToDomain(entity);
-                if (event != null) {
-                    events.add(event);
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Failed to get events of type {} between {} and {}", eventType, startTime, endTime, e);
-        }
-        return events;
-    }
-
-    @Override
-    public List<GameEvent> getRoundEndEventsBetween(Instant gameStartTime, Instant gameEndTime) {
-        return getEventsBetween(GameEventType.ROUND_END, gameStartTime, gameEndTime);
     }
 
     @Override

@@ -1,0 +1,536 @@
+/* Player Profile Page Styles */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--color-accent-blue);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  margin-bottom: 2rem;
+  transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+  background: var(--color-accent-blue-secondary);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Profile Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
+  border-radius: 20px;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent-blue), var(--color-accent-orange), var(--color-accent-blue));
+}
+
+.profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-accent-blue) 0%, var(--color-accent-orange) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px rgba(74, 144, 226, 0.4);
+  flex-shrink: 0;
+}
+
+.avatar-icon {
+  font-size: 3.5rem;
+}
+
+.profile-info {
+  flex: 1;
+}
+
+.player-name {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.player-id-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(74, 144, 226, 0.2);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--color-accent-blue);
+  margin-bottom: 0.75rem;
+}
+
+.rank-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid;
+  border-radius: 12px;
+}
+
+.rank-tier {
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.rank-number {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.current-rating {
+  text-align: center;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.2) 0%, rgba(255, 107, 53, 0.2) 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(74, 144, 226, 0.3);
+}
+
+.rating-value {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--color-accent-orange);
+  line-height: 1;
+}
+
+.rating-label {
+  font-size: 0.9rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 0.5rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0) 0%, rgba(74, 144, 226, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(74, 144, 226, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-card.highlight {
+  border-color: rgba(255, 107, 53, 0.3);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(255, 107, 53, 0.1) 100%);
+}
+
+.stat-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Section Cards */
+.section-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.subsection-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 1.5rem 0 1rem 0;
+}
+
+/* Chart Section */
+.chart-section {
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(45, 45, 45, 0.95) 100%);
+}
+
+.chart-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rating-chart {
+  width: 100%;
+  height: auto;
+  min-width: 600px;
+}
+
+.chart-tooltip-trigger .chart-tooltip {
+  display: none;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid var(--color-accent-blue);
+  border-radius: 8px;
+  padding: 0.75rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.chart-tooltip-trigger:hover .chart-tooltip {
+  display: block;
+}
+
+.tooltip-kd {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-accent-orange);
+}
+
+.tooltip-kda {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin: 0.25rem 0;
+}
+
+.tooltip-game {
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+/* Accolades Summary */
+.accolades-stats {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.accolade-stat-card {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.accolade-stat-card.featured {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.accolade-stat-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.accolade-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.accolade-stat-label {
+  font-size: 0.85rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 0.25rem;
+}
+
+/* Accolades by Type */
+.accolades-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.accolade-type-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  border-left: 3px solid var(--color-accent-blue);
+  transition: all 0.2s ease;
+}
+
+.accolade-type-item:hover {
+  background: rgba(74, 144, 226, 0.1);
+  transform: translateX(4px);
+}
+
+.accolade-type-name {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.accolade-type-count {
+  font-weight: 700;
+  color: var(--color-accent-orange);
+  background: rgba(255, 107, 53, 0.2);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+/* Recent Accolades List */
+.accolades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.accolade-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border-left: 4px solid var(--color-warning);
+  transition: all 0.2s ease;
+}
+
+.accolade-item:hover {
+  background: rgba(255, 152, 0, 0.1);
+  transform: translateX(4px);
+}
+
+.accolade-icon {
+  font-size: 1.75rem;
+}
+
+.accolade-details {
+  flex: 1;
+}
+
+.accolade-type {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.accolade-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.accolade-position {
+  color: var(--color-accent-orange);
+  font-weight: 600;
+}
+
+.accolade-date {
+  color: var(--color-text-tertiary);
+}
+
+.accolade-values {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.accolade-value,
+.accolade-score {
+  text-align: center;
+}
+
+.value-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value-number {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-accent-blue);
+}
+
+.view-game-link {
+  padding: 0.5rem 1rem;
+  background: rgba(74, 144, 226, 0.2);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  border-radius: 6px;
+  color: var(--color-accent-blue);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.view-game-link:hover {
+  background: var(--color-accent-blue);
+  color: var(--color-text-primary);
+}
+
+/* Error Message */
+.error-message {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-error);
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid var(--color-error);
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 1.5rem;
+  }
+
+  .profile-info {
+    text-align: center;
+  }
+
+  .rank-badge {
+    align-items: center;
+  }
+
+  .player-name {
+    font-size: 2rem;
+  }
+
+  .current-rating {
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-card {
+    padding: 1rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .accolades-stats {
+    flex-direction: column;
+  }
+
+  .accolade-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
+
+  .accolade-values {
+    justify-content: center;
+  }
+
+  .view-game-link {
+    width: 100%;
+    text-align: center;
+  }
+
+  .accolades-type-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-avatar {
+    width: 100px;
+    height: 100px;
+  }
+
+  .avatar-icon {
+    font-size: 2.5rem;
+  }
+}

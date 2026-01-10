@@ -12,7 +12,6 @@ export const GamesPage = () => {
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expandedPlayers, setExpandedPlayers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadGames();
@@ -30,16 +29,6 @@ export const GamesPage = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const togglePlayers = (gameId: string) => {
-    const newExpanded = new Set(expandedPlayers);
-    if (newExpanded.has(gameId)) {
-      newExpanded.delete(gameId);
-    } else {
-      newExpanded.add(gameId);
-    }
-    setExpandedPlayers(newExpanded);
   };
 
   const formatDate = (dateString: string) => {
@@ -119,60 +108,23 @@ export const GamesPage = () => {
                 <tr>
                   <th>Date & Time</th>
                   <th>Map</th>
-                  <th>Mode</th>
                   <th>Score</th>
                   <th>Duration</th>
-                  <th>Players</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {games.map((game) => (
-                  <tr key={game.gameId}>
+                  <tr key={game.id}>
                     <td className="game-date">{formatDate(game.gameDate)}</td>
                     <td>
                       <span className="map-badge">{game.map}</span>
                     </td>
-                    <td>{game.mode}</td>
                     <td className="score">{game.score}</td>
                     <td>{game.formattedDuration}</td>
                     <td>
-                      <div className="players-container">
-                        {game.players && game.players.length > 0 ? (
-                          <>
-                            <div
-                              className="players-summary"
-                              onClick={() => togglePlayers(game.gameId)}
-                            >
-                              <span className="players-count">
-                                {game.players.length} players
-                              </span>
-                              <span
-                                className={`expand-icon ${
-                                  expandedPlayers.has(game.gameId) ? 'expanded' : ''
-                                }`}
-                              >
-                                ▼
-                              </span>
-                            </div>
-                            {expandedPlayers.has(game.gameId) && (
-                              <div className="players-dropdown">
-                                {game.players.map((player, idx) => (
-                                  <div key={idx} className="player-item">
-                                    {player}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <span className="no-players">No players</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
                       <Link
-                        to={`/games/${game.gameId}`}
+                        to={`/games/${game.id}`}
                         className="details-btn"
                       >
                         📊 Details

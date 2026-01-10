@@ -41,4 +41,16 @@ public interface AccoladeRepository extends JpaRepository<AccoladeEntity, Long> 
      */
     @Query("SELECT a FROM AccoladeEntity a WHERE a.game.id = :gameId ORDER BY a.position ASC")
     List<AccoladeEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find all accolades for a specific player by player ID
+     */
+    @Query("SELECT a FROM AccoladeEntity a WHERE a.playerId = :playerId ORDER BY a.createdAt DESC")
+    List<AccoladeEntity> findByPlayerId(@Param("playerId") String playerId);
+    
+    /**
+     * Find all accolades for a player by player name (case-insensitive)
+     */
+    @Query("SELECT a FROM AccoladeEntity a WHERE LOWER(a.playerName) = LOWER(:playerName) ORDER BY a.createdAt DESC")
+    List<AccoladeEntity> findByPlayerName(@Param("playerName") String playerName);
 }

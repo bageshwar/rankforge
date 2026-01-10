@@ -5,6 +5,7 @@ package com.rankforge.server.dto;
  */
 public class PlayerStatsDTO {
     private String playerName;
+    private String playerId;
     private int kills;
     private int deaths;
     private int assists;
@@ -13,8 +14,9 @@ public class PlayerStatsDTO {
     
     public PlayerStatsDTO() {}
     
-    public PlayerStatsDTO(String playerName, int kills, int deaths, int assists, double rating, String team) {
+    public PlayerStatsDTO(String playerName, String playerId, int kills, int deaths, int assists, double rating, String team) {
         this.playerName = playerName;
+        this.playerId = playerId;
         this.kills = kills;
         this.deaths = deaths;
         this.assists = assists;
@@ -28,6 +30,14 @@ public class PlayerStatsDTO {
     
     public void setPlayerName(String playerName) {
         this.playerName = playerName;
+    }
+    
+    public String getPlayerId() {
+        return playerId;
+    }
+    
+    public void setPlayerId(String playerId) {
+        this.playerId = playerId;
     }
     
     public int getKills() {

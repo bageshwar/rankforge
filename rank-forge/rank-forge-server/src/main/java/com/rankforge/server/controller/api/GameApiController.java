@@ -20,6 +20,7 @@ package com.rankforge.server.controller.api;
 
 import com.rankforge.server.dto.GameDTO;
 import com.rankforge.server.dto.GameDetailsDTO;
+import com.rankforge.server.dto.RoundDetailsDTO;
 import com.rankforge.server.service.GameService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -106,5 +107,22 @@ public class GameApiController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(gameDetails);
+    }
+    
+    /**
+     * Get detailed round information including all events
+     * @param gameId Unique game identifier
+     * @param roundNumber Round number (1-indexed)
+     * @return Round details with all events sorted by timeline
+     */
+    @GetMapping("/{gameId}/rounds/{roundNumber}")
+    public ResponseEntity<RoundDetailsDTO> getRoundDetails(
+            @PathVariable("gameId") String gameId,
+            @PathVariable("roundNumber") int roundNumber) {
+        RoundDetailsDTO roundDetails = gameService.getRoundDetails(gameId, roundNumber);
+        if (roundDetails == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(roundDetails);
     }
 }
