@@ -58,6 +58,13 @@
             <version>${spring.boot.version}</version>
         </dependency>
 
+        <!-- Spring Boot Starter Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <version>${spring.boot.version}</version>
+        </dependency>
+
         <!-- Rank Forge Core dependency -->
         <dependency>
             <groupId>org.example</groupId>

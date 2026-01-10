@@ -19,49 +19,82 @@
 package com.rankforge.server.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.core.util.ObjectMapperFactory;
-import com.rankforge.pipeline.persistence.*;
+import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.JpaEventStore;
+import com.rankforge.pipeline.persistence.JpaPlayerStatsStore;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-import java.sql.SQLException;
+import javax.sql.DataSource;
+import java.util.Properties;
 
 /**
- * Configuration for persistence layer beans.
- * Supports JDBC persistence based on configuration.
+ * Configuration for persistence layer beans using Spring Data JPA.
  * 
  * Author bageshwar.pn  
  * Date 2026
  */
 @Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(basePackages = "com.rankforge.pipeline.persistence.repository")
 public class PersistenceConfig {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PersistenceConfig.class);
 
-    @Value("${rankforge.persistence.jdbc.url}")
-    private String jdbcUrl;
+    @Value("${spring.jpa.hibernate.ddl-auto:validate}")
+    private String ddlAuto;
 
-    @Value("${rankforge.persistence.jdbc.username}")
-    private String jdbcUsername;
-
-    @Value("${rankforge.persistence.jdbc.password}")
-    private String jdbcPassword;
+    // DataSource is auto-configured by Spring Boot from spring.datasource.* properties
+    // No explicit bean needed unless custom configuration is required
 
     /**
-     * JDBC persistence layer bean
+     * EntityManagerFactory bean for JPA
      */
     @Bean
-    @ConditionalOnProperty(name = "rankforge.persistence.type", havingValue = "jdbc")
-    public PersistenceLayer jdbcPersistenceLayer() throws SQLException {
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+        LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
+        em.setDataSource(dataSource);
+        em.setPackagesToScan("com.rankforge.pipeline.persistence.entity");
+        em.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+        
+        Properties properties = new Properties();
+        // Set ddl-auto from configuration (update for local, validate for production)
+        properties.setProperty("hibernate.hbm2ddl.auto", ddlAuto);
+        LOGGER.info("Hibernate DDL auto mode: {}", ddlAuto);
+        
+        properties.setProperty("hibernate.dialect", "org.hibernate.dialect.SQLServerDialect");
+        properties.setProperty("hibernate.format_sql", "true");
+        properties.setProperty("hibernate.jdbc.batch_size", "50");
+        properties.setProperty("hibernate.order_inserts", "true");
+        properties.setProperty("hibernate.order_updates", "true");
+        em.setJpaProperties(properties);
+        
+        return em;
+    }
 
-        LOGGER.info("Initializing JDBC persistence layer with jdbcURL: {}, username: {}",
-                jdbcUrl, jdbcUsername);
-        return new JdbcBasedPersistenceLayer(jdbcUrl, jdbcUsername, jdbcPassword);
+    /**
+     * TransactionManager for JPA
+     */
+    @Bean
+    public PlatformTransactionManager transactionManager(LocalContainerEntityManagerFactoryBean entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory.getObject());
+        return transactionManager;
     }
 
     /**
@@ -72,14 +105,31 @@ public class PersistenceConfig {
     public ObjectMapper objectMapper() {
         return ObjectMapperFactory.createObjectMapper();
     }
-
+    
     /**
-     * Player stats store that uses the configured persistence layer
+     * JPA EventStore bean
      */
-    //@Bean
-    public PlayerStatsStore playerStatsStore(PersistenceLayer persistenceLayer, ObjectMapper objectMapper) {
-        LOGGER.info("Initializing PlayerStatsStore with persistence layer: {}", 
-                persistenceLayer.getClass().getSimpleName());
-        return new DBBasedPlayerStatsStore(persistenceLayer, objectMapper);
+    @Bean
+    public EventStore jpaEventStore(GameEventRepository gameEventRepository, ObjectMapper objectMapper) {
+        LOGGER.info("Initializing JPA EventStore");
+        return new JpaEventStore(gameEventRepository, objectMapper);
+    }
+    
+    /**
+     * JPA PlayerStatsStore bean
+     */
+    @Bean
+    public PlayerStatsStore jpaPlayerStatsStore(PlayerStatsRepository playerStatsRepository) {
+        LOGGER.info("Initializing JPA PlayerStatsStore");
+        return new JpaPlayerStatsStore(playerStatsRepository);
+    }
+    
+    /**
+     * JPA AccoladeStore bean
+     */
+    @Bean
+    public AccoladeStore jpaAccoladeStore(AccoladeRepository accoladeRepository) {
+        LOGGER.info("Initializing JPA AccoladeStore");
+        return new AccoladeStore(accoladeRepository);
     }
 }

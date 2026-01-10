@@ -18,18 +18,15 @@
 
 package com.rankforge.server.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.models.PlayerStats;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
+import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.PlayerRankingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,7 +34,7 @@ import java.util.stream.Collectors;
 
 /**
  * Service layer for managing player rankings
- * Integrates with the persistence layer to provide real player statistics and rankings.
+ * Uses Spring Data JPA to provide real player statistics and rankings.
  * Author bageshwar.pn
  * Date 2024
  */
@@ -46,13 +43,11 @@ public class PlayerRankingService {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerRankingService.class);
     
-    private final ObjectMapper objectMapper;
-    private final PersistenceLayer persistenceLayer;
+    private final PlayerStatsRepository playerStatsRepository;
     
     @Autowired
-    public PlayerRankingService(ObjectMapper objectMapper, PersistenceLayer persistenceLayer) {
-        this.objectMapper = objectMapper;
-        this.persistenceLayer = persistenceLayer;
+    public PlayerRankingService(PlayerStatsRepository playerStatsRepository) {
+        this.playerStatsRepository = playerStatsRepository;
     }
 
     /**
@@ -105,62 +100,43 @@ public class PlayerRankingService {
     }
 
     /**
+     * Convert PlayerStatsEntity to PlayerStats domain object
+     */
+    private PlayerStats convertToDomain(PlayerStatsEntity entity) {
+        PlayerStats stats = new PlayerStats();
+        stats.setPlayerId(entity.getPlayerId());
+        stats.setKills(entity.getKills());
+        stats.setDeaths(entity.getDeaths());
+        stats.setAssists(entity.getAssists());
+        stats.setHeadshotKills(entity.getHeadshotKills());
+        stats.setRoundsPlayed(entity.getRoundsPlayed());
+        stats.setClutchesWon(entity.getClutchesWon());
+        stats.setDamageDealt(entity.getDamageDealt());
+        stats.setLastUpdated(entity.getLastUpdated());
+        stats.setRank(entity.getRank());
+        stats.setLastSeenNickname(entity.getLastSeenNickname());
+        return stats;
+    }
+    
+    /**
      * Retrieves all player statistics from the database
      */
-    private List<PlayerStats> getAllPlayerStatsFromDatabase() throws SQLException {
+    private List<PlayerStats> getAllPlayerStatsFromDatabase() {
         List<PlayerStats> playerStatsList = new ArrayList<>();
         
-        try (ResultSet resultSet = persistenceLayer.query("PlayerStats", 
-                new String[]{"playerId", "playerStats"}, null)) {
+        try {
+            List<PlayerStatsEntity> entities = playerStatsRepository.findAllByOrderByRankAsc();
             
-            while (resultSet.next()) {
-                String playerId = resultSet.getString("playerId");
-                try {
-                    PlayerStats statsOpt = objectMapper.readValue(resultSet.getString("playerStats"), PlayerStats.class);
-                    playerStatsList.add(statsOpt);
-                } catch (JsonProcessingException e) {
-                    LOGGER.warn("Failed to parse playerId {}", playerId, e);
-                    throw new RuntimeException(e);
-                }
+            for (PlayerStatsEntity entity : entities) {
+                PlayerStats stats = convertToDomain(entity);
+                playerStatsList.add(stats);
             }
-        } catch (SQLException e) {
-            if (isTableNotFoundError(e)) {
-                LOGGER.info("PlayerStats table does not exist yet. Returning empty list.");
-                return playerStatsList;
-            }
-            throw e;
+        } catch (Exception e) {
+            LOGGER.error("Failed to retrieve player statistics", e);
         }
 
         LOGGER.info("Retrieved {} player statistics from database", playerStatsList.size());
         return playerStatsList;
-    }
-    
-    /**
-     * Checks if an SQLException indicates that a table does not exist.
-     * Handles SQL Server (error code 208) and other common database error codes.
-     */
-    private boolean isTableNotFoundError(SQLException e) {
-        if (e == null) {
-            return false;
-        }
-        
-        // SQL Server error code for "Invalid object name"
-        if (e.getErrorCode() == 208) {
-            return true;
-        }
-        
-        // Check error message for common table-not-found patterns
-        String errorMessage = e.getMessage();
-        if (errorMessage != null) {
-            String lowerMessage = errorMessage.toLowerCase();
-            return lowerMessage.contains("invalid object name") ||
-                   lowerMessage.contains("table") && lowerMessage.contains("doesn't exist") ||
-                   lowerMessage.contains("table") && lowerMessage.contains("does not exist") ||
-                   lowerMessage.contains("no such table") ||
-                   lowerMessage.contains("relation") && lowerMessage.contains("does not exist");
-        }
-        
-        return false;
     }
     
 

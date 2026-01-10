@@ -20,15 +20,16 @@ package com.rankforge.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.util.ObjectMapperFactory;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
+import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -42,10 +43,13 @@ import static org.mockito.Mockito.*;
 class GameServiceEmptyDatabaseTest {
 
     @Mock
-    private PersistenceLayer persistenceLayer;
+    private GameEventRepository gameEventRepository;
 
     @Mock
-    private ResultSet resultSet;
+    private PlayerStatsRepository playerStatsRepository;
+
+    @Mock
+    private AccoladeStore accoladeStore;
 
     private GameService gameService;
     private ObjectMapper objectMapper;
@@ -53,94 +57,27 @@ class GameServiceEmptyDatabaseTest {
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        gameService = new GameService(objectMapper, persistenceLayer);
+        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, accoladeStore);
     }
 
     @Test
-    void testGetAllGames_WhenGameEventTableDoesNotExist_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with SQL Server error code 208 (Invalid object name)
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'GameEvent'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(tableNotFoundException);
+    void testGetAllGames_WhenGameEventTableDoesNotExist_ReturnsEmptyList() {
+        // Mock empty repository result (simulating empty database)
+        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
             var result = gameService.getAllGames();
             assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
+            assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
     }
 
     @Test
-    void testGetAllGames_WhenGameEventTableDoesNotExist_WithErrorMessage_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with error message indicating table doesn't exist
-        SQLException tableNotFoundException = new SQLException("Table 'GameEvent' does not exist");
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(tableNotFoundException);
-
-        // Should return empty list without throwing exception
-        assertDoesNotThrow(() -> {
-            var result = gameService.getAllGames();
-            assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
-        });
-    }
-
-    @Test
-    void testGetRecentGames_WhenDatabaseIsEmpty_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with SQL Server error code 208
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'GameEvent'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(tableNotFoundException);
-
-        // Should return empty list without throwing exception
-        assertDoesNotThrow(() -> {
-            var result = gameService.getRecentGames(10);
-            assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
-        });
-    }
-
-    @Test
-    void testGetGameById_WhenDatabaseIsEmpty_ReturnsNull() throws SQLException {
-        // Mock SQLException with SQL Server error code 208
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'GameEvent'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(tableNotFoundException);
-
-        // Should return null without throwing exception
-        assertDoesNotThrow(() -> {
-            var result = gameService.getGameById("some-game-id");
-            assertNull(result, "Should return null when table doesn't exist");
-        });
-    }
-
-    @Test
-    void testGetGameDetails_WhenDatabaseIsEmpty_ReturnsNull() throws SQLException {
-        // Mock SQLException with SQL Server error code 208
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'GameEvent'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(tableNotFoundException);
-
-        // Should return null without throwing exception
-        assertDoesNotThrow(() -> {
-            var result = gameService.getGameDetails("some-game-id");
-            assertNull(result, "Should return null when table doesn't exist");
-        });
-    }
-
-    @Test
-    void testGetAllGames_WhenOtherSQLExceptionOccurs_ReturnsEmptyList() throws SQLException {
-        // Mock a different SQLException (not table-not-found)
-        SQLException otherException = new SQLException("Connection timeout", "08S01", 0);
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), anyString(), any()))
-                .thenThrow(otherException);
+    void testGetAllGames_WhenRepositoryThrowsException_ReturnsEmptyList() {
+        // Mock repository throwing exception
+        when(gameEventRepository.findByGameEventType(any()))
+                .thenThrow(new RuntimeException("Database connection error"));
 
         // Should catch exception and return empty list
         assertDoesNotThrow(() -> {
@@ -151,13 +88,48 @@ class GameServiceEmptyDatabaseTest {
     }
 
     @Test
-    void testGetAllGames_WhenPlayerStatsTableDoesNotExist_StillReturnsGames() throws SQLException {
-        // Mock successful GameEvent query but PlayerStats table doesn't exist
-        when(resultSet.next()).thenReturn(false); // No GameOver events
-        
-        when(persistenceLayer.query(eq("GameEvent"), any(String[].class), 
-                eq("gameEventType = ?"), any()))
-                .thenReturn(resultSet);
+    void testGetRecentGames_WhenDatabaseIsEmpty_ReturnsEmptyList() {
+        // Mock empty repository result
+        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+
+        // Should return empty list without throwing exception
+        assertDoesNotThrow(() -> {
+            var result = gameService.getRecentGames(10);
+            assertNotNull(result);
+            assertTrue(result.isEmpty(), "Should return empty list when database is empty");
+        });
+    }
+
+    @Test
+    void testGetGameById_WhenDatabaseIsEmpty_ReturnsNull() {
+        // Mock empty repository result
+        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+
+        // Should return null without throwing exception
+        assertDoesNotThrow(() -> {
+            var result = gameService.getGameById("some-game-id");
+            assertNull(result, "Should return null when database is empty");
+        });
+    }
+
+    @Test
+    void testGetGameDetails_WhenDatabaseIsEmpty_ReturnsNull() {
+        // Mock empty repository result
+        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+
+        // Should return null without throwing exception
+        assertDoesNotThrow(() -> {
+            var result = gameService.getGameDetails("some-game-id");
+            assertNull(result, "Should return null when database is empty");
+        });
+    }
+
+    @Test
+    void testGetAllGames_WhenPlayerStatsRepositoryThrowsException_StillReturnsGames() {
+        // Mock successful GameEvent query but PlayerStats repository throws exception
+        when(gameEventRepository.findByGameEventType(any())).thenReturn(Collections.emptyList());
+        when(playerStatsRepository.findByPlayerId(anyString()))
+                .thenThrow(new RuntimeException("PlayerStats error"));
 
         // Should return empty list (no games) but not fail
         assertDoesNotThrow(() -> {

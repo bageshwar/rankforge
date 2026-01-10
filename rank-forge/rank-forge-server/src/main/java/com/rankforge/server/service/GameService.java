@@ -25,8 +25,11 @@ import com.rankforge.core.events.GameEvent;
 import com.rankforge.core.events.GameEventType;
 import com.rankforge.core.events.GameOverEvent;
 import com.rankforge.core.events.RoundEndEvent;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.AccoladeDTO;
 import com.rankforge.server.dto.GameDTO;
 import com.rankforge.server.dto.GameDetailsDTO;
@@ -37,12 +40,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -57,12 +55,19 @@ public class GameService {
     private static final Logger LOGGER = LoggerFactory.getLogger(GameService.class);
     
     private final ObjectMapper objectMapper;
-    private final PersistenceLayer persistenceLayer;
+    private final GameEventRepository gameEventRepository;
+    private final PlayerStatsRepository playerStatsRepository;
+    private final AccoladeStore accoladeStore;
     
     @Autowired
-    public GameService(ObjectMapper objectMapper, PersistenceLayer persistenceLayer) {
+    public GameService(ObjectMapper objectMapper, 
+                       GameEventRepository gameEventRepository,
+                       PlayerStatsRepository playerStatsRepository,
+                       AccoladeStore accoladeStore) {
         this.objectMapper = objectMapper;
-        this.persistenceLayer = persistenceLayer;
+        this.gameEventRepository = gameEventRepository;
+        this.playerStatsRepository = playerStatsRepository;
+        this.accoladeStore = accoladeStore;
     }
 
     /**
@@ -146,22 +151,25 @@ public class GameService {
         
         LOGGER.info("Searching for ROUND_END events on day {} to group by temporal proximity", dayStart);
         
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent",
-                new String[]{"at", "event"}, 
-                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
-                GameEventType.ROUND_END.name(), dayStart, dayEnd)) {
+        List<RoundEndEventWithTime> allRounds = new ArrayList<>();
+        
+        try {
+            Instant dayStartInstant = Instant.parse(dayStart);
+            Instant dayEndInstant = Instant.parse(dayEnd);
             
-            List<RoundEndEventWithTime> allRounds = new ArrayList<>();
+            List<GameEventEntity> entities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
+                    GameEventType.ROUND_END, dayStartInstant, dayEndInstant);
             
             // Collect all round events with their database timestamps
-            while (resultSet.next()) {
+            for (GameEventEntity entity : entities) {
                 try {
-                    String dbTimestamp = resultSet.getString("at");
-                    Instant roundTime = parseTimestamp(dbTimestamp);
-                    GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
-                    
-                    if (event instanceof RoundEndEvent roundEndEvent) {
-                        allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
+                    Instant roundTime = entity.getTimestamp();
+                    if (entity.getEventJson() != null) {
+                        GameEvent event = objectMapper.readValue(entity.getEventJson(), GameEvent.class);
+                        
+                        if (event instanceof RoundEndEvent roundEndEvent) {
+                            allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
+                        }
                     }
                 } catch (JsonProcessingException e) {
                     LOGGER.warn("Failed to parse RoundEndEvent", e);
@@ -169,53 +177,54 @@ public class GameService {
             }
             
             LOGGER.info("Found {} total ROUND_END events on this day", allRounds.size());
-            
-            if (allRounds.isEmpty()) {
-                LOGGER.warn("No ROUND_END events found for game ending at {}", gameEndTime);
-                return new ArrayList<>();
-            }
-            
-            // Group rounds into games by temporal proximity (gaps > 5 minutes = new game)
-            List<List<RoundEndEventWithTime>> gameGroups = groupRoundsByTemporalProximity(allRounds);
-            LOGGER.info("Grouped rounds into {} potential games", gameGroups.size());
-            
-            // Find the game group closest to our GameOver timestamp
-            List<RoundEndEventWithTime> bestMatch = findClosestGameGroup(gameGroups, gameEndTime);
-            
-            if (bestMatch == null || bestMatch.isEmpty()) {
-                LOGGER.warn("No round group found close to game end time {}", gameEndTime);
-                return new ArrayList<>();
-            }
-            
-            LOGGER.info("Selected game group with {} rounds spanning {} to {}", 
-                    bestMatch.size(), 
-                    bestMatch.get(0).timestamp(), 
-                    bestMatch.get(bestMatch.size() - 1).timestamp());
-            
-            // Extract players from the selected game group
-            for (RoundEndEventWithTime roundWithTime : bestMatch) {
-                roundWithTime.event().getPlayers().forEach(playerId -> {
-                    if (playerId != null && !playerId.isEmpty() && !"0".equals(playerId)) { // Exclude bots and invalid IDs
-                        String playerName = getPlayerNameById(playerIdToNameCache, playerId);
-                        if (playerName != null && !playerName.trim().isEmpty()) {
-                            String trimmedName = playerName.trim();
-                            // Use normalized (lowercase) key for case-insensitive deduplication
-                            // Keep the first occurrence's original casing
-                            String normalizedKey = trimmedName.toLowerCase();
-                            if (!normalizedToOriginal.containsKey(normalizedKey)) {
-                                normalizedToOriginal.put(normalizedKey, trimmedName);
-                            }
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("GameEvent table does not exist yet, returning empty list", e);
+            return new ArrayList<>();
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving ROUND_END events", e);
+            return new ArrayList<>();
+        }
+        
+        if (allRounds.isEmpty()) {
+            LOGGER.warn("No ROUND_END events found for game ending at {}", gameEndTime);
+            return new ArrayList<>();
+        }
+        
+        // Group rounds into games by temporal proximity (gaps > 5 minutes = new game)
+        List<List<RoundEndEventWithTime>> gameGroups = groupRoundsByTemporalProximity(allRounds);
+        LOGGER.info("Grouped rounds into {} potential games", gameGroups.size());
+        
+        // Find the game group closest to our GameOver timestamp
+        List<RoundEndEventWithTime> bestMatch = findClosestGameGroup(gameGroups, gameEndTime);
+        
+        if (bestMatch == null || bestMatch.isEmpty()) {
+            LOGGER.warn("No round group found close to game end time {}", gameEndTime);
+            return new ArrayList<>();
+        }
+        
+        LOGGER.info("Selected game group with {} rounds spanning {} to {}", 
+                bestMatch.size(), 
+                bestMatch.get(0).timestamp(), 
+                bestMatch.get(bestMatch.size() - 1).timestamp());
+        
+        // Extract players from the selected game group
+        for (RoundEndEventWithTime roundWithTime : bestMatch) {
+            roundWithTime.event().getPlayers().forEach(playerId -> {
+                if (playerId != null && !playerId.isEmpty() && !"0".equals(playerId)) { // Exclude bots and invalid IDs
+                    String playerName = getPlayerNameById(playerIdToNameCache, playerId);
+                    if (playerName != null && !playerName.trim().isEmpty()) {
+                        String trimmedName = playerName.trim();
+                        // Use normalized (lowercase) key for case-insensitive deduplication
+                        // Keep the first occurrence's original casing
+                        String normalizedKey = trimmedName.toLowerCase();
+                        if (!normalizedToOriginal.containsKey(normalizedKey)) {
+                            normalizedToOriginal.put(normalizedKey, trimmedName);
                         }
                     }
-                });
-            }
-            
-        } catch (SQLException e) {
-            if (isTableNotFoundError(e)) {
-                LOGGER.info("GameEvent table does not exist yet. Returning empty player list.");
-                return new ArrayList<>();
-            }
-            LOGGER.error("Failed to get players for game ending at {}", gameEndTime, e);
+                }
+            });
         }
         
         // Convert to sorted list for consistent display
@@ -301,26 +310,23 @@ public class GameService {
             // Convert the player ID format from round end events to full steam ID
             String fullSteamId = "[U:1:" + playerId + "]";
             
-            try (ResultSet resultSet = persistenceLayer.query("PlayerStats", 
-                    new String[]{"playerStats"}, "playerId = ?", fullSteamId)) {
-                
-                if (resultSet.next()) {
-                    String playerStatsJson = resultSet.getString("playerStats");
-                    // Parse the JSON to extract the lastSeenNickname
-                    var playerStats = objectMapper.readTree(playerStatsJson);
-                    String nick = playerStats.get("lastSeenNickname").asText();
+            Optional<PlayerStatsEntity> entityOpt = playerStatsRepository.findByPlayerId(fullSteamId);
+            if (entityOpt.isPresent()) {
+                PlayerStatsEntity entity = entityOpt.get();
+                String nick = entity.getLastSeenNickname();
+                if (nick != null && !nick.isEmpty()) {
                     playerIdToNameCache.put(playerId, nick);
                     return nick;
                 }
             }
-        } catch (SQLException e) {
-            if (isTableNotFoundError(e)) {
-                LOGGER.debug("PlayerStats table does not exist yet for player ID {}", playerId);
-            } else {
-                LOGGER.warn("Could not find player name for ID {}: {}", playerId, e.getMessage());
-            }
-        } catch (JsonProcessingException e) {
-            LOGGER.warn("Could not parse player stats for ID {}: {}", playerId, e.getMessage());
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("PlayerStats table does not exist yet for player ID {}", playerId, e);
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving player name for ID {}", playerId, e);
+        } catch (Exception e) {
+            LOGGER.warn("Could not find player name for ID {}: {}", playerId, e.getMessage());
         }
         
         // Return the player ID as fallback
@@ -411,27 +417,30 @@ public class GameService {
         List<RoundEndEventWithTime> allRounds = new ArrayList<>();
         Map<Instant, JsonNode> roundJsonMap = new HashMap<>();
         
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent",
-                new String[]{"at", "event"}, 
-                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC", 
-                GameEventType.ROUND_END.name(), dayStart, dayEnd)) {
+        try {
+            Instant dayStartInstant = Instant.parse(dayStart);
+            Instant dayEndInstant = Instant.parse(dayEnd);
+            
+            List<GameEventEntity> entities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
+                    GameEventType.ROUND_END, dayStartInstant, dayEndInstant);
             
             // Collect all round events with their database timestamps and raw JSON
-            while (resultSet.next()) {
+            for (GameEventEntity entity : entities) {
                 try {
-                    String dbTimestamp = resultSet.getString("at");
-                    Instant roundTime = parseTimestamp(dbTimestamp);
-                    String eventJson = resultSet.getString("event");
+                    Instant roundTime = entity.getTimestamp();
+                    String eventJson = entity.getEventJson();
                     
-                    // Store the raw JSON for score extraction
-                    JsonNode eventNode = objectMapper.readTree(eventJson);
-                    roundJsonMap.put(roundTime, eventNode);
-                    
-                    // Also parse as GameEvent for grouping logic
-                    GameEvent event = objectMapper.readValue(eventJson, GameEvent.class);
-                    
-                    if (event instanceof RoundEndEvent roundEndEvent) {
-                        allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
+                    if (eventJson != null) {
+                        // Store the raw JSON for score extraction
+                        JsonNode eventNode = objectMapper.readTree(eventJson);
+                        roundJsonMap.put(roundTime, eventNode);
+                        
+                        // Also parse as GameEvent for grouping logic
+                        GameEvent event = objectMapper.readValue(eventJson, GameEvent.class);
+                        
+                        if (event instanceof RoundEndEvent roundEndEvent) {
+                            allRounds.add(new RoundEndEventWithTime(roundEndEvent, roundTime));
+                        }
                     }
                 } catch (JsonProcessingException e) {
                     LOGGER.warn("Failed to parse RoundEndEvent", e);
@@ -518,11 +527,13 @@ public class GameService {
             
             rounds.addAll(tempRounds);
             
-        } catch (SQLException e) {
-            if (isTableNotFoundError(e)) {
-                LOGGER.info("GameEvent table does not exist yet. Returning empty round results.");
-                return rounds;
-            }
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("GameEvent table does not exist yet, returning empty rounds list", e);
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving round results", e);
+        } catch (Exception e) {
             LOGGER.error("Failed to get round results for game ending at {}", gameEndTime, e);
         }
         
@@ -548,22 +559,18 @@ public class GameService {
             ));
         }
         
-        String startTimeStr = gameStartTime.toString();
-        String endTimeStr = gameEndTime.toString();
-        
         // Query KillEvent to count kills and deaths
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
-                new String[]{"event", "at"}, 
-                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC",
-                GameEventType.KILL.name(), startTimeStr, endTimeStr)) {
+        try {
+            List<GameEventEntity> killEntities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
+                    GameEventType.KILL, gameStartTime, gameEndTime);
             
-            while (resultSet.next()) {
+            for (GameEventEntity entity : killEntities) {
                 try {
-                    String eventJson = resultSet.getString("event");
-                    Instant eventTime = parseTimestamp(resultSet.getString("at"));
+                    Instant eventTime = entity.getTimestamp();
+                    String eventJson = entity.getEventJson();
                     
-                    // Check timestamp first
-                    if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
+                    if (eventJson != null && 
+                        (eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
                         (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
                         
                         // Parse JSON manually to extract player names
@@ -605,25 +612,28 @@ public class GameService {
                     LOGGER.warn("Failed to parse KillEvent", e);
                 }
             }
-        } catch (SQLException e) {
-            if (!isTableNotFoundError(e)) {
-                LOGGER.error("Failed to get kill events for game between {} and {}", gameStartTime, gameEndTime, e);
-            }
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("GameEvent table does not exist yet, skipping kill events", e);
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving kill events", e);
+        } catch (Exception e) {
+            LOGGER.error("Failed to get kill events for game between {} and {}", gameStartTime, gameEndTime, e);
         }
         
         // Query AssistEvent to count assists
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
-                new String[]{"event", "at"}, 
-                "gameEventType = ? AND at BETWEEN ? AND ? ORDER BY at ASC",
-                GameEventType.ASSIST.name(), startTimeStr, endTimeStr)) {
+        try {
+            List<GameEventEntity> assistEntities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
+                    GameEventType.ASSIST, gameStartTime, gameEndTime);
             
-            while (resultSet.next()) {
+            for (GameEventEntity entity : assistEntities) {
                 try {
-                    String eventJson = resultSet.getString("event");
-                    Instant eventTime = parseTimestamp(resultSet.getString("at"));
+                    Instant eventTime = entity.getTimestamp();
+                    String eventJson = entity.getEventJson();
                     
-                    // Check timestamp first
-                    if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
+                    if (eventJson != null &&
+                        (eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
                         (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
                         
                         // Parse JSON manually to extract player name
@@ -649,10 +659,14 @@ public class GameService {
                     LOGGER.warn("Failed to parse AssistEvent", e);
                 }
             }
-        } catch (SQLException e) {
-            if (!isTableNotFoundError(e)) {
-                LOGGER.error("Failed to get assist events for game between {} and {}", gameStartTime, gameEndTime, e);
-            }
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("GameEvent table does not exist yet, skipping assist events", e);
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving assist events", e);
+        } catch (Exception e) {
+            LOGGER.error("Failed to get assist events for game between {} and {}", gameStartTime, gameEndTime, e);
         }
         
         // Calculate rating (simple K/D ratio, or 0 if no deaths)
@@ -691,63 +705,44 @@ public class GameService {
         return playerStats;
     }
 
-    /**
-     * Parse timestamp from database format to Instant
-     * Handles both ISO-8601 format and SQL Server datetime format
-     * Database timestamps are stored in local server time, treat as UTC for consistency
-     */
-    private Instant parseTimestamp(String timestampStr) {
-        try {
-            // First try standard ISO-8601 format
-            return Instant.parse(timestampStr);
-        } catch (Exception e) {
-            try {
-                // Handle SQL Server datetime format: "2025-08-03 22:59:08.0651720"
-                // Use 'S' (fraction-of-second) instead of 'n' (nano-of-second) because:
-                // - SQL Server datetime2(7) stores 7 fractional digits (hundreds of nanoseconds)
-                // - 'n' requires exactly 9 digits and misinterprets 7-digit values
-                // - 'S' correctly handles variable-length fractional seconds (1-9 digits)
-                DateTimeFormatter sqlServerFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS");
-                LocalDateTime localDateTime = LocalDateTime.parse(timestampStr, sqlServerFormatter);
-                // Treat database timestamps as UTC (no timezone conversion)
-                // This ensures GameOver and RoundEnd events use the same timezone interpretation
-                return localDateTime.toInstant(ZoneOffset.UTC);
-            } catch (Exception ex) {
-                LOGGER.warn("Failed to parse timestamp '{}', using current time as fallback", timestampStr, ex);
-                return Instant.now();
-            }
-        }
-    }
 
     /**
      * Retrieves all GameOver events from the database
      */
-    private List<GameOverEvent> getGameOverEventsFromDatabase() throws SQLException {
+    private List<GameOverEvent> getGameOverEventsFromDatabase() {
         List<GameOverEvent> gameOverEvents = new ArrayList<>();
         
-        try (ResultSet resultSet = persistenceLayer.query("GameEvent", 
-                new String[]{"event", "at"}, "gameEventType = ?", GameEventType.GAME_OVER.name())) {
+        try {
+            List<GameEventEntity> entities = gameEventRepository.findByGameEventType(GameEventType.GAME_OVER);
             
-            while (resultSet.next()) {
+            for (GameEventEntity entity : entities) {
                 try {
-                    String rawTimestamp = resultSet.getString("at");
-                    GameEvent event = objectMapper.readValue(resultSet.getString("event"), GameEvent.class);
-                    Instant parsedTimestamp = parseTimestamp(rawTimestamp);
-                    event.setTimestamp(parsedTimestamp);
-                    
-                    if (event instanceof GameOverEvent gameOverEvent) {
-                        gameOverEvents.add(gameOverEvent);
+                    if (entity.getEventJson() != null) {
+                        GameEvent event = objectMapper.readValue(entity.getEventJson(), GameEvent.class);
+                        // Use entity timestamp if event timestamp is null
+                        if (event.getTimestamp() == null && entity.getTimestamp() != null) {
+                            event.setTimestamp(entity.getTimestamp());
+                        }
+                        
+                        if (event instanceof GameOverEvent gameOverEvent) {
+                            gameOverEvents.add(gameOverEvent);
+                        }
                     }
                 } catch (JsonProcessingException e) {
                     LOGGER.warn("Failed to parse GameOver event", e);
                 }
             }
-        } catch (SQLException e) {
-            if (isTableNotFoundError(e)) {
-                LOGGER.info("GameEvent table does not exist yet. Returning empty list.");
-                return gameOverEvents;
-            }
-            throw e;
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            // Table doesn't exist yet - this is expected for empty databases
+            LOGGER.debug("GameEvent table does not exist yet, returning empty list", e);
+            return gameOverEvents;
+        } catch (org.springframework.dao.DataAccessException e) {
+            // Other database access exceptions
+            LOGGER.warn("Database access error while retrieving GameOver events, returning empty list", e);
+            return gameOverEvents;
+        } catch (Exception e) {
+            LOGGER.error("Unexpected error while retrieving GameOver events", e);
+            return gameOverEvents;
         }
 
         LOGGER.info("Retrieved {} GameOver events from database", gameOverEvents.size());
@@ -761,7 +756,6 @@ public class GameService {
         List<AccoladeDTO> accolades = new ArrayList<>();
         
         try {
-            AccoladeStore accoladeStore = new AccoladeStore(persistenceLayer);
             List<AccoladeStore.Accolade> storedAccolades = accoladeStore.getAccoladesForGame(gameEndTime);
             
             for (AccoladeStore.Accolade storedAccolade : storedAccolades) {
@@ -785,31 +779,4 @@ public class GameService {
         return accolades;
     }
     
-    /**
-     * Checks if an SQLException indicates that a table does not exist.
-     * Handles SQL Server (error code 208) and other common database error codes.
-     */
-    private boolean isTableNotFoundError(SQLException e) {
-        if (e == null) {
-            return false;
-        }
-        
-        // SQL Server error code for "Invalid object name"
-        if (e.getErrorCode() == 208) {
-            return true;
-        }
-        
-        // Check error message for common table-not-found patterns
-        String errorMessage = e.getMessage();
-        if (errorMessage != null) {
-            String lowerMessage = errorMessage.toLowerCase();
-            return lowerMessage.contains("invalid object name") ||
-                   lowerMessage.contains("table") && lowerMessage.contains("doesn't exist") ||
-                   lowerMessage.contains("table") && lowerMessage.contains("does not exist") ||
-                   lowerMessage.contains("no such table") ||
-                   lowerMessage.contains("relation") && lowerMessage.contains("does not exist");
-        }
-        
-        return false;
-    }
 }

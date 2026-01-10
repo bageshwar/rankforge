@@ -21,7 +21,9 @@ package com.rankforge.server.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.GameRankingSystem;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
+import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
+import com.rankforge.pipeline.persistence.repository.GameEventRepository;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,7 +40,13 @@ import static org.junit.jupiter.api.Assertions.*;
 class PipelineServiceTest {
 
     @Mock
-    private PersistenceLayer persistenceLayer;
+    private GameEventRepository gameEventRepository;
+
+    @Mock
+    private PlayerStatsRepository playerStatsRepository;
+
+    @Mock
+    private AccoladeRepository accoladeRepository;
 
     private ObjectMapper objectMapper;
     private PipelineService pipelineService;
@@ -46,7 +54,7 @@ class PipelineServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        pipelineService = new PipelineService(persistenceLayer, objectMapper);
+        pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, accoladeRepository, objectMapper);
     }
 
     @Test
@@ -65,12 +73,12 @@ class PipelineServiceTest {
     }
 
     @Test
-    void testCreateGameRankingSystem_UsesProvidedPersistenceLayer() {
-        // Verify that persistence layer is used (indirectly through component creation)
+    void testCreateGameRankingSystem_UsesProvidedRepositories() {
+        // Verify that repositories are used (indirectly through component creation)
         GameRankingSystem rankingSystem = pipelineService.createGameRankingSystem();
         
         assertNotNull(rankingSystem);
         // Components are created internally, so we verify the system is created successfully
-        // which implies persistence layer was used
+        // which implies repositories were used
     }
 }

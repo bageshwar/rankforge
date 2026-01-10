@@ -25,7 +25,6 @@ import com.rankforge.core.interfaces.LogParser;
 import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.stores.EventStore;
-import com.rankforge.pipeline.persistence.DBBasedEventStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
