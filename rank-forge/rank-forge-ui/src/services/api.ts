@@ -25,7 +25,7 @@ export interface PlayerRankingDTO {
 }
 
 export interface GameDTO {
-  gameId: string;
+  id: number;  // Database ID from Game table
   gameDate: string;
   map: string;
   mode: string;

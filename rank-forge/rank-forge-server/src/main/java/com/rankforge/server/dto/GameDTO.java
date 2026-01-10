@@ -22,12 +22,13 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * DTO for displaying game information
+ * DTO for displaying game information.
+ * Uses the Game table's database ID as the unique identifier.
  * Author bageshwar.pn
  * Date 2024
  */
 public class GameDTO {
-    private String gameSessionId;
+    private Long id;  // Database ID from Game table
     private Instant gameDate;
     private String map;
     private String mode;
@@ -39,9 +40,9 @@ public class GameDTO {
     // Constructors
     public GameDTO() {}
 
-    public GameDTO(String gameSessionId, Instant gameDate, String map, String mode, 
+    public GameDTO(Long id, Instant gameDate, String map, String mode, 
                    int team1Score, int team2Score, List<String> players, String duration) {
-        this.gameSessionId = gameSessionId;
+        this.id = id;
         this.gameDate = gameDate;
         this.map = map;
         this.mode = mode;
@@ -52,12 +53,12 @@ public class GameDTO {
     }
 
     // Getters and Setters
-    public String getGameSessionId() {
-        return gameSessionId;
+    public Long getId() {
+        return id;
     }
 
-    public void setGameSessionId(String gameSessionId) {
-        this.gameSessionId = gameSessionId;
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public Instant getGameDate() {
@@ -125,13 +126,5 @@ public class GameDTO {
             return duration + " min";
         }
         return "Unknown";
-    }
-    
-    public String getGameId() {
-        return gameSessionId;
-    }
-    
-    public void setGameId(String gameId) {
-        this.gameSessionId = gameId;
     }
 }
