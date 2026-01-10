@@ -7,6 +7,13 @@ import { playersApi } from '../services/api';
 import type { PlayerProfileDTO, RatingHistoryPoint } from '../services/api';
 import './PlayerProfilePage.css';
 
+// Extract numeric part from Steam ID (e.g., "[U:1:123456789]" -> "123456789")
+const extractSteamId = (fullId: string): string => {
+  if (!fullId) return '';
+  const match = fullId.match(/\[U:\d+:(\d+)\]/);
+  return match ? match[1] : fullId;
+};
+
 export const PlayerProfilePage = () => {
   const { playerId } = useParams<{ playerId: string }>();
   const [profile, setProfile] = useState<PlayerProfileDTO | null>(null);
@@ -92,7 +99,7 @@ export const PlayerProfilePage = () => {
         </div>
         <div className="profile-info">
           <h1 className="player-name">{profile.playerName}</h1>
-          <div className="player-id-badge">{profile.playerId}</div>
+          <div className="player-id-badge">{extractSteamId(profile.playerId)}</div>
           <div className="rank-badge" style={{ borderColor: rankTier.color }}>
             <span className="rank-tier" style={{ color: rankTier.color }}>
               {rankTier.tier}
