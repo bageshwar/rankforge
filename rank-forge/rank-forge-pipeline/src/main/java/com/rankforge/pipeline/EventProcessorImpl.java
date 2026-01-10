@@ -172,9 +172,19 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     @Override
     public void visit(RoundEndEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         event.getPlayers().remove("0"); //remove bots
-        logger.debug("Round end: processing {} players for ranking updates", event.getPlayers().size());
         
-        List<PlayerStats> list = event.getPlayers().stream()
+        // Get player list from event, but if empty (last round of match), get from context
+        java.util.Collection<String> playerSteamIds = event.getPlayers();
+        if (playerSteamIds.isEmpty()) {
+            // For the last round, the parser doesn't have the JSON player stats
+            // Get players from the events processed in this round via context
+            playerSteamIds = context.getPlayersInCurrentRound();
+            logger.info("Round end: event had no players, extracted {} from context", playerSteamIds.size());
+        }
+        
+        logger.debug("Round end: processing {} players for ranking updates", playerSteamIds.size());
+        
+        List<PlayerStats> list = playerSteamIds.stream()
                 .map(playerSteamId -> statsRepo.getPlayerStats("[U:1:" + playerSteamId + "]"))
                 .flatMap(playerStats1 -> playerStats1.stream()
                         .peek(p -> {

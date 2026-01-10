@@ -28,8 +28,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Maintains processing context for a single game being processed.
@@ -114,6 +118,65 @@ public class EventProcessingContext {
             logger.debug("ROUND_CONTEXT: Event {} added WITHOUT round context at {}", 
                     entity.getGameEventType(), entity.getTimestamp());
         }
+    }
+    
+    // Pattern to extract numeric Steam ID from full format [U:1:XXXXXXXX]
+    private static final Pattern STEAM_ID_PATTERN = Pattern.compile("\\[U:1:(\\d+)\\]");
+    
+    /**
+     * Gets the list of player Steam IDs (numeric part only) who participated in the current round.
+     * Extracts player IDs from all pending entities that reference the current round start.
+     * This is used for roundsPlayed counting, especially for the last round where
+     * the parser may not have the player list from JSON stats.
+     * 
+     * @return Set of numeric Steam IDs (e.g., "1090227400" from "[U:1:1090227400]")
+     */
+    public Set<String> getPlayersInCurrentRound() {
+        Set<String> playerIds = new HashSet<>();
+        
+        if (currentRoundStart == null) {
+            logger.debug("ROUND_CONTEXT: No current round start, returning empty player set");
+            return playerIds;
+        }
+        
+        for (GameEventEntity entity : pendingEntities) {
+            // Only consider events that belong to the current round
+            if (entity.getRoundStart() != null && entity.getRoundStart().equals(currentRoundStart)) {
+                // Extract numeric Steam ID from player1
+                String numericId1 = extractNumericSteamId(entity.getPlayer1());
+                if (numericId1 != null && !"0".equals(numericId1)) {
+                    playerIds.add(numericId1);
+                }
+                
+                // Extract numeric Steam ID from player2
+                String numericId2 = extractNumericSteamId(entity.getPlayer2());
+                if (numericId2 != null && !"0".equals(numericId2)) {
+                    playerIds.add(numericId2);
+                }
+            }
+        }
+        
+        logger.debug("ROUND_CONTEXT: Found {} players in current round from pending entities: {}", 
+                playerIds.size(), playerIds);
+        return playerIds;
+    }
+    
+    /**
+     * Extracts the numeric part from a Steam ID in format [U:1:XXXXXXXX].
+     * Returns the numeric ID or the original string if not in expected format.
+     */
+    private String extractNumericSteamId(String steamId) {
+        if (steamId == null || steamId.isEmpty()) {
+            return null;
+        }
+        
+        Matcher matcher = STEAM_ID_PATTERN.matcher(steamId);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        // If not in [U:1:X] format, return as-is (might already be numeric)
+        return steamId;
     }
     
     /**

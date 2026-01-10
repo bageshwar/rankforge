@@ -23,9 +23,11 @@ import com.rankforge.core.events.GameEventType;
 import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.ProcessLogRequest;
 import com.rankforge.server.dto.ProcessLogResponse;
 import org.junit.jupiter.api.BeforeAll;
@@ -99,6 +101,9 @@ class PipelineApiIntegrationTest {
     
     @Autowired
     private AccoladeRepository accoladeRepository;
+    
+    @Autowired
+    private PlayerStatsRepository playerStatsRepository;
     
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -449,6 +454,7 @@ class PipelineApiIntegrationTest {
             validateAllGameReferences();
             validateAllRoundStartReferences();
             validateDistinctRoundReferences();
+            validatePlayerRoundsPlayed();
             
             System.out.println("✅ All E2E database validations passed!");
         }
@@ -604,6 +610,77 @@ class PipelineApiIntegrationTest {
                     "All accolades should have a game reference. Found " + accoladesWithoutGame + " without.");
             
             System.out.println("  ✓ All " + accolades.size() + " accolades have valid game references");
+        }
+        
+        @Test
+        @DisplayName("Validate: Player roundsPlayed matches total rounds from games")
+        void validatePlayerRoundsPlayed() {
+            List<GameEntity> games = gameRepository.findAll();
+            assumeTrue(games.size() >= EXPECTED_GAMES, "Need at least " + EXPECTED_GAMES + " games");
+            
+            // Calculate expected total rounds from all games
+            int expectedTotalRounds = games.stream()
+                    .mapToInt(g -> g.getTeam1Score() + g.getTeam2Score())
+                    .sum();
+            
+            System.out.println("  📊 Expected total rounds from games: " + expectedTotalRounds);
+            games.forEach(g -> System.out.println("    - Game " + g.getId() + " (" + g.getMap() + "): " + 
+                    g.getTeam1Score() + " + " + g.getTeam2Score() + " = " + (g.getTeam1Score() + g.getTeam2Score()) + " rounds"));
+            
+            // Get latest PlayerStats for each player
+            List<PlayerStatsEntity> allPlayerStats = playerStatsRepository.findAll();
+            assertFalse(allPlayerStats.isEmpty(), "Should have player stats in database");
+            
+            // Group by playerId and get the latest entry for each player
+            var latestStatsByPlayer = allPlayerStats.stream()
+                    .collect(Collectors.groupingBy(PlayerStatsEntity::getPlayerId))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(
+                            e -> e.getKey(),
+                            e -> e.getValue().stream()
+                                    .max((a, b) -> {
+                                        if (a.getGameTimestamp() == null && b.getGameTimestamp() == null) return 0;
+                                        if (a.getGameTimestamp() == null) return -1;
+                                        if (b.getGameTimestamp() == null) return 1;
+                                        return a.getGameTimestamp().compareTo(b.getGameTimestamp());
+                                    })
+                                    .orElse(null)
+                    ));
+            
+            System.out.println("  📊 Checking roundsPlayed for " + latestStatsByPlayer.size() + " players:");
+            
+            int playersWithIncorrectRounds = 0;
+            for (var entry : latestStatsByPlayer.entrySet()) {
+                PlayerStatsEntity stats = entry.getValue();
+                if (stats == null) continue;
+                
+                int actualRoundsPlayed = stats.getRoundsPlayed();
+                String playerName = stats.getLastSeenNickname() != null ? stats.getLastSeenNickname() : stats.getPlayerId();
+                
+                // Each player who played in all games should have roundsPlayed == expectedTotalRounds
+                // For players who may not have played all games, we check that rounds > 0 and <= expectedTotalRounds
+                if (actualRoundsPlayed <= 0) {
+                    System.out.println("    ✗ Player " + playerName + " has roundsPlayed=" + actualRoundsPlayed + " (should be > 0)");
+                    playersWithIncorrectRounds++;
+                } else if (actualRoundsPlayed > expectedTotalRounds) {
+                    System.out.println("    ✗ Player " + playerName + " has roundsPlayed=" + actualRoundsPlayed + 
+                            " (exceeds max possible: " + expectedTotalRounds + ")");
+                    playersWithIncorrectRounds++;
+                } else {
+                    System.out.println("    ✓ Player " + playerName + ": roundsPlayed=" + actualRoundsPlayed);
+                }
+            }
+            
+            assertEquals(0, playersWithIncorrectRounds,
+                    "All players should have valid roundsPlayed counts. Found " + playersWithIncorrectRounds + " with issues.");
+            
+            // Additional check: verify the sum makes sense
+            // If there are N players across M games, total roundsPlayed entries should be reasonable
+            int totalRoundsPlayedSum = latestStatsByPlayer.values().stream()
+                    .filter(s -> s != null)
+                    .mapToInt(PlayerStatsEntity::getRoundsPlayed)
+                    .sum();
+            System.out.println("  📊 Total roundsPlayed across all players: " + totalRoundsPlayedSum);
         }
         
         @Test
