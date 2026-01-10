@@ -20,7 +20,6 @@ package com.rankforge.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.util.ObjectMapperFactory;
-import com.rankforge.pipeline.persistence.AccoladeStore;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
@@ -52,9 +51,6 @@ class GameServiceEmptyDatabaseTest {
     private PlayerStatsRepository playerStatsRepository;
 
     @Mock
-    private AccoladeStore accoladeStore;
-
-    @Mock
     private GameRepository gameRepository;
 
     @Mock
@@ -66,7 +62,7 @@ class GameServiceEmptyDatabaseTest {
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, accoladeStore, gameRepository, accoladeRepository);
+        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, gameRepository, accoladeRepository);
     }
 
     @Test
@@ -135,10 +131,10 @@ class GameServiceEmptyDatabaseTest {
 
     @Test
     void testGetAllGames_WhenPlayerStatsRepositoryThrowsException_StillReturnsGames() {
-        // Mock successful GameRepository query but PlayerStats repository throws exception
+        // Mock successful GameRepository query returning empty list
+        // Note: When gameRepository returns empty list, playerStatsRepository is not called
+        // because there are no games to process players for
         when(gameRepository.findAll()).thenReturn(Collections.emptyList());
-        when(playerStatsRepository.findByPlayerId(anyString()))
-                .thenThrow(new RuntimeException("PlayerStats error"));
 
         // Should return empty list (no games) but not fail
         assertDoesNotThrow(() -> {

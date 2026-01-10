@@ -47,28 +47,21 @@ public abstract class GameEventEntity {
     @Enumerated(EnumType.STRING)
     private GameEventType gameEventType;
     
-    @Column(name = "event", columnDefinition = "NVARCHAR(MAX)")
-    private String eventJson; // Temporary for migration compatibility
-    
     @Column(name = "player1", length = 255)
     private String player1;
     
     @Column(name = "player2", length = 255)
     private String player2;
     
-    @Column(name = "gameId")
-    private Long gameId; // Foreign key to GameEntity
-    
-    @Column(name = "roundId")
-    private Long roundId; // Foreign key to RoundEndEventEntity (the round this event belongs to)
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "gameId", insertable = false, updatable = false)
+    // Managed relationship to GameEntity - JPA handles FK via cascade
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    @JoinColumn(name = "gameId")
     private GameEntity game;
     
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "roundId", insertable = false, updatable = false)
-    private RoundEndEventEntity round;
+    // Managed relationship to RoundStartEventEntity - JPA handles FK via cascade
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.PERSIST)
+    @JoinColumn(name = "roundStartEventId")
+    private RoundStartEventEntity roundStart;
     
     // Default constructor
     public GameEventEntity() {
@@ -114,14 +107,6 @@ public abstract class GameEventEntity {
         this.gameEventType = gameEventType;
     }
     
-    public String getEventJson() {
-        return eventJson;
-    }
-    
-    public void setEventJson(String eventJson) {
-        this.eventJson = eventJson;
-    }
-    
     public String getPlayer1() {
         return player1;
     }
@@ -138,22 +123,6 @@ public abstract class GameEventEntity {
         this.player2 = player2;
     }
     
-    public Long getGameId() {
-        return gameId;
-    }
-    
-    public void setGameId(Long gameId) {
-        this.gameId = gameId;
-    }
-    
-    public Long getRoundId() {
-        return roundId;
-    }
-    
-    public void setRoundId(Long roundId) {
-        this.roundId = roundId;
-    }
-    
     public GameEntity getGame() {
         return game;
     }
@@ -162,11 +131,11 @@ public abstract class GameEventEntity {
         this.game = game;
     }
     
-    public RoundEndEventEntity getRound() {
-        return round;
+    public RoundStartEventEntity getRoundStart() {
+        return roundStart;
     }
     
-    public void setRound(RoundEndEventEntity round) {
-        this.round = round;
+    public void setRoundStart(RoundStartEventEntity roundStart) {
+        this.roundStart = roundStart;
     }
 }

@@ -22,7 +22,6 @@ import com.rankforge.core.events.GameEventType;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
 import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -31,7 +30,9 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Repository for GameEvent entities
+ * Repository for GameEvent entities.
+ * Note: Post-hoc linking methods have been removed - entity references are now set directly
+ * via EventProcessingContext before persistence.
  * Author bageshwar.pn
  * Date 2026
  */
@@ -68,39 +69,39 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
     List<GameEventEntity> findByGameEventTypeAndTimestamp(GameEventType type, Instant timestamp);
     
     /**
-     * Find events by game ID
+     * Find events by game entity
      */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.gameId = :gameId AND e.gameEventType != 'GAME_OVER' ORDER BY e.timestamp ASC")
+    @Query("SELECT e FROM GameEventEntity e WHERE e.game.id = :gameId AND e.gameEventType != 'GAME_OVER' ORDER BY e.timestamp ASC")
     List<GameEventEntity> findByGameId(@Param("gameId") Long gameId);
     
     /**
-     * Find events by round ID
+     * Find events by round start entity
      */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.roundId = :roundId ORDER BY e.timestamp ASC")
-    List<GameEventEntity> findByRoundId(@Param("roundId") Long roundId);
+    @Query("SELECT e FROM GameEventEntity e WHERE e.roundStart.id = :roundStartId ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByRoundStartId(@Param("roundStartId") Long roundStartId);
     
     /**
      * Find events by game ID and event type
      */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.gameId = :gameId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
+    @Query("SELECT e FROM GameEventEntity e WHERE e.game.id = :gameId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
     List<GameEventEntity> findByGameIdAndGameEventType(
             @Param("gameId") Long gameId,
             @Param("eventType") GameEventType eventType
     );
     
     /**
-     * Find events by round ID and event type
+     * Find events by round start ID and event type
      */
-    @Query("SELECT e FROM GameEventEntity e WHERE e.roundId = :roundId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
-    List<GameEventEntity> findByRoundIdAndGameEventType(
-            @Param("roundId") Long roundId,
+    @Query("SELECT e FROM GameEventEntity e WHERE e.roundStart.id = :roundStartId AND e.gameEventType = :eventType ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findByRoundStartIdAndGameEventType(
+            @Param("roundStartId") Long roundStartId,
             @Param("eventType") GameEventType eventType
     );
     
     /**
      * Find round end events by game ID
      */
-    @Query("SELECT e FROM RoundEndEventEntity e WHERE e.gameId = :gameId ORDER BY e.timestamp ASC")
+    @Query("SELECT e FROM RoundEndEventEntity e WHERE e.game.id = :gameId ORDER BY e.timestamp ASC")
     List<RoundEndEventEntity> findRoundEndEventsByGameId(@Param("gameId") Long gameId);
     
     /**
@@ -111,26 +112,4 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
             @Param("startTime") Instant startTime,
             @Param("endTime") Instant endTime
     );
-    
-    /**
-     * Bulk update: Set gameId for multiple events (excluding GAME_OVER)
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE GameEventEntity e SET e.gameId = :gameId WHERE e.id IN :eventIds AND e.gameEventType != 'GAME_OVER'")
-    int updateEventsGameId(@Param("gameId") Long gameId, @Param("eventIds") List<Long> eventIds);
-    
-    /**
-     * Bulk update: Set roundId for multiple events
-     * Only updates events that don't already have a roundId (to prevent overwriting)
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE GameEventEntity e SET e.roundId = :roundId WHERE e.id IN :eventIds AND e.roundId IS NULL")
-    int updateEventsRoundId(@Param("roundId") Long roundId, @Param("eventIds") List<Long> eventIds);
-    
-    /**
-     * Bulk update: Set gameId for multiple round end events
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE RoundEndEventEntity r SET r.gameId = :gameId WHERE r.id IN :roundIds")
-    int updateRoundsGameId(@Param("gameId") Long gameId, @Param("roundIds") List<Long> roundIds);
 }

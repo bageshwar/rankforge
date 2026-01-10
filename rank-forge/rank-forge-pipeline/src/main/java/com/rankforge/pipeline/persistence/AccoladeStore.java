@@ -19,17 +19,17 @@
 package com.rankforge.pipeline.persistence;
 
 import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Store for game accolades (player achievements/awards)
+ * Store for game accolades (player achievements/awards).
+ * Uses EventProcessingContext for deferred persistence with game entity reference.
  * Author bageshwar.pn
  * Date 2024
  */
@@ -37,9 +37,11 @@ public class AccoladeStore {
     private static final Logger logger = LoggerFactory.getLogger(AccoladeStore.class);
     
     private final AccoladeRepository repository;
+    private final EventProcessingContext context;
     
-    public AccoladeStore(AccoladeRepository repository) {
+    public AccoladeStore(AccoladeRepository repository, EventProcessingContext context) {
         this.repository = repository;
+        this.context = context;
     }
     
     /**
@@ -71,11 +73,11 @@ public class AccoladeStore {
     }
     
     /**
-     * Convert Accolade domain object to AccoladeEntity
+     * Convert Accolade domain object to AccoladeEntity.
+     * Game reference will be set later when GameEntity is available.
      */
-    private AccoladeEntity convertToEntity(Accolade accolade, Instant gameTimestamp) {
+    private AccoladeEntity convertToEntity(Accolade accolade) {
         AccoladeEntity entity = new AccoladeEntity();
-        entity.setGameTimestamp(gameTimestamp);
         entity.setType(accolade.getType());
         entity.setPlayerName(accolade.getPlayerName());
         entity.setPlayerId(accolade.getPlayerId());
@@ -100,52 +102,57 @@ public class AccoladeStore {
     }
     
     /**
-     * Store accolades for a game
+     * Queue accolades for deferred persistence.
+     * Accolades are parsed before GameEntity exists, so we add them to context
+     * and set the game reference when GameEntity is created.
      */
-    @Transactional
-    public void storeAccolades(Instant gameTimestamp, List<Accolade> accolades) {
+    public void queueAccolades(List<Accolade> accolades) {
         if (accolades == null || accolades.isEmpty()) {
             return;
         }
         
-        try {
-            List<AccoladeEntity> entities = new ArrayList<>();
-            for (Accolade accolade : accolades) {
-                AccoladeEntity entity = convertToEntity(accolade, gameTimestamp);
-                entities.add(entity);
-            }
-            
-            repository.saveAll(entities);
-            logger.debug("Stored {} accolades for game at {}", accolades.size(), gameTimestamp);
-            
-        } catch (Exception e) {
-            logger.error("Failed to store accolades", e);
+        for (Accolade accolade : accolades) {
+            AccoladeEntity entity = convertToEntity(accolade);
+            context.addAccolade(entity);
         }
+        
+        logger.debug("Queued {} accolades for deferred persistence", accolades.size());
     }
     
     /**
-     * Get accolades for a specific game
+     * Create accolade entities with game reference set.
+     * Used when game entity is already available.
      */
-    public List<Accolade> getAccoladesForGame(Instant gameTimestamp) {
+    public List<AccoladeEntity> createAccoladeEntities(GameEntity game, List<Accolade> accolades) {
+        if (accolades == null || accolades.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        List<AccoladeEntity> entities = new ArrayList<>();
+        for (Accolade accolade : accolades) {
+            AccoladeEntity entity = convertToEntity(accolade);
+            entity.setGame(game);
+            entities.add(entity);
+        }
+        
+        return entities;
+    }
+    
+    /**
+     * Get accolades for a specific game by game ID
+     */
+    public List<Accolade> getAccoladesForGame(Long gameId) {
         List<Accolade> accolades = new ArrayList<>();
         
-        // Use a tighter time window to find the exact game (2 seconds on each side)
-        Instant startTime = gameTimestamp.minusSeconds(2);
-        Instant endTime = gameTimestamp.plusSeconds(2);
-        
         try {
-            List<AccoladeEntity> entities = repository.findByGameTimestampBetween(startTime, endTime);
+            List<AccoladeEntity> entities = repository.findByGameId(gameId);
             
             for (AccoladeEntity entity : entities) {
-                // Only include accolades that match the exact timestamp (within 1 second tolerance)
-                long timeDiff = Math.abs(entity.getGameTimestamp().toEpochMilli() - gameTimestamp.toEpochMilli());
-                if (timeDiff <= 1000) {
-                    Accolade accolade = convertToDomain(entity);
-                    accolades.add(accolade);
-                }
+                Accolade accolade = convertToDomain(entity);
+                accolades.add(accolade);
             }
         } catch (Exception e) {
-            logger.error("Failed to get accolades for game at {}", gameTimestamp, e);
+            logger.error("Failed to get accolades for game {}", gameId, e);
         }
         
         return accolades;

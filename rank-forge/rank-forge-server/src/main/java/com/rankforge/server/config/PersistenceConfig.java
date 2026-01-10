@@ -23,6 +23,7 @@ import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import com.rankforge.pipeline.persistence.JpaEventStore;
 import com.rankforge.pipeline.persistence.JpaPlayerStatsStore;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
@@ -107,12 +108,25 @@ public class PersistenceConfig {
     }
     
     /**
+     * EventProcessingContext bean - shared context for game/round/accolade tracking
+     * Note: EventProcessingContext is also a @Component, but we need to ensure a single instance
+     */
+    @Bean
+    public EventProcessingContext eventProcessingContext() {
+        LOGGER.info("Initializing EventProcessingContext");
+        return new EventProcessingContext();
+    }
+    
+    /**
      * JPA EventStore bean
      */
     @Bean
-    public EventStore jpaEventStore(GameEventRepository gameEventRepository, ObjectMapper objectMapper) {
-        LOGGER.info("Initializing JPA EventStore");
-        return new JpaEventStore(gameEventRepository, objectMapper);
+    public EventStore jpaEventStore(GameEventRepository gameEventRepository, 
+                                     AccoladeRepository accoladeRepository,
+                                     ObjectMapper objectMapper,
+                                     EventProcessingContext eventProcessingContext) {
+        LOGGER.info("Initializing JPA EventStore with EventProcessingContext");
+        return new JpaEventStore(gameEventRepository, accoladeRepository, objectMapper, eventProcessingContext);
     }
     
     /**
@@ -128,8 +142,9 @@ public class PersistenceConfig {
      * JPA AccoladeStore bean
      */
     @Bean
-    public AccoladeStore jpaAccoladeStore(AccoladeRepository accoladeRepository) {
-        LOGGER.info("Initializing JPA AccoladeStore");
-        return new AccoladeStore(accoladeRepository);
+    public AccoladeStore jpaAccoladeStore(AccoladeRepository accoladeRepository,
+                                          EventProcessingContext eventProcessingContext) {
+        LOGGER.info("Initializing JPA AccoladeStore with EventProcessingContext");
+        return new AccoladeStore(accoladeRepository, eventProcessingContext);
     }
 }

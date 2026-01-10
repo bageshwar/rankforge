@@ -23,16 +23,13 @@ import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
-import com.rankforge.pipeline.persistence.GameLinkingService;
-import com.rankforge.pipeline.persistence.repository.GameEventRepository;
-import com.rankforge.pipeline.persistence.repository.GameRepository;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,25 +51,17 @@ class EventProcessorImplTest {
     @Mock
     private RankingService mockRankingService;
 
-    @Mock
-    private GameRepository mockGameRepository;
-
-    @Mock
-    private GameEventRepository mockGameEventRepository;
-
-    @Mock
-    private GameLinkingService mockGameLinkingService;
+    private EventProcessingContext context;
 
     private EventProcessorImpl eventProcessor;
 
     @BeforeEach
     void setUp() {
+        context = new EventProcessingContext();
         eventProcessor = new EventProcessorImpl(
                 mockStatsStore, 
                 mockRankingService,
-                mockGameRepository,
-                mockGameEventRepository,
-                mockGameLinkingService
+                context
         );
     }
 
@@ -335,28 +324,21 @@ class EventProcessorImplTest {
         }
 
         @Test
-        @DisplayName("Should handle GameOverEvent")
+        @DisplayName("Should handle GameOverEvent and create GameEntity in context")
         void shouldHandleGameOverEvent() {
             // Given
             Instant now = Instant.now();
             GameOverEvent gameOverEvent = new GameOverEvent(now, Map.of(), 
                 "de_dust2", "competitive", 16, 14);
 
-            // Mock repository responses for game creation
-            when(mockGameEventRepository.findByGameEventTypeAndTimestampBetween(any(), any(), any()))
-                    .thenReturn(Collections.emptyList());
-            when(mockGameEventRepository.findEventsBetweenTimestamps(any(), any()))
-                    .thenReturn(Collections.emptyList());
-            when(mockGameRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-            when(mockGameEventRepository.findByGameEventTypeAndTimestamp(any(), any()))
-                    .thenReturn(Collections.emptyList());
-            doNothing().when(mockGameLinkingService).linkGameToEvents(any(), any(), any(), any());
+            // When
+            eventProcessor.processEvent(gameOverEvent);
 
-            // When & Then - Should not throw exception
-            assertDoesNotThrow(() -> eventProcessor.processEvent(gameOverEvent));
-            
-            // Verify game repository was called
-            verify(mockGameRepository, atLeastOnce()).save(any());
+            // Then - context should have game entity set
+            assertNotNull(context.getCurrentGame());
+            assertEquals("de_dust2", context.getCurrentGame().getMap());
+            assertEquals(16, context.getCurrentGame().getTeam1Score());
+            assertEquals(14, context.getCurrentGame().getTeam2Score());
         }
 
         @Test

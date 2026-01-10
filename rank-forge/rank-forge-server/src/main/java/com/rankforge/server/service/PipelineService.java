@@ -26,7 +26,6 @@ import com.rankforge.pipeline.*;
 import com.rankforge.pipeline.persistence.*;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
-import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,9 +50,8 @@ public class PipelineService {
     private final GameEventRepository gameEventRepository;
     private final PlayerStatsRepository playerStatsRepository;
     private final AccoladeRepository accoladeRepository;
-    private final GameRepository gameRepository;
     private final ObjectMapper objectMapper;
-    private final GameLinkingService gameLinkingService;
+    private final EventProcessingContext eventProcessingContext;
     
     @Value("${rankforge.persistence.type:jpa}")
     private String persistenceType;
@@ -62,15 +60,13 @@ public class PipelineService {
     public PipelineService(GameEventRepository gameEventRepository,
                           PlayerStatsRepository playerStatsRepository,
                           AccoladeRepository accoladeRepository,
-                          GameRepository gameRepository,
                           ObjectMapper objectMapper,
-                          GameLinkingService gameLinkingService) {
+                          EventProcessingContext eventProcessingContext) {
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.accoladeRepository = accoladeRepository;
-        this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
-        this.gameLinkingService = gameLinkingService;
+        this.eventProcessingContext = eventProcessingContext;
     }
 
     /**
@@ -82,20 +78,19 @@ public class PipelineService {
     public GameRankingSystem createGameRankingSystem() {
         logger.debug("Creating pipeline components with server JPA configuration");
         
-        // Create stores using JPA repositories
-        EventStore eventStore = new JpaEventStore(gameEventRepository, objectMapper);
+        // Create stores using JPA repositories and shared context
+        EventStore eventStore = new JpaEventStore(gameEventRepository, accoladeRepository, 
+                objectMapper, eventProcessingContext);
         PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository);
-        AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository);
+        AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
         // Create ranking algorithm and service
         RankingAlgorithm rankingAlgo = new EloBasedRankingAlgorithm();
         RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
         
-        // Use the injected GameLinkingService (Spring-managed bean with @Transactional support)
-        
-        // Create event processor
+        // Create event processor with shared context for direct entity reference linking
         EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService, 
-                gameRepository, gameEventRepository, gameLinkingService);
+                eventProcessingContext);
         
         // Wire event listeners
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
