@@ -155,6 +155,21 @@
   color: var(--color-text-primary);
 }
 
+.player-profile-link {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  margin: -0.25rem -0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+.player-profile-link:hover {
+  color: var(--color-accent-blue);
+  background: rgba(74, 144, 226, 0.15);
+}
+
 .kills-cell {
   text-align: center;
   font-weight: 600;
@@ -206,8 +221,10 @@
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  cursor: default;
-  transition: transform 0.2s ease;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  border: 2px solid transparent;
 }
 
 .round-badge.ct-win {
@@ -219,7 +236,17 @@
 }
 
 .round-badge:hover {
-  transform: scale(1.1);
+  transform: scale(1.15);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.round-badge.ct-win:hover {
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+}
+
+.round-badge.t-win:hover {
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.6);
 }
 
 /* Accolades */
@@ -281,6 +308,24 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.accolade-player-link {
+  font-weight: 500;
+  color: var(--color-accent-blue);
+  font-size: 0.9rem;
+  margin-bottom: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  display: block;
+  transition: all 0.2s ease;
+}
+
+.accolade-player-link:hover {
+  color: var(--color-text-primary);
+  text-shadow: 0 0 8px rgba(74, 144, 226, 0.6);
 }
 
 .accolade-value {

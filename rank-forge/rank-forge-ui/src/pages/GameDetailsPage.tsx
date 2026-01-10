@@ -7,6 +7,19 @@ import { gamesApi } from '../services/api';
 import type { GameDTO, GameDetailsDTO } from '../services/api';
 import './GameDetailsPage.css';
 
+// Extract numeric part from Steam ID (e.g., "[U:1:123456789]" -> "123456789")
+// Also handles case where ID is already just a number
+const extractSteamId = (fullId: string | undefined | null): string => {
+  if (!fullId) return '';
+  // If it's in [U:X:NUMBER] format, extract the number
+  const match = fullId.match(/\[U:\d+:(\d+)\]/);
+  if (match) return match[1];
+  // If it's already just a number, return as-is
+  if (/^\d+$/.test(fullId)) return fullId;
+  // Otherwise return the original (fallback)
+  return fullId;
+};
+
 // Map accolade types to icons
 const getAccoladeIcon = (typeDescription: string): string => {
   const type = typeDescription.toLowerCase();
@@ -139,19 +152,20 @@ export const GameDetailsPage = () => {
         <div className="section-card card-bg rounds-section">
           <h2 className="section-title">⏱️ Round Timeline</h2>
           <p className="rounds-description">
-            Round-by-round results (Green = CT Win, Orange = T Win)
+            Round-by-round results (Green = CT Win, Orange = T Win) • Click a round for details
           </p>
           <div className="rounds-timeline">
             {gameDetails.rounds.map((round, idx) => (
-              <div
+              <Link
                 key={idx}
+                to={`/games/${gameId}/rounds/${idx + 1}`}
                 className={`round-badge ${
                   round.winnerTeam === 'CT' ? 'ct-win' : 't-win'
                 }`}
-                title={`Round ${idx + 1}: ${round.winnerTeam} Win`}
+                title={`Round ${idx + 1}: ${round.winnerTeam} Win - Click for details`}
               >
                 {idx + 1}
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -173,15 +187,30 @@ export const GameDetailsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {gameDetails.playerStats.map((player, idx) => (
-                  <tr key={idx}>
-                    <td className="player-name-cell">{player.playerName}</td>
-                    <td className="kills-cell">{player.kills}</td>
-                    <td className="deaths-cell">{player.deaths}</td>
-                    <td className="assists-cell">{player.assists}</td>
-                    <td className="rating-cell">{player.rating.toFixed(2)}</td>
-                  </tr>
-                ))}
+                {gameDetails.playerStats.map((player, idx) => {
+                  const steamId = extractSteamId(player.playerId);
+                  return (
+                    <tr key={idx}>
+                      <td className="player-name-cell">
+                        {steamId ? (
+                          <Link to={`/players/${steamId}`} className="player-profile-link">
+                            {player.playerName}
+                          </Link>
+                        ) : (
+                          player.playerName
+                        )}
+                      </td>
+                      <td className="kills-cell">{player.kills}</td>
+                      <td className="deaths-cell">{player.deaths}</td>
+                      <td className="assists-cell">{player.assists}</td>
+                      <td className="rating-cell">
+                        {player.deaths > 0 
+                          ? (player.kills / player.deaths).toFixed(2) 
+                          : player.kills.toFixed(2)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -195,16 +224,25 @@ export const GameDetailsPage = () => {
         <div className="section-card card-bg accolades-section">
           <h2 className="section-title">🏆 Match Accolades</h2>
           <div className="accolades-grid">
-            {gameDetails.accolades.map((accolade, idx) => (
-              <div key={idx} className="accolade-card">
-                <div className="accolade-icon">{getAccoladeIcon(accolade.typeDescription)}</div>
-                <div className="accolade-content">
-                  <div className="accolade-type">{accolade.typeDescription}</div>
-                  <div className="accolade-player">{accolade.playerName}</div>
-                  <div className="accolade-value">{accolade.value.toFixed(0)}</div>
+            {gameDetails.accolades.map((accolade, idx) => {
+              const steamId = extractSteamId(accolade.playerId);
+              return (
+                <div key={idx} className="accolade-card">
+                  <div className="accolade-icon">{getAccoladeIcon(accolade.typeDescription)}</div>
+                  <div className="accolade-content">
+                    <div className="accolade-type">{accolade.typeDescription}</div>
+                    {steamId ? (
+                      <Link to={`/players/${steamId}`} className="accolade-player-link">
+                        {accolade.playerName}
+                      </Link>
+                    ) : (
+                      <div className="accolade-player">{accolade.playerName}</div>
+                    )}
+                    <div className="accolade-value">{accolade.value.toFixed(0)}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

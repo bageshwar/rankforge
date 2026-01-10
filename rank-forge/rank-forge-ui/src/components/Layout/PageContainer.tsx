@@ -3,7 +3,7 @@ import './PageContainer.css';
 
 interface PageContainerProps {
   children: ReactNode;
-  backgroundClass?: 'bg-home' | 'bg-rankings' | 'bg-games' | 'bg-game-details';
+  backgroundClass?: 'bg-home' | 'bg-rankings' | 'bg-games' | 'bg-game-details' | 'bg-player-profile' | 'bg-round-details';
   className?: string;
 }
 

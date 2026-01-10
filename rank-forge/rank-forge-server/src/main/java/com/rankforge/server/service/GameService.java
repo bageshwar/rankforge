@@ -23,10 +23,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.GameEventType;
 import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
+import com.rankforge.pipeline.persistence.entity.AssistEventEntity;
+import com.rankforge.pipeline.persistence.entity.AttackEventEntity;
+import com.rankforge.pipeline.persistence.entity.BombEventEntity;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
+import com.rankforge.pipeline.persistence.entity.KillEventEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
+import com.rankforge.pipeline.persistence.entity.RoundStartEventEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
@@ -35,6 +40,8 @@ import com.rankforge.server.dto.AccoladeDTO;
 import com.rankforge.server.dto.GameDTO;
 import com.rankforge.server.dto.GameDetailsDTO;
 import com.rankforge.server.dto.PlayerStatsDTO;
+import com.rankforge.server.dto.RoundDetailsDTO;
+import com.rankforge.server.dto.RoundEventDTO;
 import com.rankforge.server.dto.RoundResultDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +51,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.Comparator;
 
 /**
  * Service layer for managing processed games data.
@@ -125,9 +133,10 @@ public class GameService {
     
     /**
      * Get players for a game using the game's database ID
+     * Returns a map of steam ID -> player name
      */
-    private List<String> getPlayersForGame(Long gameId, Map<String, String> playerIdToNameCache) {
-        Map<String, String> normalizedToOriginal = new HashMap<>();
+    private Map<String, String> getPlayersForGameWithIds(Long gameId, Map<String, String> playerIdToNameCache) {
+        Map<String, String> steamIdToName = new LinkedHashMap<>();
         
         try {
             // Get all rounds for this game
@@ -146,12 +155,12 @@ public class GameService {
                             for (JsonNode playerIdNode : playersNode) {
                                 String playerId = playerIdNode.asText();
                                 if (playerId != null && !playerId.isEmpty() && !"0".equals(playerId)) {
+                                    String fullSteamId = "[U:1:" + playerId + "]";
                                     String playerName = getPlayerNameById(playerIdToNameCache, playerId);
                                     if (playerName != null && !playerName.trim().isEmpty()) {
                                         String trimmedName = playerName.trim();
-                                        String normalizedKey = trimmedName.toLowerCase();
-                                        if (!normalizedToOriginal.containsKey(normalizedKey)) {
-                                            normalizedToOriginal.put(normalizedKey, trimmedName);
+                                        if (!steamIdToName.containsKey(fullSteamId)) {
+                                            steamIdToName.put(fullSteamId, trimmedName);
                                         }
                                     }
                                 }
@@ -163,16 +172,23 @@ public class GameService {
                 }
             }
             
-            List<String> playerList = new ArrayList<>(normalizedToOriginal.values());
-            playerList.sort(String.CASE_INSENSITIVE_ORDER);
-            
-            LOGGER.debug("Found {} unique players for game {}", playerList.size(), gameId);
-            return playerList;
+            LOGGER.debug("Found {} unique players for game {}", steamIdToName.size(), gameId);
+            return steamIdToName;
             
         } catch (Exception e) {
             LOGGER.error("Failed to get players for game {}", gameId, e);
-            return new ArrayList<>();
+            return new LinkedHashMap<>();
         }
+    }
+    
+    /**
+     * Get players for a game using the game's database ID
+     */
+    private List<String> getPlayersForGame(Long gameId, Map<String, String> playerIdToNameCache) {
+        Map<String, String> steamIdToName = getPlayersForGameWithIds(gameId, playerIdToNameCache);
+        List<String> playerList = new ArrayList<>(steamIdToName.values());
+        playerList.sort(String.CASE_INSENSITIVE_ORDER);
+        return playerList;
     }
 
     /**
@@ -288,12 +304,12 @@ public class GameService {
             );
             details.setRounds(rounds);
             
-            // Get players for the game
+            // Get players for the game (steamId -> playerName)
             Map<String, String> playerIdToNameCache = new HashMap<>();
-            List<String> players = getPlayersForGame(gameId, playerIdToNameCache);
+            Map<String, String> steamIdToName = getPlayersForGameWithIds(gameId, playerIdToNameCache);
             
             // Get player statistics
-            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, players);
+            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, steamIdToName);
             details.setPlayerStats(playerStats);
             
             // Get accolades
@@ -385,14 +401,17 @@ public class GameService {
     
     /**
      * Get player statistics for a game by querying KillEvent and AssistEvent
+     * @param steamIdToName Map of Steam ID -> player name
      */
-    private List<PlayerStatsDTO> getPlayerStatistics(Instant gameStartTime, Instant gameEndTime, List<String> players) {
-        // Create a map to track stats for each player
-        Map<String, PlayerStatsDTO> statsMap = new HashMap<>();
-        for (String player : players) {
-            String normalizedName = player.trim().toLowerCase();
-            statsMap.put(normalizedName, new PlayerStatsDTO(
-                player.trim(),
+    private List<PlayerStatsDTO> getPlayerStatistics(Instant gameStartTime, Instant gameEndTime, Map<String, String> steamIdToName) {
+        // Create a map to track stats for each player (keyed by steamId)
+        Map<String, PlayerStatsDTO> statsMap = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : steamIdToName.entrySet()) {
+            String steamId = entry.getKey();
+            String playerName = entry.getValue();
+            statsMap.put(steamId, new PlayerStatsDTO(
+                playerName.trim(),
+                steamId,
                 0, 0, 0, 0.0, "Unknown"
             ));
         }
@@ -412,21 +431,37 @@ public class GameService {
                     String victimSteamId = entity.getPlayer2();
                     
                     if (killerSteamId != null) {
-                        for (Map.Entry<String, PlayerStatsDTO> entry : statsMap.entrySet()) {
-                            PlayerStatsDTO stats = entry.getValue();
-                            if (stats != null && killerSteamId.contains(entry.getKey().substring(0, Math.min(3, entry.getKey().length())))) {
-                                stats.setKills(stats.getKills() + 1);
-                                break;
+                        // Try exact match first
+                        if (statsMap.containsKey(killerSteamId)) {
+                            PlayerStatsDTO stats = statsMap.get(killerSteamId);
+                            stats.setKills(stats.getKills() + 1);
+                        } else {
+                            // Fallback to partial match
+                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                                PlayerStatsDTO stats = mapEntry.getValue();
+                                String normalizedName = stats.getPlayerName().toLowerCase();
+                                if (stats != null && killerSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                    stats.setKills(stats.getKills() + 1);
+                                    break;
+                                }
                             }
                         }
                     }
                     
                     if (victimSteamId != null) {
-                        for (Map.Entry<String, PlayerStatsDTO> entry : statsMap.entrySet()) {
-                            PlayerStatsDTO stats = entry.getValue();
-                            if (stats != null && victimSteamId.contains(entry.getKey().substring(0, Math.min(3, entry.getKey().length())))) {
-                                stats.setDeaths(stats.getDeaths() + 1);
-                                break;
+                        // Try exact match first
+                        if (statsMap.containsKey(victimSteamId)) {
+                            PlayerStatsDTO stats = statsMap.get(victimSteamId);
+                            stats.setDeaths(stats.getDeaths() + 1);
+                        } else {
+                            // Fallback to partial match
+                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                                PlayerStatsDTO stats = mapEntry.getValue();
+                                String normalizedName = stats.getPlayerName().toLowerCase();
+                                if (stats != null && victimSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                    stats.setDeaths(stats.getDeaths() + 1);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -454,11 +489,19 @@ public class GameService {
                     String assisterSteamId = entity.getPlayer1();
                     
                     if (assisterSteamId != null) {
-                        for (Map.Entry<String, PlayerStatsDTO> entry : statsMap.entrySet()) {
-                            PlayerStatsDTO stats = entry.getValue();
-                            if (stats != null && assisterSteamId.contains(entry.getKey().substring(0, Math.min(3, entry.getKey().length())))) {
-                                stats.setAssists(stats.getAssists() + 1);
-                                break;
+                        // Try exact match first
+                        if (statsMap.containsKey(assisterSteamId)) {
+                            PlayerStatsDTO stats = statsMap.get(assisterSteamId);
+                            stats.setAssists(stats.getAssists() + 1);
+                        } else {
+                            // Fallback to partial match
+                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                                PlayerStatsDTO stats = mapEntry.getValue();
+                                String normalizedName = stats.getPlayerName().toLowerCase();
+                                if (stats != null && assisterSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                    stats.setAssists(stats.getAssists() + 1);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -480,20 +523,8 @@ public class GameService {
             stats.setRating(rating);
         }
         
-        // Return stats in the same order as the players list
-        List<PlayerStatsDTO> playerStats = new ArrayList<>();
-        for (String player : players) {
-            String normalizedName = player.trim().toLowerCase();
-            PlayerStatsDTO stats = statsMap.get(normalizedName);
-            if (stats != null) {
-                playerStats.add(stats);
-            } else {
-                playerStats.add(new PlayerStatsDTO(
-                    player.trim(),
-                    0, 0, 0, 0.0, "Unknown"
-                ));
-            }
-        }
+        // Return stats as a list (order preserved by LinkedHashMap)
+        List<PlayerStatsDTO> playerStats = new ArrayList<>(statsMap.values());
         
         LOGGER.debug("Calculated statistics for {} players", playerStats.size());
         
@@ -506,14 +537,20 @@ public class GameService {
     private List<AccoladeDTO> getAccolades(Long gameId) {
         List<AccoladeDTO> accolades = new ArrayList<>();
         
+        // Cache for player name to Steam ID lookup
+        Map<String, String> playerNameToSteamId = new HashMap<>();
+        
         try {
             List<AccoladeEntity> accoladeEntities = accoladeRepository.findByGameId(gameId);
             
             for (AccoladeEntity entity : accoladeEntities) {
+                // Look up actual Steam ID from player name
+                String steamId = resolvePlayerSteamId(entity.getPlayerName(), playerNameToSteamId);
+                
                 AccoladeDTO accoladeDTO = new AccoladeDTO(
                         entity.getType(),
                         entity.getPlayerName(),
-                        entity.getPlayerId(),
+                        steamId,
                         entity.getValue(),
                         entity.getPosition(),
                         entity.getScore()
@@ -528,5 +565,291 @@ public class GameService {
         }
         
         return accolades;
+    }
+    
+    /**
+     * Resolve player Steam ID from player name using PlayerStats table
+     */
+    private String resolvePlayerSteamId(String playerName, Map<String, String> cache) {
+        if (playerName == null || playerName.isEmpty()) {
+            return "";
+        }
+        
+        // Check cache first
+        String normalizedName = playerName.trim().toLowerCase();
+        if (cache.containsKey(normalizedName)) {
+            return cache.get(normalizedName);
+        }
+        
+        try {
+            // Look up by nickname in PlayerStats
+            Optional<PlayerStatsEntity> entityOpt = playerStatsRepository.findByLastSeenNickname(playerName.trim());
+            if (entityOpt.isPresent()) {
+                String steamId = entityOpt.get().getPlayerId();
+                cache.put(normalizedName, steamId);
+                return steamId;
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not find Steam ID for player: {}", playerName);
+        }
+        
+        cache.put(normalizedName, "");
+        return "";
+    }
+    
+    /**
+     * Get detailed round information including all events for a specific round
+     * @param gameIdStr The game ID
+     * @param roundNumber The round number (1-indexed)
+     * @return RoundDetailsDTO with all events in the round
+     */
+    public RoundDetailsDTO getRoundDetails(String gameIdStr, int roundNumber) {
+        try {
+            Long gameId = Long.parseLong(gameIdStr);
+            
+            Optional<GameEntity> gameEntityOpt = gameRepository.findById(gameId);
+            if (gameEntityOpt.isEmpty()) {
+                LOGGER.warn("Game not found for id {}", gameId);
+                return null;
+            }
+            
+            GameEntity gameEntity = gameEntityOpt.get();
+            
+            // Get all round start events for this game to find the specific round
+            List<GameEventEntity> roundStartEvents = gameEventRepository.findByGameIdAndGameEventType(
+                    gameId, GameEventType.ROUND_START);
+            
+            // Sort by timestamp to get correct round order
+            roundStartEvents.sort(Comparator.comparing(GameEventEntity::getTimestamp));
+            
+            if (roundNumber < 1 || roundNumber > roundStartEvents.size()) {
+                LOGGER.warn("Invalid round number {} for game {} (has {} rounds)", 
+                        roundNumber, gameId, roundStartEvents.size());
+                return null;
+            }
+            
+            // Get the round start event for the requested round (0-indexed in list)
+            GameEventEntity roundStartEvent = roundStartEvents.get(roundNumber - 1);
+            Long roundStartId = roundStartEvent.getId();
+            Instant roundStartTime = roundStartEvent.getTimestamp();
+            
+            // Get round end time
+            List<RoundEndEventEntity> roundEndEvents = gameEventRepository.findRoundEndEventsByGameId(gameId);
+            roundEndEvents.sort(Comparator.comparing(GameEventEntity::getTimestamp));
+            
+            Instant roundEndTime = null;
+            if (roundNumber <= roundEndEvents.size()) {
+                roundEndTime = roundEndEvents.get(roundNumber - 1).getTimestamp();
+            }
+            
+            // Determine winner team
+            String winnerTeam = determineRoundWinner(gameEntity, roundNumber, roundStartEvents.size());
+            
+            // Create round details DTO
+            RoundDetailsDTO roundDetails = new RoundDetailsDTO(gameId, roundNumber, winnerTeam);
+            roundDetails.setRoundStartTime(roundStartTime);
+            roundDetails.setRoundEndTime(roundEndTime);
+            
+            if (roundStartTime != null && roundEndTime != null) {
+                roundDetails.setDurationMs(roundEndTime.toEpochMilli() - roundStartTime.toEpochMilli());
+            }
+            
+            // Get all events for this round
+            List<GameEventEntity> roundEvents = gameEventRepository.findByRoundStartId(roundStartId);
+            
+            // Build player name cache
+            Map<String, String> playerIdToNameCache = new HashMap<>();
+            Map<String, String> steamIdToName = getPlayersForGameWithIds(gameId, playerIdToNameCache);
+            
+            // Convert events to DTOs
+            List<RoundEventDTO> eventDTOs = new ArrayList<>();
+            int killCount = 0;
+            int assistCount = 0;
+            int headshotCount = 0;
+            boolean bombPlanted = false;
+            boolean bombDefused = false;
+            boolean bombExploded = false;
+            
+            for (GameEventEntity event : roundEvents) {
+                // Skip ROUND_START and ROUND_END events themselves
+                if (event.getGameEventType() == GameEventType.ROUND_START || 
+                    event.getGameEventType() == GameEventType.ROUND_END) {
+                    continue;
+                }
+                
+                RoundEventDTO eventDTO = convertToEventDTO(event, roundStartTime, steamIdToName);
+                eventDTOs.add(eventDTO);
+                
+                // Track summary stats
+                switch (event.getGameEventType()) {
+                    case KILL:
+                        killCount++;
+                        if (event instanceof KillEventEntity killEvent && 
+                            Boolean.TRUE.equals(killEvent.getIsHeadshot())) {
+                            headshotCount++;
+                        }
+                        break;
+                    case ASSIST:
+                        assistCount++;
+                        break;
+                    case BOMB_EVENT:
+                        if (event instanceof BombEventEntity bombEvent) {
+                            String bombType = bombEvent.getEventType();
+                            if (bombType != null) {
+                                if (bombType.equalsIgnoreCase("planted")) bombPlanted = true;
+                                if (bombType.equalsIgnoreCase("defused")) bombDefused = true;
+                                if (bombType.equalsIgnoreCase("exploded")) bombExploded = true;
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            
+            // Sort events by timestamp
+            eventDTOs.sort(Comparator.comparing(RoundEventDTO::getTimestamp));
+            
+            roundDetails.setEvents(eventDTOs);
+            roundDetails.setTotalKills(killCount);
+            roundDetails.setTotalAssists(assistCount);
+            roundDetails.setHeadshotKills(headshotCount);
+            roundDetails.setBombPlanted(bombPlanted);
+            roundDetails.setBombDefused(bombDefused);
+            roundDetails.setBombExploded(bombExploded);
+            
+            LOGGER.info("Found {} events for game {} round {}", eventDTOs.size(), gameId, roundNumber);
+            
+            return roundDetails;
+            
+        } catch (NumberFormatException e) {
+            LOGGER.error("Failed to parse game ID: {}", gameIdStr, e);
+            return null;
+        } catch (Exception e) {
+            LOGGER.error("Failed to get round details for game {} round {}", gameIdStr, roundNumber, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Convert a GameEventEntity to RoundEventDTO
+     */
+    private RoundEventDTO convertToEventDTO(GameEventEntity event, Instant roundStartTime, 
+                                            Map<String, String> steamIdToName) {
+        RoundEventDTO dto = new RoundEventDTO(
+                event.getId(),
+                event.getGameEventType().name(),
+                event.getTimestamp()
+        );
+        
+        // Calculate time offset from round start
+        if (roundStartTime != null && event.getTimestamp() != null) {
+            dto.setTimeOffsetMs(event.getTimestamp().toEpochMilli() - roundStartTime.toEpochMilli());
+        }
+        
+        // Set player info
+        String player1Id = event.getPlayer1();
+        String player2Id = event.getPlayer2();
+        
+        if (player1Id != null) {
+            dto.setPlayer1Id(player1Id);
+            dto.setPlayer1Name(resolvePlayerName(player1Id, steamIdToName));
+        }
+        if (player2Id != null) {
+            dto.setPlayer2Id(player2Id);
+            dto.setPlayer2Name(resolvePlayerName(player2Id, steamIdToName));
+        }
+        
+        // Set event-specific details
+        switch (event.getGameEventType()) {
+            case KILL:
+                if (event instanceof KillEventEntity killEvent) {
+                    dto.setWeapon(killEvent.getWeapon());
+                    dto.setIsHeadshot(killEvent.getIsHeadshot());
+                }
+                break;
+            case ASSIST:
+                if (event instanceof AssistEventEntity assistEvent) {
+                    dto.setWeapon(assistEvent.getWeapon());
+                    dto.setAssistType(assistEvent.getAssistType());
+                }
+                break;
+            case ATTACK:
+                if (event instanceof AttackEventEntity attackEvent) {
+                    dto.setWeapon(attackEvent.getWeapon());
+                    dto.setDamage(attackEvent.getDamage());
+                    dto.setArmorDamage(attackEvent.getArmorDamage());
+                    dto.setHitGroup(attackEvent.getHitGroup());
+                }
+                break;
+            case BOMB_EVENT:
+                if (event instanceof BombEventEntity bombEvent) {
+                    dto.setBombEventType(bombEvent.getEventType());
+                    // For bomb events, player is stored differently
+                    if (bombEvent.getPlayer() != null) {
+                        dto.setPlayer1Id(bombEvent.getPlayer());
+                        dto.setPlayer1Name(resolvePlayerName(bombEvent.getPlayer(), steamIdToName));
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * Resolve player name from steam ID
+     */
+    private String resolvePlayerName(String steamId, Map<String, String> steamIdToName) {
+        if (steamId == null) return null;
+        
+        // Try exact match first
+        if (steamIdToName.containsKey(steamId)) {
+            return steamIdToName.get(steamId);
+        }
+        
+        // Try to find a partial match (handle different steam ID formats)
+        for (Map.Entry<String, String> entry : steamIdToName.entrySet()) {
+            if (entry.getKey().contains(steamId) || steamId.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        
+        // Extract numeric part and try again
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[U:1:(\\d+)\\]");
+        java.util.regex.Matcher matcher = pattern.matcher(steamId);
+        if (matcher.find()) {
+            String numericId = matcher.group(1);
+            for (Map.Entry<String, String> entry : steamIdToName.entrySet()) {
+                if (entry.getKey().contains(numericId)) {
+                    return entry.getValue();
+                }
+            }
+        }
+        
+        return steamId; // Return the ID if name not found
+    }
+    
+    /**
+     * Determine the winner of a specific round
+     */
+    private String determineRoundWinner(GameEntity game, int roundNumber, int totalRounds) {
+        int finalCtScore = game.getTeam1Score();
+        int finalTScore = game.getTeam2Score();
+        
+        // Work backwards to determine round winners
+        int ctScore = finalCtScore;
+        int tScore = finalTScore;
+        
+        // Simple heuristic: distribute wins proportionally
+        int ctWinsUpToRound = (int) Math.round((double) roundNumber * finalCtScore / totalRounds);
+        int tWinsUpToRound = roundNumber - ctWinsUpToRound;
+        
+        int ctWinsUpToPrevRound = roundNumber > 1 ? 
+                (int) Math.round((double) (roundNumber - 1) * finalCtScore / totalRounds) : 0;
+        
+        return (ctWinsUpToRound > ctWinsUpToPrevRound) ? "CT" : "T";
     }
 }

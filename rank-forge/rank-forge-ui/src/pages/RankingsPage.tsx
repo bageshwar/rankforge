@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { rankingsApi } from '../services/api';
 import type { PlayerRankingDTO } from '../services/api';
 import './RankingsPage.css';
+
+// Extract numeric part from Steam ID (e.g., "[U:1:123456789]" -> "123456789")
+const extractSteamId = (fullId: string): string => {
+  if (!fullId) return '';
+  const match = fullId.match(/\[U:\d+:(\d+)\]/);
+  return match ? match[1] : fullId;
+};
 
 export const RankingsPage = () => {
   const [rankings, setRankings] = useState<PlayerRankingDTO[]>([]);
@@ -126,10 +134,12 @@ export const RankingsPage = () => {
                   )}
                 </td>
                 <td className="player-cell">
-                  <div className="player-info">
-                    <span className="player-name">{player.playerName}</span>
-                    <span className="player-id">{player.playerId}</span>
-                  </div>
+                  <Link to={`/players/${extractSteamId(player.playerId)}`} className="player-link">
+                    <div className="player-info">
+                      <span className="player-name">{player.playerName}</span>
+                      <span className="player-id">{player.playerId}</span>
+                    </div>
+                  </Link>
                 </td>
                 <td className="stat-cell kd-ratio">{formatNumber(player.killDeathRatio)}</td>
                 <td className="stat-cell">{player.kills}</td>

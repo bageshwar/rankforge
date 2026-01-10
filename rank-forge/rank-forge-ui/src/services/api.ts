@@ -42,6 +42,7 @@ export interface RoundDTO {
 
 export interface PlayerStatDTO {
   playerName: string;
+  playerId: string;
   kills: number;
   deaths: number;
   assists: number;
@@ -52,6 +53,7 @@ export interface AccoladeDTO {
   typeDescription: string;
   position: number;
   playerName: string;
+  playerId: string;
   value: number;
   score: number;
 }
@@ -64,6 +66,40 @@ export interface GameDetailsDTO {
   playerStats?: PlayerStatDTO[];
   rounds?: RoundDTO[];
   accolades?: AccoladeDTO[];
+}
+
+export interface RoundEventDTO {
+  id: number;
+  eventType: 'KILL' | 'ASSIST' | 'ATTACK' | 'BOMB_EVENT';
+  timestamp: string;
+  timeOffsetMs: number;
+  player1Id?: string;
+  player1Name?: string;
+  player2Id?: string;
+  player2Name?: string;
+  weapon?: string;
+  isHeadshot?: boolean;
+  damage?: number;
+  armorDamage?: number;
+  hitGroup?: string;
+  bombEventType?: string;
+  assistType?: string;
+}
+
+export interface RoundDetailsDTO {
+  gameId: number;
+  roundNumber: number;
+  winnerTeam: 'CT' | 'T';
+  roundStartTime: string;
+  roundEndTime: string;
+  durationMs: number;
+  events: RoundEventDTO[];
+  totalKills: number;
+  totalAssists: number;
+  headshotKills: number;
+  bombPlanted: boolean;
+  bombDefused: boolean;
+  bombExploded: boolean;
 }
 
 // Player Profile Types
@@ -169,6 +205,18 @@ export const gamesApi = {
   getDetails: async (gameId: string): Promise<GameDetailsDTO | null> => {
     try {
       const response = await apiClient.get<GameDetailsDTO>(`/games/${gameId}/details`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  getRoundDetails: async (gameId: string, roundNumber: number): Promise<RoundDetailsDTO | null> => {
+    try {
+      const response = await apiClient.get<RoundDetailsDTO>(`/games/${gameId}/rounds/${roundNumber}`);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {

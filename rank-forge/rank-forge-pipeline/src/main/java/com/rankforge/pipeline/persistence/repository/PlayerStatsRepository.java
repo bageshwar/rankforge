@@ -80,4 +80,19 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
     default List<PlayerStatsEntity> findAllByOrderByRankAsc() {
         return findLatestStatsForAllPlayers();
     }
+    
+    /**
+     * Find the latest player stats by nickname (case-insensitive)
+     * Used for resolving player names to Steam IDs
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE LOWER(p.lastSeenNickname) = LOWER(:nickname) ORDER BY p.gameTimestamp DESC")
+    List<PlayerStatsEntity> findByLastSeenNicknameIgnoreCaseOrderByGameTimestampDesc(@Param("nickname") String nickname);
+    
+    /**
+     * Find the latest player stats by nickname (single result)
+     */
+    default Optional<PlayerStatsEntity> findByLastSeenNickname(String nickname) {
+        List<PlayerStatsEntity> results = findByLastSeenNicknameIgnoreCaseOrderByGameTimestampDesc(nickname);
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
 }

@@ -213,6 +213,147 @@
   z-index: 1;
 }
 
+/* Round Details Page Background */
+.bg-round-details {
+  position: relative;
+  background: 
+    linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-round-details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 25% 25%, rgba(244, 67, 54, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 75% 75%, rgba(76, 175, 80, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-round-details::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 30px,
+      rgba(255, 255, 255, 0.01) 30px,
+      rgba(255, 255, 255, 0.01) 31px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 30px,
+      rgba(255, 255, 255, 0.01) 30px,
+      rgba(255, 255, 255, 0.01) 31px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Player Profile Page Background */
+.bg-player-profile {
+  position: relative;
+  background: 
+    linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 30%, #0d0d0d 100%);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-player-profile::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(ellipse at 50% 0%, rgba(74, 144, 226, 0.12) 0%, transparent 50%),
+    radial-gradient(ellipse at 0% 50%, rgba(255, 107, 53, 0.06) 0%, transparent 40%),
+    radial-gradient(ellipse at 100% 80%, rgba(74, 144, 226, 0.06) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-player-profile::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 50px,
+      rgba(255, 255, 255, 0.008) 50px,
+      rgba(255, 255, 255, 0.008) 51px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 50px,
+      rgba(255, 255, 255, 0.008) 50px,
+      rgba(255, 255, 255, 0.008) 51px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Round Details Page Background */
+.bg-round-details {
+  position: relative;
+  background: 
+    linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 40%, #0d0d0d 100%);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-round-details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 30% 20%, rgba(76, 175, 80, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(255, 152, 0, 0.08) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-round-details::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 30px,
+      rgba(255, 255, 255, 0.008) 30px,
+      rgba(255, 255, 255, 0.008) 31px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* Animated particle effects */
 @keyframes particle-float {
   0%, 100% {
