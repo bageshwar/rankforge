@@ -189,8 +189,8 @@
   position: relative;
   background: 
     linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%),
-    radial-gradient(circle at 30% 30%, rgba(76, 175, 80, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 70% 70%, rgba(255, 152, 0, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 30% 30%, rgba(74, 144, 226, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(255, 193, 7, 0.05) 0%, transparent 50%);
   min-height: 100vh;
 }
 
@@ -230,8 +230,8 @@
   right: 0;
   bottom: 0;
   background: 
-    radial-gradient(circle at 25% 25%, rgba(244, 67, 54, 0.06) 0%, transparent 40%),
-    radial-gradient(circle at 75% 75%, rgba(76, 175, 80, 0.06) 0%, transparent 40%);
+    radial-gradient(circle at 25% 25%, rgba(255, 193, 7, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 75% 75%, rgba(74, 144, 226, 0.06) 0%, transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
@@ -434,7 +434,7 @@
 }
 
 .glow-green {
-  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.3);
 }
 
 /* Hover glow effects */

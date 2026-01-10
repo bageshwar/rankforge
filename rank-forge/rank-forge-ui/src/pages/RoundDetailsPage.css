@@ -31,15 +31,15 @@
 }
 
 .round-header.ct-win {
-  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.1) 100%);
-  border: 2px solid rgba(76, 175, 80, 0.4);
-  box-shadow: 0 8px 32px rgba(76, 175, 80, 0.2);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.3) 0%, rgba(74, 144, 226, 0.1) 100%);
+  border: 2px solid rgba(74, 144, 226, 0.4);
+  box-shadow: 0 8px 32px rgba(74, 144, 226, 0.2);
 }
 
 .round-header.t-win {
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 152, 0, 0.1) 100%);
-  border: 2px solid rgba(255, 152, 0, 0.4);
-  box-shadow: 0 8px 32px rgba(255, 152, 0, 0.2);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.3) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 2px solid rgba(255, 193, 7, 0.4);
+  box-shadow: 0 8px 32px rgba(255, 193, 7, 0.2);
 }
 
 .round-header::before {
@@ -84,15 +84,15 @@
 }
 
 .ct-win .round-winner-badge {
-  background: rgba(76, 175, 80, 0.3);
-  border: 1px solid rgba(76, 175, 80, 0.5);
-  color: #4caf50;
+  background: rgba(74, 144, 226, 0.3);
+  border: 1px solid rgba(74, 144, 226, 0.5);
+  color: rgb(74, 144, 226);
 }
 
 .t-win .round-winner-badge {
-  background: rgba(255, 152, 0, 0.3);
-  border: 1px solid rgba(255, 152, 0, 0.5);
-  color: #ff9800;
+  background: rgba(255, 193, 7, 0.3);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  color: rgb(255, 193, 7);
 }
 
 .winner-icon {
@@ -149,15 +149,15 @@
 }
 
 .bomb-status.planted {
-  background: rgba(255, 152, 0, 0.2);
-  border: 1px solid rgba(255, 152, 0, 0.4);
-  color: #ff9800;
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid rgba(255, 193, 7, 0.4);
+  color: rgb(255, 193, 7);
 }
 
 .bomb-status.defused {
-  background: rgba(76, 175, 80, 0.2);
-  border: 1px solid rgba(76, 175, 80, 0.4);
-  color: #4caf50;
+  background: rgba(74, 144, 226, 0.2);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  color: rgb(74, 144, 226);
 }
 
 .bomb-status.exploded {
@@ -293,13 +293,13 @@
 }
 
 .event-bomb-planted .connector-dot {
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 152, 0, 0.1) 100%);
-  border: 2px solid rgba(255, 152, 0, 0.5);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.3) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 2px solid rgba(255, 193, 7, 0.5);
 }
 
 .event-bomb-defused .connector-dot {
-  background: linear-gradient(135deg, rgba(76, 175, 80, 0.3) 0%, rgba(76, 175, 80, 0.1) 100%);
-  border: 2px solid rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0.3) 0%, rgba(74, 144, 226, 0.1) 100%);
+  border: 2px solid rgba(74, 144, 226, 0.5);
 }
 
 .event-bomb-exploded .connector-dot {
@@ -309,8 +309,8 @@
 }
 
 .event-bomb .connector-dot {
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.3) 0%, rgba(255, 152, 0, 0.1) 100%);
-  border: 2px solid rgba(255, 152, 0, 0.5);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.3) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 2px solid rgba(255, 193, 7, 0.5);
 }
 
 .event-attack .connector-dot {
@@ -373,13 +373,13 @@
 
 .event-bomb-planted .event-type-badge,
 .event-bomb .event-type-badge {
-  background: rgba(255, 152, 0, 0.2);
-  color: #ff9800;
+  background: rgba(255, 193, 7, 0.2);
+  color: rgb(255, 193, 7);
 }
 
 .event-bomb-defused .event-type-badge {
-  background: rgba(76, 175, 80, 0.2);
-  color: #4caf50;
+  background: rgba(74, 144, 226, 0.2);
+  color: rgb(74, 144, 226);
 }
 
 .event-bomb-exploded .event-type-badge {
@@ -445,7 +445,7 @@
 }
 
 .player-link.attacker {
-  color: #4caf50;
+  color: rgb(100, 180, 100);
 }
 
 .player-link.victim {
@@ -457,7 +457,7 @@
 }
 
 .player-link.bomber {
-  color: #ff9800;
+  color: rgb(255, 193, 7);
 }
 
 .kill-arrow {
@@ -541,7 +541,7 @@
 }
 
 .killer-name {
-  color: #4caf50;
+  color: rgb(100, 180, 100);
   font-weight: 600;
   text-decoration: none;
   min-width: 120px;
@@ -549,7 +549,7 @@
 }
 
 .killer-name:hover {
-  color: #81c784;
+  color: rgb(140, 200, 140);
 }
 
 .kill-weapon-icon {
@@ -649,11 +649,11 @@
   
   .event-bomb-planted,
   .event-bomb {
-    border-left-color: rgba(255, 152, 0, 0.5);
+    border-left-color: rgba(255, 193, 7, 0.5);
   }
   
   .event-bomb-defused {
-    border-left-color: rgba(76, 175, 80, 0.5);
+    border-left-color: rgba(74, 144, 226, 0.5);
   }
   
   .event-bomb-exploded {

@@ -19,13 +19,14 @@
 }
 
 .game-header {
-  background: linear-gradient(135deg, var(--color-accent-blue), var(--color-accent-blue-secondary));
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
   color: var(--color-text-primary);
   padding: 2rem;
   border-radius: 16px;
   margin-bottom: 2rem;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(74, 144, 226, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .game-title {
@@ -45,8 +46,8 @@
 .header-score-ct {
   font-size: 3rem;
   font-weight: 800;
-  color: #4caf50;
-  text-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+  color: rgb(74, 144, 226);
+  text-shadow: 0 2px 8px rgba(74, 144, 226, 0.4);
 }
 
 .header-score-divider {
@@ -58,8 +59,8 @@
 .header-score-t {
   font-size: 3rem;
   font-weight: 800;
-  color: #ff9800;
-  text-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+  color: rgb(255, 193, 7);
+  text-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
 }
 
 .game-meta {
@@ -242,11 +243,11 @@
 }
 
 .round-badge.ct-win:hover {
-  box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.6);
 }
 
 .round-badge.t-win:hover {
-  box-shadow: 0 0 20px rgba(255, 152, 0, 0.6);
+  box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
 }
 
 /* Accolades */

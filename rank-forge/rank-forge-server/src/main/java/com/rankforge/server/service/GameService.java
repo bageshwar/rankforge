@@ -289,13 +289,6 @@ public class GameService {
             List<RoundResultDTO> rounds = getRoundResults(gameId, 
                     gameEntity.getTeam1Score(), gameEntity.getTeam2Score());
             
-            // Use game entity's start and end times
-            Instant gameEndTime = gameEntity.getGameOverTimestamp();
-            Instant gameStartTime = gameEntity.getStartTime();
-            if (gameStartTime == null) {
-                gameStartTime = gameEndTime.minusSeconds(7200); // Fallback: assume 2 hour game
-            }
-            
             // Create game details with scores from the game entity
             GameDetailsDTO details = new GameDetailsDTO(
                     gameEntity.getTeam1Score(), 
@@ -309,7 +302,7 @@ public class GameService {
             Map<String, String> steamIdToName = getPlayersForGameWithIds(gameId, playerIdToNameCache);
             
             // Get player statistics
-            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameStartTime, gameEndTime, steamIdToName);
+            List<PlayerStatsDTO> playerStats = getPlayerStatistics(gameId, steamIdToName);
             details.setPlayerStats(playerStats);
             
             // Get accolades
@@ -401,9 +394,10 @@ public class GameService {
     
     /**
      * Get player statistics for a game by querying KillEvent and AssistEvent
+     * @param gameId The game ID to query events for
      * @param steamIdToName Map of Steam ID -> player name
      */
-    private List<PlayerStatsDTO> getPlayerStatistics(Instant gameStartTime, Instant gameEndTime, Map<String, String> steamIdToName) {
+    private List<PlayerStatsDTO> getPlayerStatistics(Long gameId, Map<String, String> steamIdToName) {
         // Create a map to track stats for each player (keyed by steamId)
         Map<String, PlayerStatsDTO> statsMap = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : steamIdToName.entrySet()) {
@@ -416,52 +410,48 @@ public class GameService {
             ));
         }
         
-        // Query KillEvent to count kills and deaths
+        // Query KillEvent to count kills and deaths using gameId
         try {
-            List<GameEventEntity> killEntities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
-                    GameEventType.KILL, gameStartTime, gameEndTime);
+            List<GameEventEntity> killEntities = gameEventRepository.findByGameIdAndGameEventType(
+                    gameId, GameEventType.KILL);
+            
+            LOGGER.debug("Found {} kill events for game {}", killEntities.size(), gameId);
             
             for (GameEventEntity entity : killEntities) {
-                Instant eventTime = entity.getTimestamp();
+                String killerSteamId = entity.getPlayer1();
+                String victimSteamId = entity.getPlayer2();
                 
-                if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
-                    (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
-                    
-                    String killerSteamId = entity.getPlayer1();
-                    String victimSteamId = entity.getPlayer2();
-                    
-                    if (killerSteamId != null) {
-                        // Try exact match first
-                        if (statsMap.containsKey(killerSteamId)) {
-                            PlayerStatsDTO stats = statsMap.get(killerSteamId);
-                            stats.setKills(stats.getKills() + 1);
-                        } else {
-                            // Fallback to partial match
-                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
-                                PlayerStatsDTO stats = mapEntry.getValue();
-                                String normalizedName = stats.getPlayerName().toLowerCase();
-                                if (stats != null && killerSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
-                                    stats.setKills(stats.getKills() + 1);
-                                    break;
-                                }
+                if (killerSteamId != null) {
+                    // Try exact match first
+                    if (statsMap.containsKey(killerSteamId)) {
+                        PlayerStatsDTO stats = statsMap.get(killerSteamId);
+                        stats.setKills(stats.getKills() + 1);
+                    } else {
+                        // Fallback to partial match
+                        for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                            PlayerStatsDTO stats = mapEntry.getValue();
+                            String normalizedName = stats.getPlayerName().toLowerCase();
+                            if (stats != null && killerSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                stats.setKills(stats.getKills() + 1);
+                                break;
                             }
                         }
                     }
-                    
-                    if (victimSteamId != null) {
-                        // Try exact match first
-                        if (statsMap.containsKey(victimSteamId)) {
-                            PlayerStatsDTO stats = statsMap.get(victimSteamId);
-                            stats.setDeaths(stats.getDeaths() + 1);
-                        } else {
-                            // Fallback to partial match
-                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
-                                PlayerStatsDTO stats = mapEntry.getValue();
-                                String normalizedName = stats.getPlayerName().toLowerCase();
-                                if (stats != null && victimSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
-                                    stats.setDeaths(stats.getDeaths() + 1);
-                                    break;
-                                }
+                }
+                
+                if (victimSteamId != null) {
+                    // Try exact match first
+                    if (statsMap.containsKey(victimSteamId)) {
+                        PlayerStatsDTO stats = statsMap.get(victimSteamId);
+                        stats.setDeaths(stats.getDeaths() + 1);
+                    } else {
+                        // Fallback to partial match
+                        for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                            PlayerStatsDTO stats = mapEntry.getValue();
+                            String normalizedName = stats.getPlayerName().toLowerCase();
+                            if (stats != null && victimSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                stats.setDeaths(stats.getDeaths() + 1);
+                                break;
                             }
                         }
                     }
@@ -472,36 +462,32 @@ public class GameService {
         } catch (org.springframework.dao.DataAccessException e) {
             LOGGER.warn("Database access error while retrieving kill events");
         } catch (Exception e) {
-            LOGGER.error("Failed to get kill events for game between {} and {}", gameStartTime, gameEndTime, e);
+            LOGGER.error("Failed to get kill events for game {}", gameId, e);
         }
         
-        // Query AssistEvent to count assists
+        // Query AssistEvent to count assists using gameId
         try {
-            List<GameEventEntity> assistEntities = gameEventRepository.findByGameEventTypeAndTimestampBetween(
-                    GameEventType.ASSIST, gameStartTime, gameEndTime);
+            List<GameEventEntity> assistEntities = gameEventRepository.findByGameIdAndGameEventType(
+                    gameId, GameEventType.ASSIST);
+            
+            LOGGER.debug("Found {} assist events for game {}", assistEntities.size(), gameId);
             
             for (GameEventEntity entity : assistEntities) {
-                Instant eventTime = entity.getTimestamp();
+                String assisterSteamId = entity.getPlayer1();
                 
-                if ((eventTime.equals(gameStartTime) || eventTime.isAfter(gameStartTime)) &&
-                    (eventTime.equals(gameEndTime) || eventTime.isBefore(gameEndTime))) {
-                    
-                    String assisterSteamId = entity.getPlayer1();
-                    
-                    if (assisterSteamId != null) {
-                        // Try exact match first
-                        if (statsMap.containsKey(assisterSteamId)) {
-                            PlayerStatsDTO stats = statsMap.get(assisterSteamId);
-                            stats.setAssists(stats.getAssists() + 1);
-                        } else {
-                            // Fallback to partial match
-                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
-                                PlayerStatsDTO stats = mapEntry.getValue();
-                                String normalizedName = stats.getPlayerName().toLowerCase();
-                                if (stats != null && assisterSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
-                                    stats.setAssists(stats.getAssists() + 1);
-                                    break;
-                                }
+                if (assisterSteamId != null) {
+                    // Try exact match first
+                    if (statsMap.containsKey(assisterSteamId)) {
+                        PlayerStatsDTO stats = statsMap.get(assisterSteamId);
+                        stats.setAssists(stats.getAssists() + 1);
+                    } else {
+                        // Fallback to partial match
+                        for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                            PlayerStatsDTO stats = mapEntry.getValue();
+                            String normalizedName = stats.getPlayerName().toLowerCase();
+                            if (stats != null && assisterSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                stats.setAssists(stats.getAssists() + 1);
+                                break;
                             }
                         }
                     }
@@ -512,7 +498,7 @@ public class GameService {
         } catch (org.springframework.dao.DataAccessException e) {
             LOGGER.warn("Database access error while retrieving assist events");
         } catch (Exception e) {
-            LOGGER.error("Failed to get assist events for game between {} and {}", gameStartTime, gameEndTime, e);
+            LOGGER.error("Failed to get assist events for game {}", gameId, e);
         }
         
         // Calculate rating (K/D ratio)

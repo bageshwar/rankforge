@@ -26,8 +26,8 @@
   --color-warning: #ff9800;
   --color-error: #f44336;
   
-  --color-team-ct: #4caf50;
-  --color-team-t: #ff9800;
+  --color-team-ct: rgb(74, 144, 226);
+  --color-team-t: rgb(255, 193, 7);
 }
 
 body {
