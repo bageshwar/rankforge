@@ -101,8 +101,13 @@ public class PlayerProfileService {
             List<RatingHistoryPoint> ratingHistory = buildRatingHistory(statsHistory);
             profile.setRatingHistory(ratingHistory);
             
-            // Get accolades
+            // Get accolades - try by player ID first (for new data with correct Steam IDs),
+            // then by player name (for legacy data where Steam IDs weren't resolved correctly)
             List<AccoladeEntity> accoladeEntities = accoladeRepository.findByPlayerId(playerId);
+            if (accoladeEntities.isEmpty() && profile.getPlayerName() != null) {
+                LOGGER.debug("No accolades found by playerId, trying by playerName: {}", profile.getPlayerName());
+                accoladeEntities = accoladeRepository.findByPlayerName(profile.getPlayerName());
+            }
             List<PlayerAccoladeDTO> accolades = buildAccoladeList(accoladeEntities);
             profile.setAccolades(accolades);
             

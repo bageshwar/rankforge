@@ -66,6 +66,9 @@ public class EventProcessingContext {
     private final Map<RoundStartEventEntity, Integer> roundEventCounts = new HashMap<>();
     private int eventsWithoutRound = 0;
     
+    // Player name to Steam ID mapping for resolving accolade player IDs
+    private final Map<String, String> playerNameToSteamId = new HashMap<>();
+    
     /**
      * Called when GAME_OVER is processed (happens FIRST due to parser rewind).
      * Sets the current game context that all subsequent events will reference.
@@ -212,6 +215,36 @@ public class EventProcessingContext {
     }
     
     /**
+     * Register a player name to Steam ID mapping.
+     * This is built up as kill/assist/attack events are processed.
+     * Used later to resolve accolade player IDs from player names.
+     */
+    public void registerPlayer(String playerName, String steamId) {
+        if (playerName != null && !playerName.isEmpty() && steamId != null && !steamId.isEmpty()) {
+            playerNameToSteamId.put(playerName, steamId);
+            logger.debug("PLAYER_MAP: Registered {} -> {}", playerName, steamId);
+        }
+    }
+    
+    /**
+     * Get Steam ID for a player name.
+     * Returns the Steam ID if found, or null if not found.
+     */
+    public String getSteamIdByPlayerName(String playerName) {
+        if (playerName == null || playerName.isEmpty()) {
+            return null;
+        }
+        return playerNameToSteamId.get(playerName);
+    }
+    
+    /**
+     * Get all registered player name to Steam ID mappings.
+     */
+    public Map<String, String> getPlayerNameToSteamIdMap() {
+        return new HashMap<>(playerNameToSteamId);
+    }
+    
+    /**
      * Called when GAME_OVER event is processed.
      * Sets game reference and adds to pending entities.
      */
@@ -247,6 +280,7 @@ public class EventProcessingContext {
         pendingEntities.clear();
         pendingAccolades.clear();
         roundEventCounts.clear();
+        playerNameToSteamId.clear();
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
