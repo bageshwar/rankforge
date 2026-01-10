@@ -18,19 +18,16 @@
 
 package com.rankforge.server.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rankforge.core.util.ObjectMapperFactory;
-import com.rankforge.pipeline.persistence.PersistenceLayer;
+import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.sql.SQLException;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -41,72 +38,60 @@ import static org.mockito.Mockito.*;
 class PlayerRankingServiceEmptyDatabaseTest {
 
     @Mock
-    private PersistenceLayer persistenceLayer;
+    private PlayerStatsRepository playerStatsRepository;
 
     private PlayerRankingService playerRankingService;
-    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        objectMapper = ObjectMapperFactory.createObjectMapper();
-        playerRankingService = new PlayerRankingService(objectMapper, persistenceLayer);
+        playerRankingService = new PlayerRankingService(playerStatsRepository);
     }
 
     @Test
-    void testGetAllPlayerRankings_WhenPlayerStatsTableDoesNotExist_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with SQL Server error code 208 (Invalid object name)
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'PlayerStats'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("PlayerStats"), any(String[].class), isNull()))
-                .thenThrow(tableNotFoundException);
+    void testGetAllPlayerRankings_WhenPlayerStatsTableDoesNotExist_ReturnsEmptyList() {
+        // Mock empty repository result (simulating empty database)
+        when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
             var result = playerRankingService.getAllPlayerRankings();
             assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
+            assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
     }
 
     @Test
-    void testGetAllPlayerRankings_WhenPlayerStatsTableDoesNotExist_WithErrorMessage_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with error message indicating table doesn't exist
-        SQLException tableNotFoundException = new SQLException("Table 'PlayerStats' does not exist");
-        
-        when(persistenceLayer.query(eq("PlayerStats"), any(String[].class), isNull()))
-                .thenThrow(tableNotFoundException);
+    void testGetAllPlayerRankings_WhenRepositoryThrowsException_ReturnsEmptyList() {
+        // Mock repository throwing exception
+        when(playerStatsRepository.findLatestStatsForAllPlayers())
+                .thenThrow(new RuntimeException("Database connection error"));
 
-        // Should return empty list without throwing exception
+        // Should catch exception and return empty list
         assertDoesNotThrow(() -> {
             var result = playerRankingService.getAllPlayerRankings();
             assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
+            assertTrue(result.isEmpty(), "Should return empty list on any exception");
         });
     }
 
     @Test
-    void testGetTopPlayerRankings_WhenDatabaseIsEmpty_ReturnsEmptyList() throws SQLException {
-        // Mock SQLException with SQL Server error code 208
-        SQLException tableNotFoundException = new SQLException("Invalid object name 'PlayerStats'", "S0002", 208);
-        
-        when(persistenceLayer.query(eq("PlayerStats"), any(String[].class), isNull()))
-                .thenThrow(tableNotFoundException);
+    void testGetTopPlayerRankings_WhenDatabaseIsEmpty_ReturnsEmptyList() {
+        // Mock empty repository result
+        when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
             var result = playerRankingService.getTopPlayerRankings(10);
             assertNotNull(result);
-            assertTrue(result.isEmpty(), "Should return empty list when table doesn't exist");
+            assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
     }
 
     @Test
-    void testGetAllPlayerRankings_WhenOtherSQLExceptionOccurs_ReturnsEmptyList() throws SQLException {
-        // Mock a different SQLException (not table-not-found)
-        SQLException otherException = new SQLException("Connection timeout", "08S01", 0);
-        
-        when(persistenceLayer.query(eq("PlayerStats"), any(String[].class), isNull()))
-                .thenThrow(otherException);
+    void testGetAllPlayerRankings_WhenOtherExceptionOccurs_ReturnsEmptyList() {
+        // Mock a different exception (not empty result)
+        when(playerStatsRepository.findLatestStatsForAllPlayers())
+                .thenThrow(new RuntimeException("Connection timeout"));
 
         // Should catch exception and return empty list
         assertDoesNotThrow(() -> {

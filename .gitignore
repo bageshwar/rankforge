@@ -19,3 +19,32 @@ serverlog.json
 .runPipeline/**
 .vscode/settings.json
 .runPipeline/RankForgeApplication.run.xml
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# React build
+rank-forge-ui/dist/
+rank-forge-ui/build/
+rank-forge-ui/.vite/
+
+# Environment variables
+rank-forge-ui/.env
+rank-forge-ui/.env.local
+rank-forge-ui/.env.production
+
+# IDE
+rank-forge-ui/.idea/
+rank-forge-ui/.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+cursor-help-log.log
+rank-forge/log-for-cursor.log

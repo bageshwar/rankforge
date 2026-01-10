@@ -23,6 +23,7 @@ import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -50,11 +51,18 @@ class EventProcessorImplTest {
     @Mock
     private RankingService mockRankingService;
 
+    private EventProcessingContext context;
+
     private EventProcessorImpl eventProcessor;
 
     @BeforeEach
     void setUp() {
-        eventProcessor = new EventProcessorImpl(mockStatsStore, mockRankingService);
+        context = new EventProcessingContext();
+        eventProcessor = new EventProcessorImpl(
+                mockStatsStore, 
+                mockRankingService,
+                context
+        );
     }
 
     @Nested
@@ -316,14 +324,21 @@ class EventProcessorImplTest {
         }
 
         @Test
-        @DisplayName("Should handle GameOverEvent")
+        @DisplayName("Should handle GameOverEvent and create GameEntity in context")
         void shouldHandleGameOverEvent() {
             // Given
-            GameOverEvent gameOverEvent = new GameOverEvent(Instant.now(), Map.of(), 
+            Instant now = Instant.now();
+            GameOverEvent gameOverEvent = new GameOverEvent(now, Map.of(), 
                 "de_dust2", "competitive", 16, 14);
 
-            // When & Then - Should not throw exception
-            assertDoesNotThrow(() -> eventProcessor.processEvent(gameOverEvent));
+            // When
+            eventProcessor.processEvent(gameOverEvent);
+
+            // Then - context should have game entity set
+            assertNotNull(context.getCurrentGame());
+            assertEquals("de_dust2", context.getCurrentGame().getMap());
+            assertEquals(16, context.getCurrentGame().getTeam1Score());
+            assertEquals(14, context.getCurrentGame().getTeam2Score());
         }
 
         @Test

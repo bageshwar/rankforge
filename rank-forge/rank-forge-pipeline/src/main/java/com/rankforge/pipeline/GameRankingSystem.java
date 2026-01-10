@@ -19,20 +19,16 @@
 package com.rankforge.pipeline;
 
 import com.rankforge.core.events.GameActionEvent;
-import com.rankforge.core.events.GameEvent;
 import com.rankforge.core.interfaces.EventProcessor;
 import com.rankforge.core.interfaces.LogParser;
-import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.stores.EventStore;
-import com.rankforge.pipeline.persistence.DBBasedEventStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
@@ -79,37 +75,44 @@ public class GameRankingSystem {
     // open for testing
     void processNewLogLines(String logFile) {
         try {
-            // Read new lines from log file
             List<String> newLines = readNewLines(logFile);
-            logger.debug("Starting batch processing of {} log lines from {}", newLines.size(), logFile);
-
-            for (int i = 0; i < newLines.size(); i++) {
-                Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(newLines.get(i), newLines, i);
-                if (parseLineResponse.isPresent()) {
-                    logger.debug("Processing event {} at index {}", parseLineResponse.get().getGameEvent().getGameEventType(), i);
-                    ParseLineResponse response = parseLineResponse.get();
-                    
-                    if (response.getGameEvent() instanceof GameActionEvent gameActionEvent) {
-                        // ignore the event if both players are bots
-                        if (gameActionEvent.getPlayer1().isBot() && gameActionEvent.getPlayer2().isBot()) {
-                            logger.debug("Skipping bot-only event at index {}", i);
-                            continue;
-                        }
-                    }
-
-                    logger.debug("Adding event {} to batch at index {}", response.getGameEvent().getGameEventType(), i);
-                    eventProcessor.processEvent(response.getGameEvent());
-                    eventStore.store(response.getGameEvent());
-                    
-                    // move the pointer if more lines have been processed
-                    i = response.getNextIndex();
-                }
-            }
-
-            logger.info("Completed batch processing of {} log lines", newLines.size());
+            processLines(newLines);
         } catch (Exception e) {
             logger.error("Error processing log lines", e);
         }
+    }
+
+    /**
+     * Process a list of log lines directly
+     * @param lines the log lines to process
+     */
+    public void processLines(List<String> lines) {
+        logger.debug("Starting batch processing of {} log lines", lines.size());
+
+        for (int i = 0; i < lines.size(); i++) {
+            Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(lines.get(i), lines, i);
+            if (parseLineResponse.isPresent()) {
+                logger.debug("Processing event {} at index {}", parseLineResponse.get().getGameEvent().getGameEventType(), i);
+                ParseLineResponse response = parseLineResponse.get();
+                
+                if (response.getGameEvent() instanceof GameActionEvent gameActionEvent) {
+                    // ignore the event if both players are bots
+                    if (gameActionEvent.getPlayer1().isBot() && gameActionEvent.getPlayer2().isBot()) {
+                        logger.debug("Skipping bot-only event at index {}", i);
+                        continue;
+                    }
+                }
+
+                //logger.debug("Adding event {} to batch at index {}", response.getGameEvent().getGameEventType(), i);
+                eventProcessor.processEvent(response.getGameEvent());
+                eventStore.store(response.getGameEvent());
+                
+                // move the pointer if more lines have been processed
+                i = response.getNextIndex();
+            }
+        }
+
+        logger.info("Completed batch processing of {} log lines", lines.size());
     }
 
     private List<String> readNewLines(String logFile) throws IOException {

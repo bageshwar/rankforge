@@ -67,8 +67,11 @@ class LogProcessingServiceTest {
                 "{\"time\":\"2024-01-01T00:00:01Z\",\"log\":\"test log line 2\"}"
         );
 
-        when(s3Service.downloadFileAsLines(s3Path)).thenReturn(mockLines);
-        when(pipelineService.createGameRankingSystem()).thenReturn(gameRankingSystem);
+        // Use lenient() because the async processing may not complete before test ends
+        // The method returns jobId immediately via CompletableFuture.completedFuture()
+        // while actual processing happens in a separate CompletableFuture.runAsync()
+        lenient().when(s3Service.downloadFileAsLines(s3Path)).thenReturn(mockLines);
+        lenient().when(pipelineService.createGameRankingSystem()).thenReturn(gameRankingSystem);
 
         // Note: Since processLogFileAsync is @Async, the actual execution happens in a separate thread
         // We can verify the method returns a CompletableFuture with job ID immediately

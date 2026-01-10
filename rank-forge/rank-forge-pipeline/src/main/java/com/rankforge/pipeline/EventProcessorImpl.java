@@ -35,14 +35,18 @@ import com.rankforge.core.interfaces.RankingService;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * This class processes the incoming GameEvent
+ * This class processes the incoming GameEvent.
+ * Uses direct entity references via EventProcessingContext for game/round linking.
  * Author bageshwar.pn
  * Date 26/10/24
  */
@@ -51,10 +55,13 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final PlayerStatsStore statsRepo;
     private final RankingService rankingService;
     private final List<GameEventListener> eventListeners;
+    private final EventProcessingContext context;
 
-    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService) {
+    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
+                              EventProcessingContext context) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
+        this.context = context;
         this.eventListeners = new ArrayList<>();
     }
 
@@ -101,6 +108,8 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     @Override
     public void visit(GameProcessedEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         logger.info("Processed game at {}", event.getTimestamp());
+        
+        // Notify listeners - JpaEventStore will batch persist all pending entities and accolades
         this.onGameEnded(event);
     }
 
@@ -125,7 +134,7 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
 
     @Override
     public void visit(BombEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
-
+        // Bomb events are stored but don't affect stats
     }
 
     @Override
@@ -163,9 +172,19 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     @Override
     public void visit(RoundEndEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         event.getPlayers().remove("0"); //remove bots
-        logger.debug("Round end: processing {} players for ranking updates", event.getPlayers().size());
         
-        List<PlayerStats> list = event.getPlayers().stream()
+        // Get player list from event, but if empty (last round of match), get from context
+        java.util.Collection<String> playerSteamIds = event.getPlayers();
+        if (playerSteamIds.isEmpty()) {
+            // For the last round, the parser doesn't have the JSON player stats
+            // Get players from the events processed in this round via context
+            playerSteamIds = context.getPlayersInCurrentRound();
+            logger.info("Round end: event had no players, extracted {} from context", playerSteamIds.size());
+        }
+        
+        logger.debug("Round end: processing {} players for ranking updates", playerSteamIds.size());
+        
+        List<PlayerStats> list = playerSteamIds.stream()
                 .map(playerSteamId -> statsRepo.getPlayerStats("[U:1:" + playerSteamId + "]"))
                 .flatMap(playerStats1 -> playerStats1.stream()
                         .peek(p -> {
@@ -188,6 +207,36 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
 
     @Override
     public void visit(GameOverEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
+        logger.info("Processing GAME_OVER event at {} on map {}", event.getTimestamp(), event.getMap());
+        
+        // Create transient GameEntity from GameOverEvent
+        GameEntity gameEntity = new GameEntity();
+        gameEntity.setGameOverTimestamp(event.getTimestamp());
+        gameEntity.setMap(event.getMap());
+        gameEntity.setMode(event.getMode());
+        gameEntity.setTeam1Score(event.getTeam1Score());
+        gameEntity.setTeam2Score(event.getTeam2Score());
+        gameEntity.setDuration(event.getDuration());
+        gameEntity.setEndTime(event.getTimestamp());
+        
+        // Calculate startTime from duration (approximate)
+        if (event.getDuration() != null) {
+            gameEntity.setStartTime(event.getTimestamp().minusSeconds(event.getDuration()));
+        } else {
+            // Fallback: estimate 30 minutes
+            gameEntity.setStartTime(event.getTimestamp().minusSeconds(1800));
+        }
+        
+        // Set the current game in context (this is transient, not yet persisted)
+        // JPA will persist it when we call saveAll on pending entities due to cascade
+        context.setCurrentGame(gameEntity);
+        
+        // Link any pending accolades to this game
+        context.linkAccoladesToGame();
+        
+        logger.info("Created transient GameEntity for game ending at {} on map {}", 
+                event.getTimestamp(), event.getMap());
+        
         this.onGameStarted(event);
     }
 

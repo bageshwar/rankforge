@@ -22,10 +22,21 @@
 #
 # Note: application-local.properties is gitignored and will not be committed
 
-# Azure SQL Database Configuration
-rankforge.persistence.jdbc.url=jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db-staging;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=300;socketTimeout=300000;queryTimeout=300;
-rankforge.persistence.jdbc.username=your_username_here
-rankforge.persistence.jdbc.password=your_password_here
+# Azure SQL Database Configuration (Spring Data JPA)
+# Fill in your actual database credentials
+spring.datasource.url=jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db-staging;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=300;socketTimeout=300000;queryTimeout=300;
+spring.datasource.username=your_username_here
+spring.datasource.password=your_password_here
+spring.datasource.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+# JPA/Hibernate Configuration for Local Development
+spring.jpa.database-platform=org.hibernate.dialect.SQLServerDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.jdbc.batch_size=50
+spring.jpa.properties.hibernate.order_inserts=true
+spring.jpa.properties.hibernate.order_updates=true
 
 # Pipeline API Security Configuration
 # API key for securing pipeline endpoints (required)

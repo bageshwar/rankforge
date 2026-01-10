@@ -729,9 +729,8 @@ class CS2LogParserTest {
             assertEquals(GameEventType.GAME_OVER, gameOverEvent.type());
             assertEquals(Instant.parse("2024-04-20T18:30:45Z"), gameOverEvent.getTimestamp());
             
-            // Verify that accolades were stored
-            verify(accoladeStore, times(1)).storeAccolades(
-                eq(Instant.parse("2024-04-20T18:30:45Z")),
+            // Verify that accolades were queued for batch persistence
+            verify(accoladeStore, times(1)).queueAccolades(
                 argThat(accolades -> {
                     if (accolades == null || accolades.size() != 6) {
                         System.out.println("Expected 6 accolades but got: " + (accolades == null ? "null" : accolades.size()));
@@ -807,9 +806,8 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             assertTrue(result.get().getGameEvent() instanceof GameOverEvent);
             
-            // Verify all accolades were stored with correct values
-            verify(accoladeStore, times(1)).storeAccolades(
-                eq(Instant.parse("2024-04-20T18:30:45Z")),
+            // Verify all accolades were queued with correct values
+            verify(accoladeStore, times(1)).queueAccolades(
                 argThat(accolades -> {
                     if (accolades == null || accolades.size() != 6) {
                         return false;
@@ -871,8 +869,7 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             
             // Verify accolade was parsed with correct player name
-            verify(accoladeStore, times(1)).storeAccolades(
-                eq(Instant.parse("2024-04-20T18:30:45Z")),
+            verify(accoladeStore, times(1)).queueAccolades(
                 argThat(accolades -> {
                     if (accolades == null || accolades.size() != 6) {
                         return false;
@@ -914,9 +911,9 @@ class CS2LogParserTest {
             // When
             Optional<ParseLineResponse> result = parser.parseLine(gameOverJsonLine, mockLines, 31);
 
-            // Then - game should be skipped, so no accolades stored
+            // Then - game should be skipped, so no accolades queued
             assertFalse(result.isPresent());
-            verify(accoladeStore, never()).storeAccolades(any(), any());
+            verify(accoladeStore, never()).queueAccolades(any());
         }
 
         @Test
@@ -957,8 +954,7 @@ class CS2LogParserTest {
 
             // Then - should parse 6 valid accolades (malformed one skipped)
             assertTrue(result.isPresent());
-            verify(accoladeStore, times(1)).storeAccolades(
-                eq(Instant.parse("2024-04-20T18:30:45Z")),
+            verify(accoladeStore, times(1)).queueAccolades(
                 argThat(accolades -> {
                     // Should have 6 valid accolades (malformed one is skipped during parsing)
                     // The malformed line causes JSON parsing to fail, so it's skipped
