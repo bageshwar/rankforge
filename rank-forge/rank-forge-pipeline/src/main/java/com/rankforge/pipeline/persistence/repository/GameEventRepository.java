@@ -121,9 +121,10 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
     
     /**
      * Bulk update: Set roundId for multiple events
+     * Only updates events that don't already have a roundId (to prevent overwriting)
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("UPDATE GameEventEntity e SET e.roundId = :roundId WHERE e.id IN :eventIds")
+    @Query("UPDATE GameEventEntity e SET e.roundId = :roundId WHERE e.id IN :eventIds AND e.roundId IS NULL")
     int updateEventsRoundId(@Param("roundId") Long roundId, @Param("eventIds") List<Long> eventIds);
     
     /**

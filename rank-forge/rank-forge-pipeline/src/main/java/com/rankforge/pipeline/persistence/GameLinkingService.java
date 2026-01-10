@@ -57,9 +57,9 @@ public class GameLinkingService {
     public void linkGameToEvents(GameOverEvent gameOverEvent, Long gameId, Instant gameStartTime, Instant gameEndTime) {
         logger.info("Linking game {} to events (start: {}, end: {})", gameId, gameStartTime, gameEndTime);
         
-        // 1. Link rounds to game
+        // 1. Link rounds to game (use game time range, not fixed window)
         int totalRounds = gameOverEvent.getTeam1Score() + gameOverEvent.getTeam2Score();
-        List<Long> roundIds = linkRoundsToGame(gameId, gameOverEvent.getTimestamp(), totalRounds);
+        List<Long> roundIds = linkRoundsToGame(gameId, gameStartTime, gameEndTime, totalRounds);
         
         // 2. Link all events to game
         linkEventsToGame(gameId, gameStartTime, gameEndTime);
@@ -76,29 +76,29 @@ public class GameLinkingService {
     }
     
     /**
-     * Link rounds to game by finding N most recent rounds before gameOverTimestamp
+     * Link rounds to game by finding rounds within the game's time range
+     * Only links rounds that don't already have a gameId (to avoid conflicts)
      * Returns list of round IDs that were linked
      */
-    private List<Long> linkRoundsToGame(Long gameId, Instant gameOverTimestamp, int totalRounds) {
-        logger.debug("Linking {} rounds to game {}", totalRounds, gameId);
+    private List<Long> linkRoundsToGame(Long gameId, Instant gameStartTime, Instant gameEndTime, int totalRounds) {
+        logger.debug("Linking {} rounds to game {} (time range: {} to {})", totalRounds, gameId, gameStartTime, gameEndTime);
         
-        // Find N most recent ROUND_END events before gameOverTimestamp
-        // Use a time window (e.g., 2 hours before game over) to limit search
-        Instant searchStart = gameOverTimestamp.minusSeconds(7200); // 2 hours before
-        
+        // Find ROUND_END events within the game's time range
+        // Only get rounds that don't already have a gameId set (to avoid linking rounds from other games)
         List<GameEventEntity> roundEvents = gameEventRepository.findByGameEventTypeAndTimestampBetween(
-                GameEventType.ROUND_END, searchStart, gameOverTimestamp);
+                GameEventType.ROUND_END, gameStartTime, gameEndTime);
         
-        // Sort by timestamp descending and take the N most recent
+        // Filter to only rounds without a gameId (not yet linked) and sort by timestamp ascending
         List<RoundEndEventEntity> rounds = roundEvents.stream()
                 .filter(e -> e instanceof RoundEndEventEntity)
                 .map(e -> (RoundEndEventEntity) e)
-                .sorted((a, b) -> b.getTimestamp().compareTo(a.getTimestamp())) // Descending
+                .filter(e -> e.getGameId() == null) // Only unlinked rounds
+                .sorted((a, b) -> a.getTimestamp().compareTo(b.getTimestamp())) // Ascending by time
                 .limit(totalRounds)
                 .collect(Collectors.toList());
         
         if (rounds.size() < totalRounds) {
-            logger.warn("Found only {} rounds, expected {}", rounds.size(), totalRounds);
+            logger.warn("Found only {} unlinked rounds in time range, expected {}", rounds.size(), totalRounds);
         }
         
         List<Long> roundIds = rounds.stream()
@@ -108,6 +108,8 @@ public class GameLinkingService {
         if (!roundIds.isEmpty()) {
             int updated = gameEventRepository.updateRoundsGameId(gameId, roundIds);
             logger.info("Linked {} rounds to game {}", updated, gameId);
+        } else {
+            logger.warn("No unlinked rounds found to link to game {}", gameId);
         }
         
         return roundIds;
@@ -115,6 +117,7 @@ public class GameLinkingService {
     
     /**
      * Link all events between gameStartTime and gameEndTime to the game
+     * Only links events that don't already have a gameId (to avoid conflicts)
      */
     private void linkEventsToGame(Long gameId, Instant gameStartTime, Instant gameEndTime) {
         logger.debug("Linking events to game {} (time range: {} to {})", gameId, gameStartTime, gameEndTime);
@@ -122,8 +125,10 @@ public class GameLinkingService {
         List<GameEventEntity> events = gameEventRepository.findEventsBetweenTimestamps(gameStartTime, gameEndTime);
         
         // Filter out GAME_OVER events (they define the game, not belong to it)
+        // Also filter out events that already have a gameId (already linked to another game)
         List<Long> eventIds = events.stream()
                 .filter(e -> e.getGameEventType() != GameEventType.GAME_OVER)
+                .filter(e -> e.getGameId() == null) // Only unlinked events
                 .map(GameEventEntity::getId)
                 .collect(Collectors.toList());
         
@@ -131,16 +136,39 @@ public class GameLinkingService {
             int updated = gameEventRepository.updateEventsGameId(gameId, eventIds);
             logger.info("Linked {} events to game {}", updated, gameId);
         } else {
-            logger.warn("No events found to link to game {}", gameId);
+            logger.warn("No unlinked events found to link to game {}", gameId);
         }
     }
     
     /**
      * Link events to rounds based on timestamp ranges
      * For each round, find events between previous ROUND_END and this ROUND_END
+     * Only links events that belong to the current game and don't already have a roundId
      */
     private void linkEventsToRounds(List<Long> roundIds, Instant gameStartTime, Instant gameEndTime) {
         logger.debug("Linking events to {} rounds", roundIds.size());
+        
+        if (roundIds.isEmpty()) {
+            logger.warn("No round IDs provided for linking");
+            return;
+        }
+        
+        // Get the gameId from the first round (all rounds should have the same gameId)
+        RoundEndEventEntity firstRound = gameEventRepository.findById(roundIds.get(0))
+                .filter(e -> e instanceof RoundEndEventEntity)
+                .map(e -> (RoundEndEventEntity) e)
+                .orElse(null);
+        
+        if (firstRound == null) {
+            logger.warn("Could not find first round to determine gameId");
+            return;
+        }
+        
+        Long gameId = firstRound.getGameId();
+        if (gameId == null) {
+            logger.warn("First round does not have a gameId, cannot link events");
+            return;
+        }
         
         // Get all round end events with their timestamps
         List<RoundEndEventEntity> rounds = roundIds.stream()
@@ -149,6 +177,7 @@ public class GameLinkingService {
                 .map(java.util.Optional::get)
                 .filter(e -> e instanceof RoundEndEventEntity)
                 .map(e -> (RoundEndEventEntity) e)
+                .filter(r -> gameId.equals(r.getGameId())) // Only rounds from this game
                 .sorted((a, b) -> a.getTimestamp().compareTo(b.getTimestamp())) // Ascending by time
                 .collect(Collectors.toList());
         
@@ -157,11 +186,16 @@ public class GameLinkingService {
             return;
         }
         
-        // Get all events in the game time range
+        // Get all events in the game time range that belong to this game
         List<GameEventEntity> allEvents = gameEventRepository.findEventsBetweenTimestamps(gameStartTime, gameEndTime);
         
-        // Filter out ROUND_END and GAME_OVER events (they don't belong to a round)
+        // Filter to only events that:
+        // 1. Belong to this game (have matching gameId)
+        // 2. Don't already have a roundId (not yet linked)
+        // 3. Are not ROUND_END or GAME_OVER events (they don't belong to a round)
         List<GameEventEntity> eventsToLink = allEvents.stream()
+                .filter(e -> gameId.equals(e.getGameId())) // Only events from this game
+                .filter(e -> e.getRoundId() == null) // Only unlinked events
                 .filter(e -> e.getGameEventType() != GameEventType.ROUND_END 
                           && e.getGameEventType() != GameEventType.GAME_OVER)
                 .sorted((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()))
@@ -188,13 +222,13 @@ public class GameLinkingService {
             if (!eventIds.isEmpty()) {
                 int updated = gameEventRepository.updateEventsRoundId(round.getId(), eventIds);
                 totalLinked += updated;
-                logger.debug("Linked {} events to round {}", updated, round.getId());
+                logger.debug("Linked {} events to round {} (game {})", updated, round.getId(), gameId);
             }
             
             previousRoundEnd[0] = roundEndTime;
         }
         
-        logger.info("Linked {} total events to rounds", totalLinked);
+        logger.info("Linked {} total events to rounds for game {}", totalLinked, gameId);
     }
     
     /**

@@ -65,9 +65,20 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final GameLinkingService gameLinkingService;
     
     // Store game info for linking after events are persisted
-    private Long pendingGameId;
-    private GameOverEvent pendingGameOverEvent;
-    private Instant pendingGameStartTime;
+    // Use a map keyed by gameOverTimestamp to handle multiple games
+    private final java.util.Map<Instant, PendingGameInfo> pendingGames = new java.util.concurrent.ConcurrentHashMap<>();
+    
+    private static class PendingGameInfo {
+        final Long gameId;
+        final GameOverEvent gameOverEvent;
+        final Instant gameStartTime;
+        
+        PendingGameInfo(Long gameId, GameOverEvent gameOverEvent, Instant gameStartTime) {
+            this.gameId = gameId;
+            this.gameOverEvent = gameOverEvent;
+            this.gameStartTime = gameStartTime;
+        }
+    }
 
     public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
                               GameRepository gameRepository, GameEventRepository gameEventRepository,
@@ -129,29 +140,84 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
         
         // Now link events to game AFTER they've been persisted
         // Events are now in the database, so linking queries will find them
-        if (pendingGameId != null && pendingGameOverEvent != null) {
+        // Find the most recent pending game that hasn't been linked yet
+        // Match by finding the pending game with the closest timestamp before or equal to GAME_PROCESSED timestamp
+        PendingGameInfo pendingGame = findMatchingPendingGame(event.getTimestamp());
+        
+        if (pendingGame != null) {
             try {
-                logger.info("Linking events to game {} after persistence", pendingGameId);
+                logger.info("Linking events to game {} after persistence (gameOver at {})", 
+                        pendingGame.gameId, pendingGame.gameOverEvent.getTimestamp());
                 gameLinkingService.linkGameToEvents(
-                        pendingGameOverEvent, 
-                        pendingGameId, 
-                        pendingGameStartTime, 
-                        pendingGameOverEvent.getTimestamp()
+                        pendingGame.gameOverEvent, 
+                        pendingGame.gameId, 
+                        pendingGame.gameStartTime, 
+                        pendingGame.gameOverEvent.getTimestamp()
                 );
                 
-                // Clear pending game info
-                pendingGameId = null;
-                pendingGameOverEvent = null;
-                pendingGameStartTime = null;
+                // Now that events are persisted, link the GameOverEventEntity to the GameEntity
+                linkGameOverEventToGame(pendingGame.gameId, pendingGame.gameOverEvent.getTimestamp());
+                
+                // Remove the linked game from pending map
+                pendingGames.remove(pendingGame.gameOverEvent.getTimestamp());
+                logger.info("Successfully linked game {} and removed from pending", pendingGame.gameId);
             } catch (Exception e) {
-                logger.error("Failed to link events to game {} after persistence", pendingGameId, e);
-                // Clear pending info even on error to avoid stale state
-                pendingGameId = null;
-                pendingGameOverEvent = null;
-                pendingGameStartTime = null;
+                logger.error("Failed to link events to game {} after persistence", pendingGame.gameId, e);
+                // Remove even on error to avoid stale state
+                pendingGames.remove(pendingGame.gameOverEvent.getTimestamp());
             }
         } else {
-            logger.warn("GAME_PROCESSED event received but no pending game info to link");
+            logger.warn("GAME_PROCESSED event received at {} but no matching pending game info found. " +
+                    "Pending games: {}", event.getTimestamp(), pendingGames.keySet());
+        }
+    }
+    
+    /**
+     * Find the matching pending game for a GAME_PROCESSED event.
+     * Matches by finding the most recent pending game with timestamp <= GAME_PROCESSED timestamp.
+     */
+    private PendingGameInfo findMatchingPendingGame(Instant gameProcessedTimestamp) {
+        if (pendingGames.isEmpty()) {
+            return null;
+        }
+        
+        // Find the most recent pending game that occurred before or at the GAME_PROCESSED timestamp
+        return pendingGames.entrySet().stream()
+                .filter(entry -> !entry.getKey().isAfter(gameProcessedTimestamp))
+                .max(java.util.Map.Entry.comparingByKey())
+                .map(java.util.Map.Entry::getValue)
+                .orElse(null);
+    }
+    
+    /**
+     * Link the GameOverEventEntity to the GameEntity by setting gameOverEventId
+     * This is called after events are persisted so we can query for the GameOverEventEntity
+     */
+    private void linkGameOverEventToGame(Long gameId, Instant gameOverTimestamp) {
+        try {
+            // Find the GameOverEventEntity by timestamp (now that it's persisted)
+            List<GameEventEntity> gameOverEvents = gameEventRepository.findByGameEventTypeAndTimestamp(
+                    GameEventType.GAME_OVER, gameOverTimestamp);
+            
+            if (!gameOverEvents.isEmpty()) {
+                Long gameOverEventId = gameOverEvents.get(0).getId();
+                
+                // Update the GameEntity with the gameOverEventId
+                java.util.Optional<GameEntity> gameEntityOpt = gameRepository.findById(gameId);
+                if (gameEntityOpt.isPresent()) {
+                    GameEntity gameEntity = gameEntityOpt.get();
+                    gameEntity.setGameOverEventId(gameOverEventId);
+                    gameRepository.save(gameEntity);
+                    logger.info("Linked GameOverEventEntity {} to GameEntity {}", gameOverEventId, gameId);
+                } else {
+                    logger.warn("GameEntity {} not found when trying to link gameOverEventId", gameId);
+                }
+            } else {
+                logger.warn("GameOverEventEntity not found for timestamp {} when linking to game {}", 
+                        gameOverTimestamp, gameId);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to link GameOverEventEntity to GameEntity {}", gameId, e);
         }
     }
 
@@ -263,21 +329,15 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
             Long gameId = gameEntity.getId();
             logger.info("Created GameEntity with ID {} for game ending at {}", gameId, event.getTimestamp());
             
-            // Try to find and link GameOverEventEntity ID
-            // The event might not be saved yet, so we'll query by timestamp
-            List<GameEventEntity> gameOverEvents = gameEventRepository.findByGameEventTypeAndTimestamp(
-                    GameEventType.GAME_OVER, event.getTimestamp());
-            if (!gameOverEvents.isEmpty()) {
-                gameEntity.setGameOverEventId(gameOverEvents.get(0).getId());
-                gameRepository.save(gameEntity);
-            }
+            // Note: gameOverEventId will be set after events are persisted (during GAME_PROCESSED)
+            // The event is still in-memory at this point, so we can't query for it yet
             
             // Store game info for linking AFTER events are persisted (during GAME_PROCESSED)
             // Events are still in-memory at this point, so we can't link them yet
-            pendingGameId = gameId;
-            pendingGameOverEvent = event;
-            pendingGameStartTime = gameStartTime;
-            logger.info("Stored game info for linking after events are persisted: gameId={}", gameId);
+            // Use gameOverTimestamp as key to handle multiple games
+            pendingGames.put(event.getTimestamp(), new PendingGameInfo(gameId, event, gameStartTime));
+            logger.info("Stored game info for linking after events are persisted: gameId={}, timestamp={}", 
+                    gameId, event.getTimestamp());
             
         } catch (Exception e) {
             logger.error("Failed to create GameEntity for GAME_OVER event at {}", 
