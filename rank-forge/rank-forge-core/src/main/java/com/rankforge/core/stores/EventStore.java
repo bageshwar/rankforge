@@ -26,35 +26,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Interface for storing and retrieving game events
+ * Interface for storing and retrieving game events.
+ * All event fetching is done by ID or type+timestamp for deduplication - 
+ * timestamp range scanning has been removed.
  * Author bageshwar.pn
  * Date 26/10/24
  */
 public interface EventStore {
     void store(GameEvent event);
 
+    /**
+     * Get a game event by type and exact timestamp.
+     * Used for deduplication check (e.g., checking if a game was already processed).
+     */
     Optional<GameEvent> getGameEvent(GameEventType eventType, Instant timestamp);
     
     /**
      * Get all GameOver events to display completed games
      */
     List<GameEvent> getGameOverEvents();
-    
-    /**
-     * Get all events of a specific type between two timestamps
-     * @param eventType The type of events to retrieve
-     * @param startTime Start of the time range (inclusive)
-     * @param endTime End of the time range (inclusive)
-     * @return List of events within the time range
-     */
-    List<GameEvent> getEventsBetween(GameEventType eventType, Instant startTime, Instant endTime);
-    
-    /**
-     * Get all round end events between game start and end times
-     * This is used to determine players who participated in a game
-     * @param gameStartTime When the game started
-     * @param gameEndTime When the game ended
-     * @return List of RoundEndEvent instances for the game
-     */
-    List<GameEvent> getRoundEndEventsBetween(Instant gameStartTime, Instant gameEndTime);
 }

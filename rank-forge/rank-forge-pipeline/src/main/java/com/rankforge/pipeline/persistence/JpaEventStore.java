@@ -258,28 +258,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
     }
 
     @Override
-    public List<GameEvent> getEventsBetween(GameEventType eventType, Instant startTime, Instant endTime) {
-        List<GameEvent> events = new ArrayList<>();
-        try {
-            List<GameEventEntity> entities = repository.findByGameEventTypeAndTimestampBetween(eventType, startTime, endTime);
-            for (GameEventEntity entity : entities) {
-                GameEvent event = convertToDomain(entity);
-                if (event != null) {
-                    events.add(event);
-                }
-            }
-        } catch (Exception e) {
-            logger.error("Failed to get events of type {} between {} and {}", eventType, startTime, endTime, e);
-        }
-        return events;
-    }
-
-    @Override
-    public List<GameEvent> getRoundEndEventsBetween(Instant gameStartTime, Instant gameEndTime) {
-        return getEventsBetween(GameEventType.ROUND_END, gameStartTime, gameEndTime);
-    }
-
-    @Override
     public void onGameStarted(GameOverEvent event) {
         // Note: Do NOT clear context here!
         // The context is set up in EventProcessorImpl.visit(GameOverEvent) BEFORE this is called.
