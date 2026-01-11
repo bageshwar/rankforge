@@ -54,14 +54,14 @@ public class CS2LogParser implements LogParser {
                     "<\\d+>" +
                     "<(?:BOT|(?<killerSteamId>\\[U:\\d+:\\d+\\]))>" + // Killer steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
-                    "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed " +  // Killer position
+                    "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed (?:other )?" +  // Killer position, "other" is optional
                     "\"(?<victimName>.+?)" +                          // Victim name
                     "<\\d+>" +
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
                     "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] with " +  // Victim position
                     "\"(?<weapon>[^\"]+)\"" +                         // Weapon used
-                    "(?<isHeadshot> \\(headshot\\))?\\n?"
+                    "(?<modifiers>(?: \\([^)]+\\))*)?\\n?"           // Optional modifiers like (headshot), (penetrated), (throughsmoke), etc.
     );
 
 
@@ -105,22 +105,22 @@ public class CS2LogParser implements LogParser {
     private static final Pattern ATTACK_PATTERN = Pattern.compile(
             "L (?<time>\\d{2}\\/\\d{2}\\/\\d{4} - \\d{2}:\\d{2}:\\d{2}): " +
                     // Attacker info with Steam ID in new format and team
-                    "\"(?<attackerName>[^<]+)<(?<attackerId>\\d+)><(?<attackerSteamId>\\[U:\\d:\\d+\\]|BOT)><(?<attackerTeam>\\w+)>\" " +
+                    "\"(?<attackerName>[^<]+)<(?<attackerId>\\d+)><(?<attackerSteamId>\\[U:\\d+:\\d+\\]|BOT)><(?<attackerTeam>\\w+)>\" " +
                     // Attacker position
                     "\\[(?<attackerX>-?\\d+) (?<attackerY>-?\\d+) (?<attackerZ>-?\\d+)\\] " +
                     // Action
                     "attacked " +
                     // Victim info
-                    "\"(?<victimName>[^<]+)<(?<victimId>\\d+)><(?<victimSteamId>\\[U:\\d:\\d+\\]|BOT)><(?<victimTeam>\\w+)>\" " +
+                    "\"(?<victimName>[^<]+)<(?<victimId>\\d+)><(?<victimSteamId>\\[U:\\d+:\\d+\\]|BOT)><(?<victimTeam>\\w+)>\" " +
                     // Victim position
                     "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] " +
                     // Weapon and damage details
-                    "with \"(?<weapon>\\w+)\" " +
+                    "with \"(?<weapon>[^\"]+)\" " +
                     "\\(damage \"(?<damage>\\d+)\"\\) " +
                     "\\(damage_armor \"(?<damageArmor>\\d+)\"\\) " +
                     "\\(health \"(?<healthRemaining>\\d+)\"\\) " +
                     "\\(armor \"(?<armorRemaining>\\d+)\"\\) " +
-                    "\\(hitgroup \"(?<hitgroup>\\w+)\"\\)"
+                    "\\(hitgroup \"(?<hitgroup>[^\"]+)\"\\)\\n?"  // Optional newline at end
     );
 
     private static final Pattern ROUND_END_PATTERN = Pattern.compile(
@@ -240,6 +240,12 @@ public class CS2LogParser implements LogParser {
             }
 
             // Try to match different event patterns
+            // Check attack pattern first - it's more specific than kill
+            Matcher attackMatcher = ATTACK_PATTERN.matcher(line);
+            if (attackMatcher.matches()) {
+                return Optional.of(parseAttackEvent(attackMatcher, timestamp, lines, currentIndex));
+            }
+
             Matcher killMatcher = KILL_PATTERN.matcher(line);
             if (killMatcher.matches()) {
                 return Optional.of(parseKillEvent(killMatcher, timestamp, lines, currentIndex));
@@ -248,11 +254,6 @@ public class CS2LogParser implements LogParser {
             Matcher assistMatcher = ASSIST_PATTERN.matcher(line);
             if (assistMatcher.matches()) {
                 return Optional.of(parseAssistEvent(assistMatcher, timestamp, lines, currentIndex));
-            }
-
-            Matcher attackMatcher = ATTACK_PATTERN.matcher(line);
-            if (attackMatcher.find()) {
-                return Optional.of(parseAttackEvent(attackMatcher, timestamp, lines, currentIndex));
             }
 
             if (line.contains("World triggered \"Round_End\"")) {
@@ -477,12 +478,16 @@ public class CS2LogParser implements LogParser {
         Integer victimY = parseCoordinate(matcher.group("victimY"));
         Integer victimZ = parseCoordinate(matcher.group("victimZ"));
         
+        // Check for headshot in modifiers (could be (headshot), (headshot penetrated), (headshot throughsmoke), etc.)
+        String modifiers = matcher.group("modifiers");
+        boolean isHeadshot = modifiers != null && modifiers.contains("headshot");
+        
         KillEvent killEvent = new KillEvent(
                 timestamp, Map.of(),
                 new Player(matcher.group("killerName"), matcher.group("killerSteamId")),
                 new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
                 matcher.group("weapon"),
-                matcher.group(0).contains("headshot")
+                isHeadshot
         );
         killEvent.setPlayer1X(killerX);
         killEvent.setPlayer1Y(killerY);
@@ -501,6 +506,39 @@ public class CS2LogParser implements LogParser {
             logger.warn("Failed to parse coordinate: {}", coordStr);
             return null;
         }
+    }
+
+    /**
+     * Package-private method for testing individual event parsing without state machine checks.
+     * This method directly attempts to parse a log line as various event types.
+     * 
+     * @param logLine The extracted log content (not JSON wrapped)
+     * @param timestamp The timestamp for the event
+     * @return Optional containing the parsed event, or empty if no pattern matched
+     */
+    Optional<GameEvent> parseEventForTesting(String logLine, Instant timestamp) {
+        // Try attack pattern
+        Matcher attackMatcher = ATTACK_PATTERN.matcher(logLine);
+        if (attackMatcher.matches()) {
+            ParseLineResponse response = parseAttackEvent(attackMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        // Try kill pattern
+        Matcher killMatcher = KILL_PATTERN.matcher(logLine);
+        if (killMatcher.matches()) {
+            ParseLineResponse response = parseKillEvent(killMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        // Try assist pattern
+        Matcher assistMatcher = ASSIST_PATTERN.matcher(logLine);
+        if (assistMatcher.matches()) {
+            ParseLineResponse response = parseAssistEvent(assistMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        return Optional.empty();
     }
 
     private ParseLineResponse parseAttackEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {

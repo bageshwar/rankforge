@@ -1,0 +1,6 @@
+# Extracted unprocessed event examples for testing
+# Pattern: L <DATE> - <TIME>: "<VALUE>" [<COORDS>] killed "<VALUE>" [<COORDS>] with "<VALUE>" (headshot throughsmoke)
+# Count: 2
+
+{"log":"L 01/07/2026 - 16:44:42: \"HwoaranG<6><[U:1:107493695]><CT>\" [751 2006 -40] killed \"_m3th0d<4><[U:1:1114723128]><TERRORIST>\" [836 1643 -70] with \"hkp2000\" (headshot throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:59:47: \"Khanjer<0><[U:1:1098204826]><TERRORIST>\" [55 1344 102] killed \"HwoaranG<6><[U:1:107493695]><CT>\" [386 2101 139] with \"m4a1_silencer\" (headshot throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}

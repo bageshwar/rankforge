@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -78,10 +79,6 @@ class UnprocessedEventsLoggerTest {
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
         parser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
-        
-        // Mock eventStore to return empty (no games processed yet)
-        when(eventStore.getGameEvent(eq(GameEventType.GAME_OVER), any()))
-            .thenReturn(Optional.empty());
     }
     
     @Test
@@ -94,6 +91,11 @@ class UnprocessedEventsLoggerTest {
             logger.warn("Skipping test - no log file to process");
             return;
         }
+        
+        // Mock eventStore to return empty (no games processed yet)
+        // Only stub when file exists to avoid unnecessary stubbing exception
+        when(eventStore.getGameEvent(eq(GameEventType.GAME_OVER), any()))
+            .thenReturn(Optional.empty());
         
         logger.info("Reading log file: {}", logFilePath.toAbsolutePath());
         List<String> lines = Files.readAllLines(logFilePath);
@@ -137,8 +139,9 @@ class UnprocessedEventsLoggerTest {
                     // This line was not processed - check if it's a known skip pattern
                     if (!shouldSkipLine(logContent)) {
                         String eventPattern = normalizeEventPattern(logContent);
-                        unprocessedEventGroups.computeIfAbsent(eventPattern, k -> new EventGroup())
-                                .increment();
+                        EventGroup group = unprocessedEventGroups.computeIfAbsent(eventPattern, k -> new EventGroup());
+                        group.increment();
+                        group.addExample(logContent); // Store actual log line
                         unprocessedCount++;
                     }
                 }
@@ -180,6 +183,79 @@ class UnprocessedEventsLoggerTest {
         logger.info("=".repeat(80));
         logger.info("END OF UNPROCESSED EVENTS REPORT");
         logger.info("=".repeat(80));
+        
+        // Save specific event patterns to test resource files
+        //saveEventExamplesToFiles(unprocessedEventGroups, logFilePath);
+    }
+    
+    /**
+     * Save actual log line examples for specific event patterns to test resource files.
+     */
+    private void saveEventExamplesToFiles(Map<String, EventGroup> unprocessedEventGroups, Path logFilePath) {
+        try {
+            // Define patterns we want to extract (matching the user's specified patterns)
+            Map<String, String> patternToFile = new LinkedHashMap<>();
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] attacked \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (<PARAM>\"<VALUE>\") (<PARAM>\"<VALUE>\") (<PARAM>\"<VALUE>\") (<PARAM>\"<VALUE>\") (hitgroup \"<VALUE>\")",
+                    "unprocessed_attack_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\"",
+                    "unprocessed_kill_basic_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (headshot)",
+                    "unprocessed_kill_headshot_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (throughsmoke)",
+                    "unprocessed_kill_throughsmoke_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (headshot throughsmoke)",
+                    "unprocessed_kill_headshot_throughsmoke_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (attackerinair)",
+                    "unprocessed_kill_attackerinair_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (headshot penetrated)",
+                    "unprocessed_kill_headshot_penetrated_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] killed \"<VALUE>\" [<COORDS>] with \"<VALUE>\" (headshot attackerinair)",
+                    "unprocessed_kill_headshot_attackerinair_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" flash-assisted killing \"<VALUE>\"",
+                    "unprocessed_flash_assist_events.txt");
+            patternToFile.put("L <DATE> - <TIME>: \"<VALUE>\" [<COORDS>] attacked \"<VALUE>\" [<COORDS>] with \"\"<VALUE>\"<NUM>\"<VALUE>\"<NUM>\"<VALUE>\"<NUM>\"<VALUE>\"<NUM>\"<VALUE>\"GENERIC)",
+                    "unprocessed_attack_malformed_events.txt");
+            
+            // Create test resources directory if it doesn't exist
+            // Path is relative to the module root (rank-forge-pipeline/)
+            Path testResourcesDir = Paths.get("src/test/resources/com/rankforge/pipeline");
+            if (!Files.exists(testResourcesDir)) {
+                Files.createDirectories(testResourcesDir);
+            }
+            
+            for (Map.Entry<String, String> patternFile : patternToFile.entrySet()) {
+                String pattern = patternFile.getKey();
+                String filename = patternFile.getValue();
+                EventGroup group = unprocessedEventGroups.get(pattern);
+                
+                if (group != null && !group.examples.isEmpty()) {
+                    Path outputFile = testResourcesDir.resolve(filename);
+                    List<String> jsonLines = new ArrayList<>();
+                    jsonLines.add("# Extracted unprocessed event examples for testing");
+                    jsonLines.add("# Pattern: " + pattern);
+                    jsonLines.add("# Count: " + group.count);
+                    jsonLines.add("");
+                    
+                    // Wrap each example in JSON format like production logs
+                    for (String example : group.examples) {
+                        // Escape JSON special characters
+                        String escaped = example.replace("\\", "\\\\")
+                                .replace("\"", "\\\"")
+                                .replace("\n", "\\n")
+                                .replace("\r", "\\r")
+                                .replace("\t", "\\t");
+                        String jsonLine = String.format("{\"log\":\"%s\",\"stream\":\"stdout\",\"time\":\"2026-01-07T16:00:00.000Z\"}", escaped);
+                        jsonLines.add(jsonLine);
+                    }
+                    
+                    Files.write(outputFile, jsonLines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                    logger.info("Saved {} examples of pattern '{}' to {}", 
+                            group.examples.size(), pattern, outputFile);
+                }
+            }
+        } catch (IOException e) {
+            logger.error("Failed to save event examples to files", e);
+        }
     }
     
     /**
@@ -262,9 +338,14 @@ class UnprocessedEventsLoggerTest {
      */
     private static class EventGroup {
         int count = 0;
+        List<String> examples = new ArrayList<>();
         
         void increment() {
             count++;
+        }
+        
+        void addExample(String example) {
+            examples.add(example); // Save all examples for test files
         }
     }
     
