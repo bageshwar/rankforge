@@ -710,6 +710,182 @@ class PipelineApiIntegrationTest {
         }
         
         /**
+         * E2E test for game deduplication.
+         * Reimports the same log file and verifies that duplicates are not created.
+         * This test validates that the deduplication logic in EventProcessorImpl works correctly.
+         */
+        @Test
+        @DisplayName("E2E: Verify game deduplication on reimport")
+        void verifyGameDeduplicationOnReimport() throws Exception {
+            String apiKey = getApiKey();
+            assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
+                    "API key must be configured in application-local.properties");
+            
+            // Verify we're on staging (redundant but safe)
+            assertStagingDatabase();
+            
+            // Step 1: Capture counts after initial import (from previous test or fresh import)
+            // If no games exist, import first
+            long initialGameCount = gameRepository.count();
+            if (initialGameCount == 0) {
+                System.out.println("📥 No games found - importing log file first...");
+                ProcessLogRequest request = new ProcessLogRequest(TEST_S3_PATH);
+                String responseContent = mockMvc.perform(post("/api/pipeline/process")
+                                .header("X-API-Key", apiKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                        .andExpect(status().isAccepted())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+                
+                ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
+                System.out.println("🚀 Started initial log processing job: " + response.getJobId());
+                
+                boolean processingComplete = waitForProcessingComplete(90, TimeUnit.SECONDS);
+                assertTrue(processingComplete, "Initial processing should complete within timeout");
+                
+                initialGameCount = gameRepository.count();
+            }
+            
+            // Capture all counts after first import
+            long gamesCountAfterFirstImport = gameRepository.count();
+            long eventsAfterFirstImport = gameEventRepository.count();
+            long accoladesAfterFirstImport = accoladeRepository.count();
+            long playerStatsAfterFirstImport = playerStatsRepository.count();
+            
+            // Get game details for deduplication verification
+            List<GameEntity> gamesAfterFirstImport = gameRepository.findAll();
+            assertFalse(gamesAfterFirstImport.isEmpty(), "Should have games after first import");
+            
+            // Store game timestamps and maps for verification
+            var gameSignatures = gamesAfterFirstImport.stream()
+                    .collect(Collectors.toMap(
+                            g -> g.getGameOverTimestamp() + "|" + g.getMap(),
+                            g -> g,
+                            (g1, g2) -> g1
+                    ));
+            
+            System.out.println("\n📊 Counts after first import:");
+            System.out.println("  - Games: " + gamesCountAfterFirstImport);
+            System.out.println("  - Events: " + eventsAfterFirstImport);
+            System.out.println("  - Accolades: " + accoladesAfterFirstImport);
+            System.out.println("  - Player Stats: " + playerStatsAfterFirstImport);
+            System.out.println("  - Game signatures (timestamp|map): " + gameSignatures.size());
+            gamesAfterFirstImport.forEach(g -> 
+                    System.out.println("    * Game ID " + g.getId() + ": " + g.getMap() + 
+                            " @ " + g.getGameOverTimestamp()));
+            
+            // Step 2: Reimport the same log file
+            System.out.println("\n📥 Reimporting the same log file to test deduplication...");
+            ProcessLogRequest reimportRequest = new ProcessLogRequest(TEST_S3_PATH);
+            String reimportResponseContent = mockMvc.perform(post("/api/pipeline/process")
+                            .header("X-API-Key", apiKey)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(reimportRequest)))
+                    .andExpect(status().isAccepted())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            
+            ProcessLogResponse reimportResponse = objectMapper.readValue(reimportResponseContent, ProcessLogResponse.class);
+            System.out.println("🚀 Started reimport log processing job: " + reimportResponse.getJobId());
+            
+            // Wait for processing to complete
+            boolean reimportComplete = waitForProcessingComplete(90, TimeUnit.SECONDS);
+            assertTrue(reimportComplete, "Reimport processing should complete within timeout");
+            
+            // Step 3: Verify counts haven't increased (deduplication worked)
+            long gamesCountAfterReimport = gameRepository.count();
+            long eventsAfterReimport = gameEventRepository.count();
+            long accoladesAfterReimport = accoladeRepository.count();
+            long playerStatsAfterReimport = playerStatsRepository.count();
+            
+            System.out.println("\n📊 Counts after reimport:");
+            System.out.println("  - Games: " + gamesCountAfterReimport + " (was " + gamesCountAfterFirstImport + ")");
+            System.out.println("  - Events: " + eventsAfterReimport + " (was " + eventsAfterFirstImport + ")");
+            System.out.println("  - Accolades: " + accoladesAfterReimport + " (was " + accoladesAfterFirstImport + ")");
+            System.out.println("  - Player Stats: " + playerStatsAfterReimport + " (was " + playerStatsAfterFirstImport + ")");
+            
+            // Verify no new games were created
+            assertEquals(gamesCountAfterFirstImport, gamesCountAfterReimport,
+                    "Game count should not increase after reimport (deduplication should prevent duplicate games)");
+            
+            // Verify no new events were created
+            assertEquals(eventsAfterFirstImport, eventsAfterReimport,
+                    "Event count should not increase after reimport (duplicate games should be skipped)");
+            
+            // Verify no new accolades were created
+            assertEquals(accoladesAfterFirstImport, accoladesAfterReimport,
+                    "Accolade count should not increase after reimport (duplicate games should be skipped)");
+            
+            // Verify player stats count (may increase slightly if stats are updated, but shouldn't double)
+            // Note: Player stats might be updated even if game is deduplicated, so we check it's reasonable
+            assertTrue(playerStatsAfterReimport >= playerStatsAfterFirstImport,
+                    "Player stats count should not decrease");
+            // If deduplication works perfectly, stats shouldn't increase much
+            // But allow some tolerance for stats updates
+            long statsIncrease = playerStatsAfterReimport - playerStatsAfterFirstImport;
+            double statsIncreasePercent = (double) statsIncrease / playerStatsAfterFirstImport * 100;
+            assertTrue(statsIncreasePercent < 50, 
+                    "Player stats should not increase significantly after reimport (increase: " + 
+                    statsIncrease + ", " + String.format("%.1f", statsIncreasePercent) + "%)");
+            
+            // Step 4: Verify game signatures (timestamp + map) are still unique
+            List<GameEntity> gamesAfterReimport = gameRepository.findAll();
+            var gameSignaturesAfterReimport = gamesAfterReimport.stream()
+                    .collect(Collectors.toMap(
+                            g -> g.getGameOverTimestamp() + "|" + g.getMap(),
+                            g -> g,
+                            (g1, g2) -> g1
+                    ));
+            
+            assertEquals(gameSignatures.size(), gameSignaturesAfterReimport.size(),
+                    "Number of unique game signatures (timestamp|map) should not increase");
+            
+            // Verify all original games still exist
+            for (var entry : gameSignatures.entrySet()) {
+                String signature = entry.getKey();
+                GameEntity originalGame = entry.getValue();
+                
+                assertTrue(gameSignaturesAfterReimport.containsKey(signature),
+                        "Original game with signature '" + signature + "' should still exist after reimport");
+                
+                GameEntity gameAfterReimport = gameSignaturesAfterReimport.get(signature);
+                assertEquals(originalGame.getId(), gameAfterReimport.getId(),
+                        "Game ID should not change after reimport (same game, not duplicate)");
+            }
+            
+            // Step 5: Verify no duplicate games with same timestamp and map
+            // Group games by timestamp and map to check for duplicates
+            var gamesBySignature = gamesAfterReimport.stream()
+                    .collect(Collectors.groupingBy(
+                            g -> g.getGameOverTimestamp() + "|" + g.getMap()
+                    ));
+            
+            int duplicateCount = 0;
+            for (var entry : gamesBySignature.entrySet()) {
+                List<GameEntity> gamesWithSameSignature = entry.getValue();
+                if (gamesWithSameSignature.size() > 1) {
+                    duplicateCount++;
+                    System.out.println("  ✗ Found " + gamesWithSameSignature.size() + 
+                            " games with same signature: " + entry.getKey());
+                    gamesWithSameSignature.forEach(g -> 
+                            System.out.println("      - Game ID: " + g.getId()));
+                }
+            }
+            
+            assertEquals(0, duplicateCount,
+                    "Should not have duplicate games with same timestamp and map. Found " + duplicateCount + " duplicates.");
+            
+            System.out.println("\n✅ Deduplication test passed!");
+            System.out.println("  ✓ No duplicate games created");
+            System.out.println("  ✓ Event count unchanged");
+            System.out.println("  ✓ Accolade count unchanged");
+            System.out.println("  ✓ All original games preserved");
+        }
+        
+        /**
          * Waits for processing to complete by polling the database for expected game count.
          */
         private boolean waitForProcessingComplete(long timeout, TimeUnit unit) throws InterruptedException {

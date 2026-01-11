@@ -214,15 +214,21 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
         logger.info("Processing GAME_OVER event at {} on map {}", event.getTimestamp(), event.getMap());
         
         // Check for duplicate game (same timestamp and map)
+        logger.debug("Checking for duplicate game: timestamp={}, map={}", event.getTimestamp(), event.getMap());
         Optional<GameEntity> existingGame = gameRepository.findDuplicate(event.getTimestamp(), event.getMap());
+        
         if (existingGame.isPresent()) {
             GameEntity duplicate = existingGame.get();
-            logger.warn("Duplicate game detected - skipping ingestion. Existing game ID: {}, timestamp: {}, map: {}", 
+            logger.info("🔄 DEDUPE: Duplicate game detected - skipping ingestion. Existing game ID: {}, timestamp: {}, map: {}", 
                     duplicate.getId(), event.getTimestamp(), event.getMap());
+            logger.info("🔄 DEDUPE: Skipping game creation and event processing for duplicate game");
             // Skip processing - don't create game entity, don't process events, don't update stats
             // Clear any pending accolades that were queued before we detected the duplicate
             context.clear();
             return;
+        } else {
+            logger.debug("No duplicate found for timestamp={}, map={}, proceeding with game creation", 
+                    event.getTimestamp(), event.getMap());
         }
         
         // Create transient GameEntity from GameOverEvent

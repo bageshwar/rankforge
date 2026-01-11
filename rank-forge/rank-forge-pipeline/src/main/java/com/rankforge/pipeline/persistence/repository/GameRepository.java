@@ -55,9 +55,37 @@ public interface GameRepository extends JpaRepository<GameEntity, Long> {
     /**
      * Find a game by timestamp and map (for deduplication check).
      * Returns Optional.empty() if no duplicate exists.
+     * 
+     * Uses a tolerance check for timestamps to handle potential precision differences
+     * between database storage and Java Instant (e.g., SQL Server datetime2 precision).
+     * Checks for timestamps within 1 second of each other.
      */
     default Optional<GameEntity> findDuplicate(Instant gameOverTimestamp, String map) {
-        List<GameEntity> matches = findByGameOverTimestampAndMap(gameOverTimestamp, map);
-        return matches.isEmpty() ? Optional.empty() : Optional.of(matches.get(0));
+        // First try exact match
+        List<GameEntity> exactMatches = findByGameOverTimestampAndMap(gameOverTimestamp, map);
+        if (!exactMatches.isEmpty()) {
+            return Optional.of(exactMatches.get(0));
+        }
+        
+        // If no exact match, check for games with same map and timestamp within 1 second
+        // This handles potential precision differences in database storage
+        // Use a more efficient approach: query all games with the same map first
+        List<GameEntity> gamesWithSameMap = findAll().stream()
+                .filter(g -> g.getMap() != null && g.getMap().equals(map))
+                .collect(java.util.stream.Collectors.toList());
+        
+        for (GameEntity game : gamesWithSameMap) {
+            if (game.getGameOverTimestamp() != null) {
+                long secondsDiff = Math.abs(
+                    game.getGameOverTimestamp().getEpochSecond() - 
+                    gameOverTimestamp.getEpochSecond()
+                );
+                if (secondsDiff <= 1) {
+                    return Optional.of(game);
+                }
+            }
+        }
+        
+        return Optional.empty();
     }
 }

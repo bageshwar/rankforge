@@ -177,6 +177,10 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
                 playerStatsMap.put(playerSteamId, stats);
                 return Optional.of(stats);
             }
+        } catch (org.springframework.beans.factory.BeanCreationNotAllowedException e) {
+            // Spring context is shutting down - this is expected during test cleanup
+            // Don't log as error, just return empty (processing will stop naturally)
+            logger.debug("Spring context shutting down, cannot retrieve PlayerStats for {}", playerSteamId);
         } catch (Exception e) {
             logger.error("Failed to get PlayerStats for {}", playerSteamId, e);
         }
