@@ -26,6 +26,7 @@ import com.rankforge.pipeline.persistence.entity.RoundStartEventEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -257,13 +258,24 @@ public class EventProcessingContext {
     /**
      * Links all pending accolades to the current game.
      * Should be called after setCurrentGame() when accolades were queued before game existed.
+     * Sets the accolade timestamp to the game's end time (when the accolade was actually awarded).
      */
     public void linkAccoladesToGame() {
         if (currentGame != null) {
+            // Use game end time as the timestamp when the accolade was awarded
+            Instant gameEndTime = currentGame.getEndTime() != null 
+                    ? currentGame.getEndTime() 
+                    : currentGame.getGameOverTimestamp();
+            
             for (AccoladeEntity accolade : pendingAccolades) {
                 accolade.setGame(currentGame);
+                // Set timestamp to game end time (when accolade was actually awarded)
+                if (gameEndTime != null) {
+                    accolade.setCreatedAt(gameEndTime);
+                }
             }
-            logger.debug("GAME_CONTEXT: Linked {} accolades to game", pendingAccolades.size());
+            logger.debug("GAME_CONTEXT: Linked {} accolades to game with end time {}", 
+                    pendingAccolades.size(), gameEndTime);
         }
     }
     

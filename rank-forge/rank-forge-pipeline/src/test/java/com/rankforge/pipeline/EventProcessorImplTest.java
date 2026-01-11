@@ -24,6 +24,7 @@ import com.rankforge.core.models.Player;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.EventProcessingContext;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -51,6 +52,9 @@ class EventProcessorImplTest {
     @Mock
     private RankingService mockRankingService;
 
+    @Mock
+    private GameRepository mockGameRepository;
+
     private EventProcessingContext context;
 
     private EventProcessorImpl eventProcessor;
@@ -58,10 +62,13 @@ class EventProcessorImplTest {
     @BeforeEach
     void setUp() {
         context = new EventProcessingContext();
+        // Mock GameRepository to return empty (no duplicates) by default
+        when(mockGameRepository.findDuplicate(any(), any())).thenReturn(Optional.empty());
         eventProcessor = new EventProcessorImpl(
                 mockStatsStore, 
                 mockRankingService,
-                context
+                context,
+                mockGameRepository
         );
     }
 
