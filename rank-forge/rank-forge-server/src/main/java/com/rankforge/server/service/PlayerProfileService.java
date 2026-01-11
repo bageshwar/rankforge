@@ -34,6 +34,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -127,6 +128,16 @@ public class PlayerProfileService {
                     .map(Map.Entry::getKey)
                     .orElse("None");
             profile.setMostFrequentAccolade(mostFrequent);
+            
+            // Extract all unique past nicks from stats history
+            List<String> pastNicks = statsHistory.stream()
+                    .map(PlayerStatsEntity::getLastSeenNickname)
+                    .filter(Objects::nonNull)
+                    .filter(nick -> !nick.trim().isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList());
+            // Always set a non-null list (empty if no past nicks)
+            profile.setPastNicks(pastNicks != null ? pastNicks : new ArrayList<>());
             
             LOGGER.info("Built profile for player {} with {} games and {} accolades", 
                     profile.getPlayerName(), statsHistory.size(), accoladeEntities.size());

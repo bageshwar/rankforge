@@ -142,6 +142,7 @@ export interface PlayerProfileDTO {
   accoladesByType: Record<string, number>;
   mostFrequentAccolade: string;
   totalAccolades: number;
+  pastNicks?: string[];
 }
 
 // Rankings API
