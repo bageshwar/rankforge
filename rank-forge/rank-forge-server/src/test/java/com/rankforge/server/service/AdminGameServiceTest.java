@@ -111,40 +111,181 @@ class AdminGameServiceTest {
     class GameDeletionTests {
 
         @Test
-        @DisplayName("Should delete game and all related entities")
+        @DisplayName("Should delete game and all related entities with data validation")
         void shouldDeleteGameAndAllRelatedEntities() {
-            // Given: Comprehensive test data
-            Long gameId = 1L;
-            List<GameEventEntity> gameEvents = createGameEvents(game1, 3); // 3 rounds
-            List<AccoladeEntity> accolades = createAccolades(game1, 5); // 5 accolades
+            // Given: Comprehensive test data with multiple games to verify isolation
+            Long game1Id = 1L;
+            Long game2Id = 2L;
+            
+            // Game1 data
+            List<GameEventEntity> game1Events = createGameEvents(game1, 3); // 3 rounds = 9 events (3 round starts, 9 kills, 3 round ends)
+            List<AccoladeEntity> game1Accolades = createAccolades(game1, 5); // 5 accolades
             List<PlayerStatsEntity> game1Stats = createPlayerStats(game1, 4); // 4 players
+            
+            // Game2 data (should remain untouched)
+            List<GameEventEntity> game2Events = createGameEvents(game2, 2); // 2 rounds
+            List<AccoladeEntity> game2Accolades = createAccolades(game2, 3); // 3 accolades
+            List<PlayerStatsEntity> game2Stats = createPlayerStats(game2, 3); // 3 players
 
-            // Mock repository responses
-            when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
-            when(gameEventRepository.findAllByGameId(gameId)).thenReturn(gameEvents);
-            when(accoladeRepository.findByGameId(gameId)).thenReturn(accolades);
-            when(playerStatsRepository.findByGameId(gameId)).thenReturn(game1Stats);
+            // Mock repository responses - return game1 data when queried for game1Id
+            when(gameRepository.findById(game1Id)).thenReturn(Optional.of(game1));
+            when(gameEventRepository.findAllByGameId(game1Id)).thenReturn(game1Events);
+            when(accoladeRepository.findByGameId(game1Id)).thenReturn(game1Accolades);
+            when(playerStatsRepository.findByGameId(game1Id)).thenReturn(game1Stats);
+            
+            // Note: We don't stub game2 methods since we only verify they're never called
 
-            // When: Delete the game
-            boolean result = adminGameService.deleteGame(gameId);
+            // When: Delete game1
+            boolean result = adminGameService.deleteGame(game1Id);
 
-            // Then: Verify all entities are deleted
+            // Then: Verify deletion result
             assertTrue(result, "Delete should return true");
 
-            // Verify game events deleted
-            verify(gameEventRepository, times(1)).findAllByGameId(gameId);
-            verify(gameEventRepository, times(1)).deleteAll(gameEvents);
+            // Capture what was actually deleted
+            ArgumentCaptor<List<GameEventEntity>> eventsCaptor = ArgumentCaptor.forClass(List.class);
+            ArgumentCaptor<List<AccoladeEntity>> accoladesCaptor = ArgumentCaptor.forClass(List.class);
+            ArgumentCaptor<List<PlayerStatsEntity>> statsCaptor = ArgumentCaptor.forClass(List.class);
+            ArgumentCaptor<GameEntity> gameCaptor = ArgumentCaptor.forClass(GameEntity.class);
 
-            // Verify accolades deleted
-            verify(accoladeRepository, times(1)).findByGameId(gameId);
-            verify(accoladeRepository, times(1)).deleteAll(accolades);
+            // Verify game events deletion with data validation
+            verify(gameEventRepository, times(1)).findAllByGameId(game1Id);
+            verify(gameEventRepository, times(1)).deleteAll(eventsCaptor.capture());
+            List<GameEventEntity> deletedEvents = eventsCaptor.getValue();
+            // Expected: 3 rounds * (1 ROUND_START + 3 KILLS + 1 ROUND_END) = 3 * 5 = 15 events
+            assertEquals(15, deletedEvents.size(), 
+                String.format("Should delete all 15 events (3 rounds * 5 events each), but got %d", deletedEvents.size()));
+            // Verify all deleted events belong to game1
+            Instant game1Timestamp = game1.getGameOverTimestamp();
+            deletedEvents.forEach(event -> {
+                assertNotNull(event.getGame(), "Event should have game reference");
+                assertEquals(game1Id, event.getGame().getId(), 
+                    "Deleted event should belong to game1");
+                assertNotNull(event.getTimestamp(), "Event should have timestamp");
+                // Events should occur before or at the game over timestamp
+                assertTrue(event.getTimestamp().isBefore(game1Timestamp) || 
+                          event.getTimestamp().equals(game1Timestamp),
+                    "Event timestamp should be before or equal to game over timestamp");
+            });
+            // Verify event types are correct
+            long roundStarts = deletedEvents.stream()
+                .filter(e -> e.getGameEventType() == GameEventType.ROUND_START)
+                .count();
+            long kills = deletedEvents.stream()
+                .filter(e -> e.getGameEventType() == GameEventType.KILL)
+                .count();
+            long roundEnds = deletedEvents.stream()
+                .filter(e -> e.getGameEventType() == GameEventType.ROUND_END)
+                .count();
+            assertEquals(3, roundStarts, "Should delete 3 round start events");
+            assertEquals(9, kills, "Should delete 9 kill events (3 per round)");
+            assertEquals(3, roundEnds, "Should delete 3 round end events");
 
-            // Verify player stats deleted
-            verify(playerStatsRepository, times(1)).findByGameId(gameId);
-            verify(playerStatsRepository, times(1)).deleteAll(game1Stats);
+            // Verify accolades deletion with data validation
+            verify(accoladeRepository, times(1)).findByGameId(game1Id);
+            verify(accoladeRepository, times(1)).deleteAll(accoladesCaptor.capture());
+            List<AccoladeEntity> deletedAccolades = accoladesCaptor.getValue();
+            assertEquals(5, deletedAccolades.size(), "Should delete all 5 accolades");
+            // Verify all deleted accolades belong to game1
+            deletedAccolades.forEach(accolade -> {
+                assertNotNull(accolade.getGame(), "Accolade should have game reference");
+                assertEquals(game1Id, accolade.getGame().getId(), 
+                    "Deleted accolade should belong to game1");
+                assertNotNull(accolade.getType(), "Accolade should have type");
+                assertFalse(accolade.getType().isEmpty(), "Accolade type should not be empty");
+                assertNotNull(accolade.getPlayerName(), "Accolade should have player name");
+                assertFalse(accolade.getPlayerName().isEmpty(), "Accolade player name should not be empty");
+                assertNotNull(accolade.getPlayerId(), "Accolade should have player ID");
+                assertFalse(accolade.getPlayerId().isEmpty(), "Accolade player ID should not be empty");
+            });
+            // Verify unique players in accolades
+            long uniquePlayers = deletedAccolades.stream()
+                .map(AccoladeEntity::getPlayerId)
+                .distinct()
+                .count();
+            assertTrue(uniquePlayers >= 1, "Should have at least 1 unique player in accolades");
 
-            // Verify game deleted
-            verify(gameRepository, times(1)).delete(game1);
+            // Verify player stats deletion with data validation
+            verify(playerStatsRepository, times(1)).findByGameId(game1Id);
+            verify(playerStatsRepository, times(1)).deleteAll(statsCaptor.capture());
+            List<PlayerStatsEntity> deletedStats = statsCaptor.getValue();
+            assertEquals(4, deletedStats.size(), "Should delete all 4 player stats");
+            // Verify all deleted stats belong to game1
+            // game1Timestamp already defined above
+            deletedStats.forEach(stat -> {
+                assertNotNull(stat.getGame(), "Player stat should have game reference");
+                assertEquals(game1Id, stat.getGame().getId(), 
+                    "Deleted player stat should belong to game1");
+                assertEquals(game1Timestamp, stat.getGameTimestamp(), 
+                    "Player stat gameTimestamp should match game's gameOverTimestamp");
+                assertNotNull(stat.getPlayerId(), "Player stat should have playerId");
+                assertTrue(stat.getKills() >= 0, "Player stat should have valid kills");
+                assertTrue(stat.getDeaths() >= 0, "Player stat should have valid deaths");
+                assertNotNull(stat.getLastSeenNickname(), "Player stat should have nickname");
+            });
+            // Verify unique players
+            long uniquePlayerIds = deletedStats.stream()
+                .map(PlayerStatsEntity::getPlayerId)
+                .distinct()
+                .count();
+            assertEquals(4, uniquePlayerIds, "Should have 4 unique players");
+            // Verify all player IDs are non-null and non-empty
+            deletedStats.forEach(stat -> {
+                assertNotNull(stat.getPlayerId(), "Player ID should not be null");
+                assertFalse(stat.getPlayerId().isEmpty(), "Player ID should not be empty");
+            });
+
+            // Verify game deletion with data validation
+            verify(gameRepository, times(1)).delete(gameCaptor.capture());
+            GameEntity deletedGame = gameCaptor.getValue();
+            assertEquals(game1Id, deletedGame.getId(), "Should delete game1");
+            assertEquals("de_dust2", deletedGame.getMap(), "Deleted game should be de_dust2");
+            assertEquals(16, deletedGame.getTeam1Score(), "Deleted game should have correct team1 score");
+            assertEquals(14, deletedGame.getTeam2Score(), "Deleted game should have correct team2 score");
+            assertNotNull(deletedGame.getGameOverTimestamp(), "Deleted game should have timestamp");
+            assertEquals(game1Timestamp, deletedGame.getGameOverTimestamp(), 
+                "Deleted game timestamp should match original");
+
+            // Verify round references in events are correct
+            // Each round should have events linked to the same RoundStartEventEntity
+            List<RoundStartEventEntity> deletedRoundStarts = deletedEvents.stream()
+                .filter(e -> e instanceof RoundStartEventEntity)
+                .map(e -> (RoundStartEventEntity) e)
+                .collect(java.util.stream.Collectors.toList());
+            assertEquals(3, deletedRoundStarts.size(), "Should have 3 round start events");
+            
+            // Verify kill events are linked to their round starts
+            deletedEvents.stream()
+                .filter(e -> e instanceof KillEventEntity)
+                .map(e -> (KillEventEntity) e)
+                .forEach(killEvent -> {
+                    assertNotNull(killEvent.getRoundStart(), 
+                        "Kill event should be linked to a round start");
+                    assertTrue(deletedRoundStarts.contains(killEvent.getRoundStart()), 
+                        "Kill event's round start should be one of the deleted round starts");
+                });
+            
+            // Verify round end events are linked to their round starts
+            deletedEvents.stream()
+                .filter(e -> e instanceof RoundEndEventEntity)
+                .map(e -> (RoundEndEventEntity) e)
+                .forEach(roundEnd -> {
+                    assertNotNull(roundEnd.getRoundStart(), 
+                        "Round end event should be linked to a round start");
+                    assertTrue(deletedRoundStarts.contains(roundEnd.getRoundStart()), 
+                        "Round end's round start should be one of the deleted round starts");
+                });
+
+            // Verify game2 data was NOT touched (isolation check)
+            verify(gameEventRepository, never()).findAllByGameId(game2Id);
+            verify(accoladeRepository, never()).findByGameId(game2Id);
+            verify(playerStatsRepository, never()).findByGameId(game2Id);
+            verify(gameRepository, never()).delete(game2);
+            
+            // Verify that game2's data would still exist (if we queried it)
+            // This ensures the deletion was isolated to game1
+            assertNotEquals(game1Id, game2Id, "Game IDs should be different");
+            assertNotEquals(game1.getGameOverTimestamp(), game2.getGameOverTimestamp(), 
+                "Game timestamps should be different to ensure isolation");
         }
 
         @Test
