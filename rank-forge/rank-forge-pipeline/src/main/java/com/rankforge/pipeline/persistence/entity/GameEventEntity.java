@@ -34,7 +34,8 @@ import java.time.Instant;
 public abstract class GameEventEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "game_event_seq")
+    @SequenceGenerator(name = "game_event_seq", sequenceName = "game_event_seq", allocationSize = 50)
     private Long id;
     
     @Column(name = "at", nullable = false)

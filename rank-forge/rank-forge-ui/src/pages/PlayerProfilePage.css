@@ -198,6 +198,35 @@
   letter-spacing: 1px;
 }
 
+/* Past Nicks Section */
+.past-nicks-section {
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(45, 45, 45, 0.95) 100%);
+}
+
+.past-nicks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.past-nick-item {
+  padding: 0.5rem 1rem;
+  background: rgba(74, 144, 226, 0.15);
+  border: 1px solid rgba(74, 144, 226, 0.3);
+  border-radius: 20px;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.past-nick-item:hover {
+  background: rgba(74, 144, 226, 0.25);
+  border-color: rgba(74, 144, 226, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.2);
+}
+
 /* Section Cards */
 .section-card {
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);

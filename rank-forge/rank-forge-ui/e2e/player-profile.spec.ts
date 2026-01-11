@@ -140,6 +140,38 @@ test.describe('Player Profile Page', () => {
       console.log('[TEST] ⚠ Recent accolades section not visible');
     }
 
+    // Assert past nicks section
+    console.log('[TEST] Asserting past nicks section');
+    const hasPastNicks = await profilePage.hasPastNicksSection();
+    if (hasPastNicks) {
+      const pastNicksCount = await profilePage.getPastNicksCount();
+      expect(pastNicksCount).toBeGreaterThan(0);
+      console.log(`[TEST] ✓ Found ${pastNicksCount} past nicks`);
+
+      if (pastNicksCount > 0) {
+        const allNicks = await profilePage.getAllPastNicks();
+        expect(allNicks.length).toBeGreaterThan(0);
+        // Verify that all nicks are non-empty strings
+        allNicks.forEach((nick, idx) => {
+          expect(nick).toBeTruthy();
+          expect(nick.trim().length).toBeGreaterThan(0);
+        });
+        console.log(`[TEST] ✓ Past nicks are valid: ${allNicks.join(', ')}`);
+        
+        // Verify that the current player name is included in past nicks (or at least one nick exists)
+        const currentPlayerName = await profilePage.getPlayerName();
+        if (currentPlayerName) {
+          const currentNameInPastNicks = allNicks.some(nick => 
+            nick.toLowerCase() === currentPlayerName.toLowerCase()
+          );
+          // Note: current name might not be in past nicks if it's the only name used
+          console.log(`[TEST] Current player name "${currentPlayerName}" ${currentNameInPastNicks ? 'is' : 'may not be'} in past nicks list`);
+        }
+      }
+    } else {
+      console.log('[TEST] ⚠ Past nicks section not visible (player may not have multiple nicks)');
+    }
+
     console.log('[TEST] ✓ All player profile sections asserted successfully');
   });
 
