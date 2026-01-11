@@ -181,7 +181,11 @@ export const GameDetailsPage = () => {
                     <tr key={idx}>
                       <td className="player-name-cell">
                         {steamId ? (
-                          <Link to={`/players/${steamId}`} className="player-profile-link">
+                          <Link 
+                            to={`/players/${steamId}`} 
+                            className="player-profile-link"
+                            data-testid={`testid-player-link-${steamId}`}
+                          >
                             {player.playerName}
                           </Link>
                         ) : (
@@ -220,7 +224,11 @@ export const GameDetailsPage = () => {
                   <div className="accolade-content">
                     <div className="accolade-type">{accolade.typeDescription}</div>
                     {steamId ? (
-                      <Link to={`/players/${steamId}`} className="accolade-player-link">
+                      <Link 
+                        to={`/players/${steamId}`} 
+                        className="accolade-player-link"
+                        data-testid={`testid-accolade-player-link-${steamId}`}
+                      >
                         {accolade.playerName}
                       </Link>
                     ) : (

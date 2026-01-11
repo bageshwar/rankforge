@@ -133,7 +133,11 @@ export const RankingsPage = () => {
                   )}
                 </td>
                 <td className="player-cell">
-                  <Link to={`/players/${extractSteamId(player.playerId)}`} className="player-link">
+                  <Link 
+                    to={`/players/${extractSteamId(player.playerId)}`} 
+                    className="player-link"
+                    data-testid={`testid-rankings-player-link-${extractSteamId(player.playerId)}`}
+                  >
                     <div className="player-info">
                       <span className="player-name">{player.playerName}</span>
                       <span className="player-id">{extractSteamId(player.playerId)}</span>

@@ -267,6 +267,7 @@ export const RoundDetailsPage = () => {
                         <Link 
                           to={`/players/${extractSteamId(event.player1Id)}`}
                           className="player-link attacker"
+                          data-testid={`testid-round-event-player-link-${event.id || idx}-attacker`}
                         >
                           {event.player1Name || event.player1Id || 'Unknown'}
                         </Link>
@@ -274,6 +275,7 @@ export const RoundDetailsPage = () => {
                         <Link 
                           to={`/players/${extractSteamId(event.player2Id)}`}
                           className="player-link victim"
+                          data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
                         >
                           {event.player2Name || event.player2Id || 'Unknown'}
                         </Link>
@@ -285,6 +287,7 @@ export const RoundDetailsPage = () => {
                         <Link 
                           to={`/players/${extractSteamId(event.player1Id)}`}
                           className="player-link assister"
+                          data-testid={`testid-round-event-player-link-${event.id || idx}-assister`}
                         >
                           {event.player1Name || event.player1Id || 'Unknown'}
                         </Link>
@@ -292,6 +295,7 @@ export const RoundDetailsPage = () => {
                         <Link 
                           to={`/players/${extractSteamId(event.player2Id)}`}
                           className="player-link victim"
+                          data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
                         >
                           {event.player2Name || event.player2Id || 'Unknown'}
                         </Link>
@@ -340,6 +344,7 @@ export const RoundDetailsPage = () => {
                   <Link 
                     to={`/players/${extractSteamId(kill.player1Id)}`}
                     className="killer-name"
+                    data-testid={`testid-kill-feed-player-link-${kill.id || idx}-killer`}
                   >
                     {kill.player1Name || kill.player1Id || 'Unknown'}
                   </Link>
@@ -350,6 +355,7 @@ export const RoundDetailsPage = () => {
                   <Link 
                     to={`/players/${extractSteamId(kill.player2Id)}`}
                     className="victim-name"
+                    data-testid={`testid-kill-feed-player-link-${kill.id || idx}-victim`}
                   >
                     {kill.player2Name || kill.player2Id || 'Unknown'}
                   </Link>
