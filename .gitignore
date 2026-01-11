@@ -50,3 +50,6 @@ cursor-help-log.log
 rank-forge/log-for-cursor.log
 
 .local/**
+.cursor/**
+/rank-forge/rank-forge-ui/test-results/
+/rank-forge/rank-forge-ui/playwright-report/
