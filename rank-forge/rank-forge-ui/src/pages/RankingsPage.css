@@ -224,6 +224,7 @@
   letter-spacing: 0.5px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   white-space: nowrap;
+  background: var(--color-dark-tertiary);
 }
 
 .rankings-table th.sortable {
