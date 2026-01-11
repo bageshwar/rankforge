@@ -122,9 +122,9 @@ public class PipelineService {
         // Create scheduler for async processing
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         
-        // Create and return game ranking system
+        // Create and return game ranking system with EntityManager for cleanup
         GameRankingSystem rankingSystem = new GameRankingSystem(
-                logParser, eventProcessor, eventStore, scheduler);
+                logParser, eventProcessor, eventStore, scheduler, entityManager);
         
         logger.debug("Successfully created GameRankingSystem with all components");
         return rankingSystem;
