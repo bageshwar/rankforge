@@ -22,7 +22,6 @@ import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
-import com.rankforge.server.dto.AccoladeDTO;
 import com.rankforge.server.dto.PlayerProfileDTO;
 import com.rankforge.server.dto.PlayerProfileDTO.PlayerAccoladeDTO;
 import com.rankforge.server.dto.PlayerProfileDTO.RatingHistoryPoint;
@@ -31,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -46,6 +46,7 @@ import java.util.stream.Collectors;
 public class PlayerProfileService {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerProfileService.class);
+    // Use system default timezone for display (consistent with other date formatting in the app)
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")
             .withZone(ZoneId.systemDefault());
     
@@ -169,6 +170,8 @@ public class PlayerProfileService {
     
     /**
      * Build accolade list from entities
+     * Uses game end time as the timestamp when the accolade was awarded.
+     * Falls back to createdAt if game is not available (shouldn't happen in normal flow).
      */
     private List<PlayerAccoladeDTO> buildAccoladeList(List<AccoladeEntity> accoladeEntities) {
         List<PlayerAccoladeDTO> accolades = new ArrayList<>();
@@ -181,12 +184,28 @@ public class PlayerProfileService {
             accolade.setPosition(entity.getPosition());
             accolade.setScore(entity.getScore());
             
-            if (entity.getCreatedAt() != null) {
-                accolade.setGameDate(DATE_FORMATTER.format(entity.getCreatedAt()));
-            }
-            
+            // Use game end time as the timestamp when the accolade was awarded
+            // This is the actual time the game ended (when accolades are awarded)
+            Instant accoladeTimestamp = null;
             if (entity.getGame() != null) {
                 accolade.setGameId(entity.getGame().getId());
+                // Prefer endTime, fallback to gameOverTimestamp
+                accoladeTimestamp = entity.getGame().getEndTime() != null 
+                        ? entity.getGame().getEndTime() 
+                        : entity.getGame().getGameOverTimestamp();
+            }
+            
+            // Fallback to createdAt if game timestamp is not available
+            if (accoladeTimestamp == null) {
+                accoladeTimestamp = entity.getCreatedAt();
+                if (accoladeTimestamp != null) {
+                    LOGGER.warn("Accolade {} has no game end time, using createdAt as fallback", 
+                            entity.getId());
+                }
+            }
+            
+            if (accoladeTimestamp != null) {
+                accolade.setGameDate(DATE_FORMATTER.format(accoladeTimestamp));
             }
             
             accolades.add(accolade);

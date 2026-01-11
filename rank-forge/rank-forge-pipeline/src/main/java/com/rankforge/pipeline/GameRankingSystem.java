@@ -23,6 +23,7 @@ import com.rankforge.core.interfaces.EventProcessor;
 import com.rankforge.core.interfaces.LogParser;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.stores.EventStore;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,14 +47,23 @@ public class GameRankingSystem {
     private final EventProcessor eventProcessor;
     private final EventStore eventStore;
     private final ScheduledExecutorService scheduler;
+    private final EntityManager entityManager;
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler) {
+        this(logParser, eventProcessor, eventStore, scheduler, null);
+    }
+    
+    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler,
+                           EntityManager entityManager) {
         this.logParser = logParser;
         this.eventProcessor = eventProcessor;
         this.eventStore = eventStore;
         this.scheduler = scheduler;
+        this.entityManager = entityManager;
     }
 
     public void startProcessing(String logFile) throws IOException {
@@ -117,5 +127,34 @@ public class GameRankingSystem {
 
     private List<String> readNewLines(String logFile) throws IOException {
         return Files.readAllLines(Path.of(logFile));
+    }
+    
+    /**
+     * Closes resources associated with this GameRankingSystem.
+     * This should be called after processing is complete to prevent connection leaks.
+     */
+    public void close() {
+        if (entityManager != null && entityManager.isOpen()) {
+            try {
+                // Ensure any active transaction is rolled back before closing
+                if (entityManager.getTransaction().isActive()) {
+                    logger.warn("Active transaction found during close, rolling back");
+                    entityManager.getTransaction().rollback();
+                }
+                entityManager.close();
+                logger.debug("Closed EntityManager for GameRankingSystem");
+            } catch (Exception e) {
+                logger.error("Error closing EntityManager", e);
+            }
+        }
+        
+        if (scheduler != null && !scheduler.isShutdown()) {
+            try {
+                scheduler.shutdown();
+                logger.debug("Shutdown scheduler for GameRankingSystem");
+            } catch (Exception e) {
+                logger.error("Error shutting down scheduler", e);
+            }
+        }
     }
 }

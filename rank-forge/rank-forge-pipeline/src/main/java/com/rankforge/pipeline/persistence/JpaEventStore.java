@@ -295,33 +295,58 @@ public class JpaEventStore implements EventStore, GameEventListener {
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
         try {
-            // Validate EntityManager is available
+            // Validate EntityManager is available and open
             if (entityManager == null) {
                 throw new IllegalStateException("EntityManager is not available. " +
                         "Ensure JpaEventStore is properly configured with an EntityManager.");
+            }
+            
+            if (!entityManager.isOpen()) {
+                throw new IllegalStateException("EntityManager is closed. " +
+                        "Cannot persist game data with a closed EntityManager.");
             }
             
             // Check if we need to manage the transaction ourselves
             // This happens when JpaEventStore is created manually (not via Spring DI)
             // and the @Transactional annotation is not intercepted by Spring's proxy
             boolean managedTransaction = false;
-            if (!entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().begin();
-                managedTransaction = true;
-                logger.debug("Started manual transaction for game persistence");
+            try {
+                if (!entityManager.getTransaction().isActive()) {
+                    entityManager.getTransaction().begin();
+                    managedTransaction = true;
+                    logger.debug("Started manual transaction for game persistence");
+                }
+            } catch (IllegalStateException e) {
+                // EntityManager might be closed or in an invalid state
+                logger.error("Cannot begin transaction - EntityManager may be closed", e);
+                throw new IllegalStateException("Cannot begin transaction", e);
             }
             
             try {
                 persistGameData();
                 
                 if (managedTransaction) {
-                    entityManager.getTransaction().commit();
-                    logger.debug("Committed manual transaction for game persistence");
+                    try {
+                        if (entityManager.getTransaction().isActive()) {
+                            entityManager.getTransaction().commit();
+                            logger.debug("Committed manual transaction for game persistence");
+                        }
+                    } catch (Exception e) {
+                        logger.error("Error committing transaction", e);
+                        throw e;
+                    }
                 }
             } catch (Exception e) {
-                if (managedTransaction && entityManager.getTransaction().isActive()) {
-                    entityManager.getTransaction().rollback();
-                    logger.debug("Rolled back manual transaction due to error");
+                if (managedTransaction) {
+                    try {
+                        if (entityManager.getTransaction().isActive()) {
+                            entityManager.getTransaction().rollback();
+                            logger.debug("Rolled back manual transaction due to error");
+                        }
+                    } catch (Exception rollbackException) {
+                        logger.error("Error rolling back transaction", rollbackException);
+                        // Don't throw - the original exception is more important
+                    }
                 }
                 throw e;
             }
@@ -334,6 +359,10 @@ public class JpaEventStore implements EventStore, GameEventListener {
     /**
      * Internal method that performs the actual persistence of game data.
      * Should be called within a transaction context.
+     * 
+     * PERFORMANCE OPTIMIZATION: Removed expensive entityManager.contains() checks
+     * that were being called 770+ times per game. After persisting and flushing
+     * entities, we know they're managed, so we cache the references and skip the checks.
      */
     private void persistGameData() {
         // Use EntityManager directly to ensure all entities stay in the same persistence context
@@ -341,50 +370,56 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // 1. First, persist or merge GameEntity to get its ID
         GameEntity game = context.getCurrentGame();
+        GameEntity managedGame = null; // Cache the managed game reference
         if (game != null) {
             // Use merge instead of persist to handle both new and detached entities
             // If game.id is null, merge behaves like persist
             // If game.id is set (detached entity), merge re-attaches it
             if (game.getId() == null) {
                 entityManager.persist(game);
+                managedGame = game; // After persist, it's managed
             } else {
-                game = entityManager.merge(game);
+                managedGame = entityManager.merge(game);
             }
             entityManager.flush(); // Flush to get the generated ID
             logger.info("Persisted GameEntity with ID {} for game on map {}", 
-                    game.getId(), game.getMap());
+                    managedGame.getId(), managedGame.getMap());
             
             // Update all references to point to the managed entity
             // Important: must use the returned entity from merge
-            updateGameReferences(game);
+            updateGameReferences(managedGame);
         }
         
         // 2. Persist all game events using EntityManager (same persistence context)
         // First pass: persist RoundStartEventEntity instances to get their IDs
         // This is needed because other events may reference them
         List<GameEventEntity> entitiesToSave = context.getPendingEntities();
-        Map<RoundStartEventEntity, RoundStartEventEntity> roundStartMap = new HashMap<>();
+        // Map to cache managed roundStart entities by ID (for fast lookup)
+        Map<Long, RoundStartEventEntity> managedRoundStartsById = new HashMap<>();
         
         logger.debug("Persisting {} total events for game", entitiesToSave.size());
         
         int roundStartCount = 0;
         for (GameEventEntity entity : entitiesToSave) {
             if (entity instanceof RoundStartEventEntity roundStart) {
-                // Ensure game reference is managed
-                if (game != null && !entityManager.contains(game)) {
-                    game = entityManager.merge(game);
-                }
-                roundStart.setGame(game);
+                // Game is already managed after persist/flush above, no need to check
+                roundStart.setGame(managedGame);
                 entityManager.persist(roundStart);
-                roundStartMap.put(roundStart, roundStart); // Track for reference updates
                 roundStartCount++;
             }
         }
         
         // Flush to get RoundStartEventEntity IDs assigned
-        if (!roundStartMap.isEmpty()) {
+        if (roundStartCount > 0) {
             entityManager.flush();
             logger.debug("Flushed {} RoundStartEventEntity instances", roundStartCount);
+            
+            // Cache all managed roundStart entities by ID (they're all managed after flush)
+            for (GameEventEntity entity : entitiesToSave) {
+                if (entity instanceof RoundStartEventEntity roundStart && roundStart.getId() != null) {
+                    managedRoundStartsById.put(roundStart.getId(), roundStart);
+                }
+            }
         }
         
         // Second pass: persist all other events
@@ -395,17 +430,14 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         for (GameEventEntity entity : entitiesToSave) {
             if (!(entity instanceof RoundStartEventEntity)) {
-                // Ensure game reference is managed
-                if (game != null && !entityManager.contains(game)) {
-                    game = entityManager.merge(game);
-                }
-                entity.setGame(game);
+                // Game is already managed after persist/flush above, no need to check
+                entity.setGame(managedGame);
                 
                 // Ensure roundStart reference is set and managed (if applicable)
                 RoundStartEventEntity roundStart = entity.getRoundStart();
                 if (roundStart != null) {
                     // roundStart should have been persisted in the first pass
-                    // Verify it has an ID and is managed
+                    // Verify it has an ID
                     if (roundStart.getId() == null) {
                         logger.warn("PERSIST_ROUND: RoundStart has null ID for event type {} at {}", 
                                 entity.getGameEventType(), entity.getTimestamp());
@@ -414,13 +446,13 @@ public class JpaEventStore implements EventStore, GameEventListener {
                         eventsWithRoundRef++;
                         eventsPerRound.merge(roundStart.getId(), 1, Integer::sum);
                         
-                        if (!entityManager.contains(roundStart)) {
-                            // Re-attach if detached
-                            logger.debug("PERSIST_ROUND: Re-attaching detached roundStart ID {} for event {}", 
-                                    roundStart.getId(), entity.getGameEventType());
-                            RoundStartEventEntity managedRoundStart = entityManager.merge(roundStart);
+                        // Use cached managed roundStart if available (much faster than contains check)
+                        RoundStartEventEntity managedRoundStart = managedRoundStartsById.get(roundStart.getId());
+                        if (managedRoundStart != null && managedRoundStart != roundStart) {
+                            // Use the managed version from cache
                             entity.setRoundStart(managedRoundStart);
                         }
+                        // If roundStart is already the managed one, no action needed
                     }
                 } else {
                     eventsWithoutRoundRef++;
@@ -451,11 +483,8 @@ public class JpaEventStore implements EventStore, GameEventListener {
         // 3. Persist all accolades using EntityManager (same persistence context)
         List<AccoladeEntity> accoladesToSave = context.getPendingAccolades();
         for (AccoladeEntity accolade : accoladesToSave) {
-            // Check if the game reference is managed; if not, re-attach it
-            GameEntity accoladeGame = accolade.getGame();
-            if (accoladeGame != null && accoladeGame.getId() != null && !entityManager.contains(accoladeGame)) {
-                accolade.setGame(entityManager.merge(accoladeGame));
-            }
+            // Game is already managed after persist/flush above, no need to check
+            // The game reference was already set in updateGameReferences()
             entityManager.persist(accolade);
         }
         if (!accoladesToSave.isEmpty()) {

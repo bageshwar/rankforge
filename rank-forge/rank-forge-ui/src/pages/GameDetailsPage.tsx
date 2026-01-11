@@ -78,6 +78,13 @@ export const GameDetailsPage = () => {
     }
   };
 
+  const getRankIcon = (position: number) => {
+    if (position === 1) return '🥇';
+    if (position === 2) return '🥈';
+    if (position === 3) return '🥉';
+    return null;
+  };
+
   if (loading) {
     return (
       <PageContainer backgroundClass="bg-game-details">
@@ -175,13 +182,26 @@ export const GameDetailsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {gameDetails.playerStats.map((player, idx) => {
+                {[...gameDetails.playerStats]
+                  .sort((a, b) => b.kills - a.kills)
+                  .map((player, idx) => {
+                  const position = idx + 1;
+                  const rankClass = position === 1 ? 'rank-gold' : position === 2 ? 'rank-silver' : position === 3 ? 'rank-bronze' : '';
                   const steamId = extractSteamId(player.playerId);
                   return (
-                    <tr key={idx}>
+                    <tr key={idx} className={rankClass}>
                       <td className="player-name-cell">
+                        {position <= 3 && (
+                          <span className={`rank-icon ${rankClass}`} data-testid={`testid-rank-icon-${position}`}>
+                            {getRankIcon(position)}
+                          </span>
+                        )}
                         {steamId ? (
-                          <Link to={`/players/${steamId}`} className="player-profile-link">
+                          <Link 
+                            to={`/players/${steamId}`} 
+                            className="player-profile-link"
+                            data-testid={`testid-player-link-${steamId}`}
+                          >
                             {player.playerName}
                           </Link>
                         ) : (
@@ -220,7 +240,11 @@ export const GameDetailsPage = () => {
                   <div className="accolade-content">
                     <div className="accolade-type">{accolade.typeDescription}</div>
                     {steamId ? (
-                      <Link to={`/players/${steamId}`} className="accolade-player-link">
+                      <Link 
+                        to={`/players/${steamId}`} 
+                        className="accolade-player-link"
+                        data-testid={`testid-accolade-player-link-${steamId}`}
+                      >
                         {accolade.playerName}
                       </Link>
                     ) : (
