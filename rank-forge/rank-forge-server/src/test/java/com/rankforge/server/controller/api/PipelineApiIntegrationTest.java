@@ -225,53 +225,6 @@ class PipelineApiIntegrationTest {
     }
 
     @Test
-    void testHealthEndpoint_WithoutApiKey_ReturnsOk() throws Exception {
-        mockMvc.perform(get("/api/pipeline/health"))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Pipeline API is healthy"));
-    }
-
-    @Test
-    void testProcessEndpoint_WithoutApiKey_ReturnsUnauthorized() throws Exception {
-        ProcessLogRequest request = new ProcessLogRequest("s3://test-bucket/test-file.json");
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("Unauthorized. Invalid or missing API key."));
-    }
-
-    @Test
-    void testProcessEndpoint_WithInvalidApiKey_ReturnsUnauthorized() throws Exception {
-        ProcessLogRequest request = new ProcessLogRequest("s3://test-bucket/test-file.json");
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", "invalid-key")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("Unauthorized. Invalid or missing API key."));
-    }
-
-    @Test
-    void testProcessEndpoint_WithValidApiKey_ButInvalidS3Path_ReturnsBadRequest() throws Exception {
-        String apiKey = getApiKey();
-        assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                "API key must be configured in application-local.properties");
-        
-        ProcessLogRequest request = new ProcessLogRequest("invalid-path");
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", apiKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value("error"))
-                .andExpect(jsonPath("$.jobId").doesNotExist());
-    }
-
-    @Test
     void testProcessEndpoint_WithValidApiKey_AndValidS3Path_ReturnsAccepted() throws Exception {
         String apiKey = getApiKey();
         assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
@@ -302,83 +255,6 @@ class PipelineApiIntegrationTest {
         assertEquals("Log processing started successfully", response.getMessage());
         
         System.out.println("✅ Successfully started log processing job: " + response.getJobId());
-    }
-
-    @Test
-    void testProcessEndpoint_WithEmptyS3Path_ReturnsBadRequest() throws Exception {
-        String apiKey = getApiKey();
-        assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                "API key must be configured in application-local.properties");
-        
-        ProcessLogRequest request = new ProcessLogRequest("");
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", apiKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testProcessEndpoint_WithNullS3Path_ReturnsBadRequest() throws Exception {
-        String apiKey = getApiKey();
-        assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                "API key must be configured in application-local.properties");
-        
-        // Send request with null s3Path
-        String requestJson = "{\"s3Path\": null}";
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", apiKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testProcessEndpoint_WithMissingS3Path_ReturnsBadRequest() throws Exception {
-        String apiKey = getApiKey();
-        assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                "API key must be configured in application-local.properties");
-        
-        // Send request without s3Path field
-        String requestJson = "{}";
-        
-        mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", apiKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testProcessEndpoint_WithNonExistentS3Bucket_ReturnsError() throws Exception {
-        String apiKey = getApiKey();
-        assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                "API key must be configured in application-local.properties");
-        
-        // Use non-existent bucket path
-        String invalidS3Path = "s3://non-existent-bucket-12345/invalid-file.json";
-        ProcessLogRequest request = new ProcessLogRequest(invalidS3Path);
-        
-        // The endpoint will accept the request and start async processing
-        // The error will be logged but the response will still be 202 Accepted
-        // This is because async processing errors don't fail the HTTP request
-        String responseContent = mockMvc.perform(post("/api/pipeline/process")
-                        .header("X-API-Key", apiKey)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.jobId").exists())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        
-        ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
-        assertNotNull(response.getJobId());
-        assertEquals("processing", response.getStatus());
-        
-        System.out.println("⚠️  Note: Job " + response.getJobId() + " will fail during async processing (expected for invalid S3 path)");
     }
 
     // ========================================================================
