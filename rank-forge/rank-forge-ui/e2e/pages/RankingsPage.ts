@@ -135,4 +135,36 @@ export class RankingsPage extends BasePage {
     await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 30000, state: 'visible' });
     console.log('[RankingsPage] "Top 25" filter applied');
   }
+
+  async clickMonthlyTab() {
+    console.log('[RankingsPage] Clicking Monthly tab');
+    await this.page.getByRole('link', { name: 'Monthly' }).click();
+    await this.waitForApiResponse('/api/rankings/leaderboard/monthly', 70000);
+    await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 30000, state: 'visible' });
+    console.log('[RankingsPage] Monthly tab clicked');
+  }
+
+  async clickAllTimeTab() {
+    console.log('[RankingsPage] Clicking All Time tab');
+    await this.page.getByRole('link', { name: 'All Time' }).click();
+    await this.waitForApiResponse('/api/rankings', 70000);
+    await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 30000, state: 'visible' });
+    console.log('[RankingsPage] All Time tab clicked');
+  }
+
+  async selectMonth(month: number) {
+    console.log(`[RankingsPage] Selecting month ${month}`);
+    await this.page.locator('#month-select').selectOption(month.toString());
+    await this.waitForApiResponse('/api/rankings/leaderboard/monthly', 70000);
+    await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 30000, state: 'visible' });
+    console.log(`[RankingsPage] Month ${month} selected`);
+  }
+
+  async selectYear(year: number) {
+    console.log(`[RankingsPage] Selecting year ${year}`);
+    await this.page.locator('#year-select').selectOption(year.toString());
+    await this.waitForApiResponse('/api/rankings/leaderboard/monthly', 70000);
+    await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 30000, state: 'visible' });
+    console.log(`[RankingsPage] Year ${year} selected`);
+  }
 }
