@@ -98,6 +98,29 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
     }
     
     /**
+     * Find all player stats entries for a specific game timestamp.
+     * Used for cascade deletion when a game is deleted.
+     * 
+     * @param gameTimestamp The game timestamp to match
+     * @return List of PlayerStatsEntity entries for that game
+     * @deprecated Use findByGameId instead for more confident deletion
+     */
+    @Deprecated
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE p.gameTimestamp = :gameTimestamp")
+    List<PlayerStatsEntity> findByGameTimestamp(@Param("gameTimestamp") Instant gameTimestamp);
+    
+    /**
+     * Find all player stats entries for a specific game by game ID.
+     * Used for cascade deletion when a game is deleted.
+     * This is more reliable than timestamp-based lookup.
+     * 
+     * @param gameId The game ID to match
+     * @return List of PlayerStatsEntity entries for that game
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE p.game.id = :gameId")
+    List<PlayerStatsEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
      * Find all player stats records within a specific month range (inclusive)
      * @param startOfMonth Start of month (00:00:00 UTC on first day)
      * @param endOfMonth End of month (23:59:59 UTC on last day)
