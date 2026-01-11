@@ -117,13 +117,13 @@ class AdminGameServiceTest {
             Long gameId = 1L;
             List<GameEventEntity> gameEvents = createGameEvents(game1, 3); // 3 rounds
             List<AccoladeEntity> accolades = createAccolades(game1, 5); // 5 accolades
-            List<PlayerStatsEntity> playerStats = createPlayerStats(game1Timestamp, 4); // 4 players
+            List<PlayerStatsEntity> game1Stats = createPlayerStats(game1, 4); // 4 players
 
             // Mock repository responses
             when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(gameId)).thenReturn(gameEvents);
             when(accoladeRepository.findByGameId(gameId)).thenReturn(accolades);
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(playerStats);
+            when(playerStatsRepository.findByGameId(gameId)).thenReturn(game1Stats);
 
             // When: Delete the game
             boolean result = adminGameService.deleteGame(gameId);
@@ -140,8 +140,8 @@ class AdminGameServiceTest {
             verify(accoladeRepository, times(1)).deleteAll(accolades);
 
             // Verify player stats deleted
-            verify(playerStatsRepository, times(1)).findByGameTimestamp(game1Timestamp);
-            verify(playerStatsRepository, times(1)).deleteAll(playerStats);
+            verify(playerStatsRepository, times(1)).findByGameId(gameId);
+            verify(playerStatsRepository, times(1)).deleteAll(game1Stats);
 
             // Verify game deleted
             verify(gameRepository, times(1)).delete(game1);
@@ -173,7 +173,7 @@ class AdminGameServiceTest {
             when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(gameId)).thenReturn(new ArrayList<>());
             when(accoladeRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(new ArrayList<>());
+            when(playerStatsRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
 
             // When
             boolean result = adminGameService.deleteGame(gameId);
@@ -186,30 +186,30 @@ class AdminGameServiceTest {
         }
 
         @Test
-        @DisplayName("Should only delete player stats for the specific game timestamp")
-        void shouldOnlyDeletePlayerStatsForSpecificGameTimestamp() {
-            // Given: Two games with different timestamps
+        @DisplayName("Should only delete player stats for the specific game ID")
+        void shouldOnlyDeletePlayerStatsForSpecificGameId() {
+            // Given: Two games with different IDs
             Long game1Id = 1L;
             Long game2Id = 2L;
 
             // Game1 stats
-            List<PlayerStatsEntity> game1Stats = createPlayerStats(game1Timestamp, 3);
-            // Game2 stats (different timestamp)
-            List<PlayerStatsEntity> game2Stats = createPlayerStats(game2Timestamp, 2);
+            List<PlayerStatsEntity> game1Stats = createPlayerStats(game1, 3);
+            // Game2 stats (different game)
+            List<PlayerStatsEntity> game2Stats = createPlayerStats(game2, 2);
 
             when(gameRepository.findById(game1Id)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(game1Id)).thenReturn(new ArrayList<>());
             when(accoladeRepository.findByGameId(game1Id)).thenReturn(new ArrayList<>());
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(game1Stats);
+            when(playerStatsRepository.findByGameId(game1Id)).thenReturn(game1Stats);
 
             // When: Delete game1
             adminGameService.deleteGame(game1Id);
 
             // Then: Only game1 stats should be deleted
-            verify(playerStatsRepository, times(1)).findByGameTimestamp(game1Timestamp);
+            verify(playerStatsRepository, times(1)).findByGameId(game1Id);
             verify(playerStatsRepository, times(1)).deleteAll(game1Stats);
             // Verify game2 stats were never touched
-            verify(playerStatsRepository, never()).findByGameTimestamp(game2Timestamp);
+            verify(playerStatsRepository, never()).findByGameId(game2Id);
         }
     }
 
@@ -251,7 +251,7 @@ class AdminGameServiceTest {
             when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(gameId)).thenReturn(events);
             when(accoladeRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(new ArrayList<>());
+            when(playerStatsRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
 
             // When
             adminGameService.deleteGame(gameId);
@@ -277,7 +277,7 @@ class AdminGameServiceTest {
             when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(gameId)).thenReturn(new ArrayList<>());
             when(accoladeRepository.findByGameId(gameId)).thenReturn(accolades);
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(new ArrayList<>());
+            when(playerStatsRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
 
             // When
             adminGameService.deleteGame(gameId);
@@ -296,16 +296,16 @@ class AdminGameServiceTest {
         }
 
         @Test
-        @DisplayName("Should delete all player stats for the game timestamp")
-        void shouldDeleteAllPlayerStatsForGameTimestamp() {
+        @DisplayName("Should delete all player stats for the game ID")
+        void shouldDeleteAllPlayerStatsForGameId() {
             // Given: Game with multiple players
             Long gameId = 1L;
-            List<PlayerStatsEntity> playerStats = createPlayerStats(game1Timestamp, 8); // 8 players
+            List<PlayerStatsEntity> playerStats = createPlayerStats(game1, 8); // 8 players
 
             when(gameRepository.findById(gameId)).thenReturn(Optional.of(game1));
             when(gameEventRepository.findAllByGameId(gameId)).thenReturn(new ArrayList<>());
             when(accoladeRepository.findByGameId(gameId)).thenReturn(new ArrayList<>());
-            when(playerStatsRepository.findByGameTimestamp(game1Timestamp)).thenReturn(playerStats);
+            when(playerStatsRepository.findByGameId(gameId)).thenReturn(playerStats);
 
             // When
             adminGameService.deleteGame(gameId);
@@ -317,10 +317,12 @@ class AdminGameServiceTest {
             List<PlayerStatsEntity> deletedStats = statsCaptor.getValue();
             assertEquals(8, deletedStats.size(), "Should delete all 8 player stats");
             
-            // Verify all stats have the correct timestamp
-            deletedStats.forEach(stat -> 
-                assertEquals(game1Timestamp, stat.getGameTimestamp(), 
-                    "Player stat should have the game's timestamp"));
+            // Verify all stats belong to the correct game
+            deletedStats.forEach(stat -> {
+                assertNotNull(stat.getGame(), "Player stat should have a game reference");
+                assertEquals(game1.getId(), stat.getGame().getId(), 
+                    "Player stat should belong to the deleted game");
+            });
         }
     }
 
@@ -423,16 +425,18 @@ class AdminGameServiceTest {
     }
 
     /**
-     * Create player stats for a game timestamp
+     * Create player stats for a game
      */
-    private List<PlayerStatsEntity> createPlayerStats(Instant gameTimestamp, int playerCount) {
+    private List<PlayerStatsEntity> createPlayerStats(GameEntity game, int playerCount) {
         List<PlayerStatsEntity> stats = new ArrayList<>();
+        Instant gameTimestamp = game.getGameOverTimestamp();
 
         for (int i = 0; i < playerCount; i++) {
             PlayerStatsEntity stat = new PlayerStatsEntity();
             stat.setId((long) (i + 1));
             stat.setPlayerId("[U:1:" + (1000000 + i) + "]");
             stat.setGameTimestamp(gameTimestamp);
+            stat.setGame(game); // Set game reference for confident deletion
             stat.setKills(10 + i);
             stat.setDeaths(5 + i);
             stat.setAssists(3 + i);

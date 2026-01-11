@@ -40,6 +40,11 @@ public class PlayerStatsEntity {
     @Column(name = "gameTimestamp", nullable = false)
     private Instant gameTimestamp;
     
+    // Relationship to GameEntity for confident deletion
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gameId")
+    private GameEntity game;
+    
     @Column(name = "kills", nullable = false)
     private Integer kills = 0;
     
@@ -190,5 +195,13 @@ public class PlayerStatsEntity {
     
     public void setGameTimestamp(Instant gameTimestamp) {
         this.gameTimestamp = gameTimestamp;
+    }
+    
+    public GameEntity getGame() {
+        return game;
+    }
+    
+    public void setGame(GameEntity game) {
+        this.game = game;
     }
 }

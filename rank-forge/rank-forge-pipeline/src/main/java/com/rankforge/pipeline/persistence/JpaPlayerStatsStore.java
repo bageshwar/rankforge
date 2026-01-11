@@ -25,6 +25,7 @@ import com.rankforge.core.events.RoundStartEvent;
 import com.rankforge.core.interfaces.GameEventListener;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
@@ -45,10 +46,18 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     
     private final PlayerStatsRepository repository;
     private final Map<String, PlayerStats> playerStatsMap;
+    private final EventProcessingContext context;
     
     public JpaPlayerStatsStore(PlayerStatsRepository repository) {
         this.repository = repository;
         this.playerStatsMap = new ConcurrentHashMap<>();
+        this.context = null; // For backward compatibility
+    }
+    
+    public JpaPlayerStatsStore(PlayerStatsRepository repository, EventProcessingContext context) {
+        this.repository = repository;
+        this.playerStatsMap = new ConcurrentHashMap<>();
+        this.context = context;
     }
     
     /**
@@ -92,10 +101,10 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     /**
      * Stores multiple player stats in batches
      * Always inserts new records to track progression over time
-     * Each record is associated with a game timestamp for historical tracking
+     * Each record is associated with a game entity for confident deletion
      */
     @Transactional
-    private void storeBatch(Collection<PlayerStats> stats, Instant gameTimestamp) {
+    private void storeBatch(Collection<PlayerStats> stats, Instant gameTimestamp, GameEntity game) {
         if (stats == null || stats.isEmpty()) {
             return;
         }
@@ -125,14 +134,16 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
             for (PlayerStats stat : uniqueStats.values()) {
                 PlayerStatsEntity entity = convertToEntity(stat);
                 entity.setGameTimestamp(gameTimestamp);
+                entity.setGame(game); // Set game reference for confident deletion
                 entity.setLastUpdated(stat.getLastUpdated() != null ? stat.getLastUpdated() : Instant.now());
                 entitiesToSave.add(entity);
             }
             
             // Always insert new records (never update) to track progression
             repository.saveAll(entitiesToSave);
-            logger.info("Batch stored {} player stats for game at {} (historical records)", 
+            logger.info("Batch stored {} player stats for game ID {} at {} (historical records)", 
                     entitiesToSave.size(), 
+                    game != null ? game.getId() : "unknown",
                     gameTimestamp);
             
         } catch (Exception e) {
@@ -182,7 +193,12 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
         Instant gameTimestamp = event.getTimestamp();
-        storeBatch(playerStatsMap.values(), gameTimestamp);
+        // Get the game entity from context if available (game is already persisted at this point)
+        GameEntity game = null;
+        if (context != null) {
+            game = context.getCurrentGame();
+        }
+        storeBatch(playerStatsMap.values(), gameTimestamp, game);
         playerStatsMap.clear();
     }
 

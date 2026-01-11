@@ -103,7 +103,20 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
      * 
      * @param gameTimestamp The game timestamp to match
      * @return List of PlayerStatsEntity entries for that game
+     * @deprecated Use findByGameId instead for more confident deletion
      */
+    @Deprecated
     @Query("SELECT p FROM PlayerStatsEntity p WHERE p.gameTimestamp = :gameTimestamp")
     List<PlayerStatsEntity> findByGameTimestamp(@Param("gameTimestamp") Instant gameTimestamp);
+    
+    /**
+     * Find all player stats entries for a specific game by game ID.
+     * Used for cascade deletion when a game is deleted.
+     * This is more reliable than timestamp-based lookup.
+     * 
+     * @param gameId The game ID to match
+     * @return List of PlayerStatsEntity entries for that game
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE p.game.id = :gameId")
+    List<PlayerStatsEntity> findByGameId(@Param("gameId") Long gameId);
 }

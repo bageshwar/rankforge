@@ -112,9 +112,9 @@ public class AdminGameService {
             logger.info("ADMIN_DELETE: Deleted {} accolades for game ID: {}", accoladeCount, gameId);
         }
         
-        // 3. Delete player stats entries that match this game's timestamp
-        // PlayerStats are stored with gameTimestamp matching the game's gameOverTimestamp
-        List<PlayerStatsEntity> playerStats = playerStatsRepository.findByGameTimestamp(gameTimestamp);
+        // 3. Delete player stats entries associated with this game
+        // Use gameId for confident deletion instead of timestamp
+        List<PlayerStatsEntity> playerStats = playerStatsRepository.findByGameId(gameId);
         int statsCount = playerStats.size();
         if (statsCount > 0) {
             playerStatsRepository.deleteAll(playerStats);

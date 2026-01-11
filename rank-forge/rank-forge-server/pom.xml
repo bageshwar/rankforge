@@ -34,8 +34,6 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>3.2.0</spring.boot.version>
-        <!-- Skip npm build - set to true to skip (defaults to false for normal builds) -->
-        <skip.npm>false</skip.npm>
     </properties>
 
     <dependencies>
@@ -108,7 +106,6 @@
     <build>
         <plugins>
             <!-- Frontend Maven Plugin - Build React UI -->
-            <!-- Skip during test phase by setting -Dskip.npm=true or using test profile -->
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
@@ -116,44 +113,37 @@
                 <configuration>
                     <workingDirectory>${project.parent.basedir}/rank-forge-ui</workingDirectory>
                     <installDirectory>${project.parent.basedir}/rank-forge-ui</installDirectory>
-                    <skip>${skip.npm}</skip>
                 </configuration>
                 <executions>
                     <!-- Install Node and npm -->
                     <execution>
                         <id>install node and npm</id>
-                        <phase>generate-resources</phase>
                         <goals>
                             <goal>install-node-and-npm</goal>
                         </goals>
                         <configuration>
                             <nodeVersion>v20.19.0</nodeVersion>
                             <npmVersion>10.8.2</npmVersion>
-                            <skip>${skip.npm}</skip>
                         </configuration>
                     </execution>
                     <!-- Install npm dependencies -->
                     <execution>
                         <id>npm install</id>
-                        <phase>generate-resources</phase>
                         <goals>
                             <goal>npm</goal>
                         </goals>
                         <configuration>
                             <arguments>install</arguments>
-                            <skip>${skip.npm}</skip>
                         </configuration>
                     </execution>
                     <!-- Build React app -->
                     <execution>
                         <id>npm run build</id>
-                        <phase>generate-resources</phase>
                         <goals>
                             <goal>npm</goal>
                         </goals>
                         <configuration>
                             <arguments>run build</arguments>
-                            <skip>${skip.npm}</skip>
                         </configuration>
                     </execution>
                 </executions>
@@ -253,21 +243,5 @@
             </plugin>
         </plugins>
     </build>
-
-    <!-- Profile to automatically skip npm during test phase -->
-    <profiles>
-        <profile>
-            <id>test</id>
-            <activation>
-                <property>
-                    <name>maven.test.skip</name>
-                    <value>false</value>
-                </property>
-            </activation>
-            <properties>
-                <skip.npm>true</skip.npm>
-            </properties>
-        </profile>
-    </profiles>
 
 </project>

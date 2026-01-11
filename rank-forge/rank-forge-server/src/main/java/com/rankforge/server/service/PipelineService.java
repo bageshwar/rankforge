@@ -101,7 +101,7 @@ public class PipelineService {
         jpaEventStore.setEntityManager(entityManager);
         EventStore eventStore = jpaEventStore;
         
-        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository);
+        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
         // Create ranking algorithm and service
