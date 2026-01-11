@@ -548,7 +548,7 @@ export const RankingsPage = () => {
             </tr>
           </thead>
           <tbody>
-            {getSortedRankings().map((player, displayIndex) => {
+            {getSortedRankings().map((player) => {
               // Use original rank from player data, not display position
               const originalRank = rankings.findIndex(p => p.playerId === player.playerId) + 1;
               const rankClass = originalRank === 1 ? 'rank-gold' : originalRank === 2 ? 'rank-silver' : originalRank === 3 ? 'rank-bronze' : '';
