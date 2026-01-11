@@ -178,6 +178,9 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring.boot.version}</version>
+                <configuration>
+                    <mainClass>com.rankforge.server.RankForgeServerApplication</mainClass>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -203,13 +206,24 @@
                         <javaVersion>Java 17</javaVersion>
                         <webContainer>Java SE</webContainer>
                     </runtime>
+                    <appSettings>
+                        <property>
+                            <name>JAVA_OPTS</name>
+                            <value>-Dserver.port=8080 -Dserver.startup.timeout=600</value>
+                        </property>
+                        <property>
+                            <name>SPRING_PROFILES_ACTIVE</name>
+                            <value>azure</value>
+                        </property>
+                    </appSettings>
                     <deployment>
                         <resources>
                             <resource>
                                 <directory>${project.basedir}/target</directory>
                                 <includes>
-                                    <include>*.jar</include>
+                                    <include>rank-forge-server-${project.version}.jar</include>
                                 </includes>
+                                <targetPath>app.jar</targetPath>
                             </resource>
                         </resources>
                     </deployment>
