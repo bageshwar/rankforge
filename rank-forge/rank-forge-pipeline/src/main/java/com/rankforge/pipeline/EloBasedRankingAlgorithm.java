@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Implementation of ranking algorithm based on ELO rating system
+ * Stateless class that can be safely shared across requests
+ * Note: Bean is configured in rank-forge-server module's CacheConfig
  * Author bageshwar.pn
  * Date 26/10/24
  */

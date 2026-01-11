@@ -91,4 +91,12 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
      */
     @Query("SELECT e FROM RoundEndEventEntity e WHERE e.game.id = :gameId ORDER BY e.timestamp ASC")
     List<RoundEndEventEntity> findRoundEndEventsByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find round end events for multiple games (by game IDs)
+     * @param gameIds List of game IDs
+     * @return List of RoundEndEventEntity for the specified games
+     */
+    @Query("SELECT e FROM RoundEndEventEntity e WHERE e.game.id IN :gameIds ORDER BY e.game.id ASC, e.timestamp ASC")
+    List<RoundEndEventEntity> findRoundEndEventsByGameIds(@Param("gameIds") List<Long> gameIds);
 }
