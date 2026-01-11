@@ -39,6 +39,7 @@ export const RankingsPage = () => {
   const [totalRounds, setTotalRounds] = useState<number>(0);
   const [totalPlayers, setTotalPlayers] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [loadingFilter, setLoadingFilter] = useState(false);
   const [limit, setLimit] = useState<number | null>(getLimitFromUrl());
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(getTabFromUrl());
@@ -96,9 +97,13 @@ export const RankingsPage = () => {
     loadRankings();
   }, [limit, activeTab, selectedYear, selectedMonth]);
 
-  const loadRankings = async () => {
+  const loadRankings = async (isFilterChange = false) => {
     try {
-      setLoading(true);
+      if (isFilterChange) {
+        setLoadingFilter(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
       
       if (activeTab === 'monthly') {
@@ -125,10 +130,12 @@ export const RankingsPage = () => {
         setTotalPlayers(response.totalPlayers);
       }
     } catch (err) {
-      setError('Failed to load rankings. Please try again later.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load rankings. Please try again later.';
+      setError(errorMessage);
       console.error('Error loading rankings:', err);
     } finally {
       setLoading(false);
+      setLoadingFilter(false);
     }
   };
 
@@ -221,21 +228,25 @@ export const RankingsPage = () => {
       <div className="rankings-tabs">
         <Link
           to={buildRankingsUrl({ tab: 'all-time' })}
-          className={`tab-btn ${activeTab === 'all-time' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'all-time' ? 'active' : ''} ${loadingFilter ? 'loading' : ''}`}
           onClick={(e) => {
             e.preventDefault();
             setActiveTab('all-time');
+            loadRankings(true);
           }}
+          aria-disabled={loadingFilter}
         >
           All Time
         </Link>
         <Link
           to={buildRankingsUrl({ tab: 'monthly' })}
-          className={`tab-btn ${activeTab === 'monthly' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'monthly' ? 'active' : ''} ${loadingFilter ? 'loading' : ''}`}
           onClick={(e) => {
             e.preventDefault();
             setActiveTab('monthly');
+            loadRankings(true);
           }}
+          aria-disabled={loadingFilter}
         >
           Monthly
         </Link>
@@ -250,7 +261,9 @@ export const RankingsPage = () => {
             onChange={(e) => {
               const newMonth = parseInt(e.target.value);
               setSelectedMonth(newMonth);
+              loadRankings(true);
             }}
+            disabled={loadingFilter}
           >
             {generateMonthOptions().map((month) => (
               <option key={month} value={month}>
@@ -265,7 +278,9 @@ export const RankingsPage = () => {
             onChange={(e) => {
               const newYear = parseInt(e.target.value);
               setSelectedYear(newYear);
+              loadRankings(true);
             }}
+            disabled={loadingFilter}
           >
             {generateYearOptions().map((year) => (
               <option key={year} value={year}>
@@ -273,6 +288,7 @@ export const RankingsPage = () => {
               </option>
             ))}
           </select>
+          {loadingFilter && <span className="loading-indicator">Loading...</span>}
         </div>
       )}
 
@@ -300,31 +316,37 @@ export const RankingsPage = () => {
       <div className="filter-controls">
         <Link
           to={buildRankingsUrl({ limit: null })}
-          className={`filter-btn ${!limit ? 'active' : ''}`}
+          className={`filter-btn ${!limit ? 'active' : ''} ${loadingFilter ? 'loading' : ''}`}
           onClick={(e) => {
             e.preventDefault();
             setLimit(null);
+            loadRankings(true);
           }}
+          aria-disabled={loadingFilter}
         >
           All Players
         </Link>
         <Link
           to={buildRankingsUrl({ limit: 10 })}
-          className={`filter-btn ${limit === 10 ? 'active' : ''}`}
+          className={`filter-btn ${limit === 10 ? 'active' : ''} ${loadingFilter ? 'loading' : ''}`}
           onClick={(e) => {
             e.preventDefault();
             setLimit(10);
+            loadRankings(true);
           }}
+          aria-disabled={loadingFilter}
         >
           Top 10
         </Link>
         <Link
           to={buildRankingsUrl({ limit: 25 })}
-          className={`filter-btn ${limit === 25 ? 'active' : ''}`}
+          className={`filter-btn ${limit === 25 ? 'active' : ''} ${loadingFilter ? 'loading' : ''}`}
           onClick={(e) => {
             e.preventDefault();
             setLimit(25);
+            loadRankings(true);
           }}
+          aria-disabled={loadingFilter}
         >
           Top 25
         </Link>

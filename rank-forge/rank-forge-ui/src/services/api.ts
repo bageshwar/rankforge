@@ -155,8 +155,12 @@ export interface LeaderboardResponseDTO {
 
 // Rankings API
 export const rankingsApi = {
-  getAll: async (): Promise<PlayerRankingDTO[]> => {
-    const response = await apiClient.get<PlayerRankingDTO[]>('/rankings');
+  /**
+   * Get all player rankings with summary statistics
+   * @deprecated Use getAllWithStats() for consistency. This method is kept for backward compatibility.
+   */
+  getAll: async (): Promise<LeaderboardResponseDTO> => {
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings');
     return response.data;
   },
 
@@ -165,8 +169,12 @@ export const rankingsApi = {
     return response.data;
   },
 
-  getTop: async (limit: number = 10): Promise<PlayerRankingDTO[]> => {
-    const response = await apiClient.get<PlayerRankingDTO[]>('/rankings/top', {
+  /**
+   * Get top N player rankings with summary statistics
+   * @deprecated Use getTopWithStats() for consistency. This method is kept for backward compatibility.
+   */
+  getTop: async (limit: number = 10): Promise<LeaderboardResponseDTO> => {
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/top', {
       params: { limit },
     });
     return response.data;

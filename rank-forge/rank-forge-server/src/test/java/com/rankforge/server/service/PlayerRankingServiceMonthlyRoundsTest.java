@@ -21,7 +21,6 @@ package com.rankforge.server.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.interfaces.RankingAlgorithm;
 import com.rankforge.core.models.PlayerStats;
-import com.rankforge.pipeline.EloBasedRankingAlgorithm;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
@@ -69,6 +68,9 @@ class PlayerRankingServiceMonthlyRoundsTest {
     
     private ObjectMapper objectMapper;
     
+    @Mock
+    private RankingAlgorithm rankingAlgorithm;
+    
     private PlayerRankingService playerRankingService;
     
     private Instant novemberStart;
@@ -81,7 +83,8 @@ class PlayerRankingServiceMonthlyRoundsTest {
                 playerStatsRepository, 
                 gameRepository, 
                 gameEventRepository, 
-                objectMapper
+                objectMapper,
+                rankingAlgorithm
         );
         
         // November 2025 boundaries

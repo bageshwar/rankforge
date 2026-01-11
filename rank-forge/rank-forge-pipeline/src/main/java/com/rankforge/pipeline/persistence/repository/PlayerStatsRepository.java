@@ -157,4 +157,20 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
      */
     @Query("SELECT COUNT(DISTINCT p.gameTimestamp) FROM PlayerStatsEntity p WHERE p.gameTimestamp >= :startOfMonth AND p.gameTimestamp <= :endOfMonth")
     long countTotalDistinctGamesInMonth(@Param("startOfMonth") Instant startOfMonth, @Param("endOfMonth") Instant endOfMonth);
+    
+    /**
+     * Count distinct games played by multiple players within a month range (batch query)
+     * Returns a map of playerId -> game count to avoid N+1 query problem
+     * @param playerIds List of player IDs to count games for
+     * @param startOfMonth Start of month (00:00:00 UTC on first day)
+     * @param endOfMonth End of month (23:59:59 UTC on last day)
+     * @return List of Object arrays where [0] = playerId (String), [1] = gameCount (Long)
+     */
+    @Query("SELECT p.playerId, COUNT(DISTINCT p.gameTimestamp) FROM PlayerStatsEntity p " +
+           "WHERE p.playerId IN :playerIds AND p.gameTimestamp >= :startOfMonth AND p.gameTimestamp <= :endOfMonth " +
+           "GROUP BY p.playerId")
+    List<Object[]> countDistinctGamesByPlayerIdsInMonth(
+            @Param("playerIds") List<String> playerIds,
+            @Param("startOfMonth") Instant startOfMonth,
+            @Param("endOfMonth") Instant endOfMonth);
 }

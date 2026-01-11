@@ -19,6 +19,7 @@
 package com.rankforge.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rankforge.core.interfaces.RankingAlgorithm;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
@@ -51,14 +52,17 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Mock
     private GameEventRepository gameEventRepository;
     
-    @Mock
     private ObjectMapper objectMapper;
+    
+    @Mock
+    private RankingAlgorithm rankingAlgorithm;
 
     private PlayerRankingService playerRankingService;
 
     @BeforeEach
     void setUp() {
-        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper);
+        objectMapper = new ObjectMapper();
+        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper, rankingAlgorithm);
     }
 
     @Test

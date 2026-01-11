@@ -34,9 +34,11 @@ import com.rankforge.server.dto.PlayerRankingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
@@ -57,16 +59,19 @@ public class PlayerRankingService {
     private final GameRepository gameRepository;
     private final GameEventRepository gameEventRepository;
     private final ObjectMapper objectMapper;
+    private final RankingAlgorithm rankingAlgorithm;
     
     @Autowired
     public PlayerRankingService(PlayerStatsRepository playerStatsRepository, 
                                GameRepository gameRepository,
                                GameEventRepository gameEventRepository,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               RankingAlgorithm rankingAlgorithm) {
         this.playerStatsRepository = playerStatsRepository;
         this.gameRepository = gameRepository;
         this.gameEventRepository = gameEventRepository;
         this.objectMapper = objectMapper;
+        this.rankingAlgorithm = rankingAlgorithm;
     }
 
     /**
@@ -102,7 +107,9 @@ public class PlayerRankingService {
     
     /**
      * Get all player rankings with summary statistics
+     * Cached for 1 minute as data changes when new games are processed
      */
+    @Cacheable(value = "allTimeLeaderboard", key = "'all-time'")
     public LeaderboardResponseDTO getAllPlayerRankingsWithStats() {
         List<PlayerRankingDTO> rankings = getAllPlayerRankings();
         long totalGames = playerStatsRepository.countTotalDistinctGames();
@@ -113,7 +120,9 @@ public class PlayerRankingService {
     
     /**
      * Get top N player rankings with summary statistics
+     * Cached for 1 minute as data changes when new games are processed
      */
+    @Cacheable(value = "topLeaderboard", key = "#limit")
     public LeaderboardResponseDTO getTopPlayerRankingsWithStats(int limit) {
         List<PlayerRankingDTO> rankings = getTopPlayerRankings(limit);
         long totalGames = playerStatsRepository.countTotalDistinctGames();
@@ -229,12 +238,20 @@ public class PlayerRankingService {
     
     /**
      * Get monthly player rankings with summary statistics
+     * 
+     * Caching Strategy:
+     * - Past months: Cached indefinitely (data doesn't change)
+     * - Current month: Not cached (data changes as new games are processed)
+     * 
      * @param year The year (e.g., 2026)
      * @param month The month (1-12)
      * @param limit Maximum number of results to return
      * @param offset Number of results to skip for pagination
      * @return LeaderboardResponseDTO with rankings and summary stats
      */
+    @Cacheable(value = "monthlyLeaderboard", 
+               key = "#year + '-' + #month + '-' + #limit + '-' + #offset",
+               condition = "T(java.time.LocalDate).of(#year, #month, 1).isBefore(T(java.time.LocalDate).now().withDayOfMonth(1))")
     public LeaderboardResponseDTO getMonthlyPlayerRankingsWithStats(int year, int month, int limit, int offset) {
         try {
             // Calculate month boundaries in UTC
@@ -277,9 +294,6 @@ public class PlayerRankingService {
             // Group records by player ID
             Map<String, List<PlayerStatsEntity>> playerRecordsMap = monthRecords.stream()
                     .collect(Collectors.groupingBy(PlayerStatsEntity::getPlayerId));
-            
-            // Create ranking algorithm instance
-            RankingAlgorithm rankingAlgorithm = new EloBasedRankingAlgorithm();
             
             List<PlayerStats> monthlyStatsList = new ArrayList<>();
             
@@ -395,13 +409,28 @@ public class PlayerRankingService {
             LOGGER.info("Computed monthly leaderboard: {} players total, returning {} (offset: {}, limit: {})", 
                     monthlyStatsList.size(), paginatedStats.size(), offset, limit);
             
+            // Batch query games counts for all players to avoid N+1 query problem
+            List<String> playerIds = paginatedStats.stream()
+                    .map(PlayerStats::getPlayerId)
+                    .collect(Collectors.toList());
+            
+            Map<String, Long> gamesCountMap = new HashMap<>();
+            if (!playerIds.isEmpty()) {
+                List<Object[]> gamesCounts = playerStatsRepository.countDistinctGamesByPlayerIdsInMonth(
+                        playerIds, startInstant, endInstant);
+                for (Object[] result : gamesCounts) {
+                    String playerId = (String) result[0];
+                    Long gameCount = (Long) result[1];
+                    gamesCountMap.put(playerId, gameCount);
+                }
+            }
+            
             // Convert to DTOs with games played count for the month
             List<PlayerRankingDTO> dtos = new ArrayList<>();
             for (PlayerStats stats : paginatedStats) {
                 String playerId = stats.getPlayerId();
-                // Count distinct games played in this month
-                long gamesPlayedInMonth = playerStatsRepository.countDistinctGamesByPlayerIdInMonth(
-                        playerId, startInstant, endInstant);
+                // Get games count from batch query result (default to 0 if not found)
+                long gamesPlayedInMonth = gamesCountMap.getOrDefault(playerId, 0L);
                 PlayerRankingDTO dto = convertToDTO(stats, (int) gamesPlayedInMonth);
                 dtos.add(dto);
             }
