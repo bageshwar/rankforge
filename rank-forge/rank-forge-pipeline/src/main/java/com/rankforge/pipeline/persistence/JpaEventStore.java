@@ -429,8 +429,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
             entityManager.flush(); // Flush to get the generated ID
             
             long gameTime = System.currentTimeMillis() - gameStartTime;
-            logger.info("Persisted GameEntity with ID {} for game on map {} (took {}ms)", 
-                    game.getId(), game.getMap(), gameTime);
             
             // Update all references to point to the managed entity
             // Important: must use the returned entity from merge
@@ -602,9 +600,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
             }
         }
         long accoladesTime = System.currentTimeMillis() - accoladesStart;
-        if (!accoladesToSave.isEmpty()) {
-            logger.info("Persisted {} accolades (took {}ms)", accoladesToSave.size(), accoladesTime);
-        }
         
         // Flush all pending changes to database
         long finalFlushStart = System.currentTimeMillis();
@@ -615,7 +610,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
         context.clear();
         
         long totalTime = System.currentTimeMillis() - startTime;
-        logger.info("Total persistGameData() time: {}ms", totalTime);
     }
     
     /**

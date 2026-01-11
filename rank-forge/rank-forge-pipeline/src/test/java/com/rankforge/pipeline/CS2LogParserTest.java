@@ -206,10 +206,9 @@ class CS2LogParserTest {
         void shouldParseRegularAssistEvent() {
 
 
-            // Given - assist events require coordinates
+            // Given - assist events do NOT have coordinates in log format
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
-                              "[1987 2835 124] assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\" " +
-                              "[2493 2090 133]";
+                              "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
 
             // When
@@ -237,61 +236,19 @@ class CS2LogParserTest {
             // Check assist type
             assertEquals(AssistEvent.AssistType.Regular, assistEvent.getAssistType());
             
-            // Verify coordinates are required and present
-            assertNotNull(assistEvent.getPlayer1X(), "Assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Y(), "Assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Z(), "Assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2X(), "Assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2Y(), "Assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2Z(), "Assist events must have coordinates");
-            
-            // Check coordinate values
-            assertEquals(Integer.valueOf(1987), assistEvent.getPlayer1X(), "Assisting player X coordinate");
-            assertEquals(Integer.valueOf(2835), assistEvent.getPlayer1Y(), "Assisting player Y coordinate");
-            assertEquals(Integer.valueOf(124), assistEvent.getPlayer1Z(), "Assisting player Z coordinate");
-            assertEquals(Integer.valueOf(2493), assistEvent.getPlayer2X(), "Victim X coordinate");
-            assertEquals(Integer.valueOf(2090), assistEvent.getPlayer2Y(), "Victim Y coordinate");
-            assertEquals(Integer.valueOf(133), assistEvent.getPlayer2Z(), "Victim Z coordinate");
+            // Verify assist events do NOT have coordinates (they're not in the log format)
+            assertNull(assistEvent.getPlayer1X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Assist events do not have coordinates");
         }
         
         @Test
-        @DisplayName("Should parse flash assist event with coordinates correctly")
-        void shouldParseFlashAssistEventWithCoordinates() {
-            // Given - flash assist event with coordinates (required)
-            String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
-                              "[1987 2835 124] flash-assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\" " +
-                              "[2493 2090 133]";
-            initiateGameEventParsing(logContent);
-
-            // When
-            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 0);
-
-            // Then
-            assertTrue(result.isPresent());
-            AssistEvent assistEvent = (AssistEvent) result.get().getGameEvent();
-            assertEquals(AssistEvent.AssistType.Flash, assistEvent.getAssistType());
-            
-            // Verify coordinates are required and present
-            assertNotNull(assistEvent.getPlayer1X(), "Flash assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Y(), "Flash assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Z(), "Flash assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2X(), "Flash assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2Y(), "Flash assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer2Z(), "Flash assist events must have coordinates");
-            
-            // Check coordinate values
-            assertEquals(Integer.valueOf(1987), assistEvent.getPlayer1X(), "Assisting player X coordinate");
-            assertEquals(Integer.valueOf(2835), assistEvent.getPlayer1Y(), "Assisting player Y coordinate");
-            assertEquals(Integer.valueOf(124), assistEvent.getPlayer1Z(), "Assisting player Z coordinate");
-            assertEquals(Integer.valueOf(2493), assistEvent.getPlayer2X(), "Victim X coordinate");
-            assertEquals(Integer.valueOf(2090), assistEvent.getPlayer2Y(), "Victim Y coordinate");
-            assertEquals(Integer.valueOf(133), assistEvent.getPlayer2Z(), "Victim Z coordinate");
-        }
-
-        @Test
         @DisplayName("Should parse flash assist event correctly")
         void shouldParseFlashAssistEvent() {
-            // Given
+            // Given - flash assist event (no coordinates in log format)
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "flash-assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -303,15 +260,22 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             AssistEvent assistEvent = (AssistEvent) result.get().getGameEvent();
             assertEquals(AssistEvent.AssistType.Flash, assistEvent.getAssistType());
+            
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Flash assist events do not have coordinates");
         }
 
         @Test
         @DisplayName("Should parse assist event with BOT correctly")
         void shouldParseAssistEventWithBot() {
-            // Given - coordinates are required even for BOT assists
+            // Given - assist events do NOT have coordinates (even for BOT)
             String logContent = "L 04/20/2024 - 17:52:34: \"Bot Helper<9><BOT><CT>\" " +
-                              "[100 200 50] assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\" " +
-                              "[300 400 60]";
+                              "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
 
             // When
@@ -326,13 +290,13 @@ class CS2LogParserTest {
             assertNull(assister.getSteamId());
             assertTrue(assister.isBot());
             
-            // Verify coordinates are required and present
-            assertNotNull(assistEvent.getPlayer1X(), "BOT assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Y(), "BOT assist events must have coordinates");
-            assertNotNull(assistEvent.getPlayer1Z(), "BOT assist events must have coordinates");
-            assertEquals(Integer.valueOf(100), assistEvent.getPlayer1X());
-            assertEquals(Integer.valueOf(200), assistEvent.getPlayer1Y());
-            assertEquals(Integer.valueOf(50), assistEvent.getPlayer1Z());
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "BOT assist events do not have coordinates");
         }
     }
 

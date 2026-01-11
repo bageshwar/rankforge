@@ -303,16 +303,16 @@ public class EventProcessingContext {
      */
     private void logRoundSummary() {
         String map = currentGame != null ? currentGame.getMap() : "unknown";
-        logger.info("=== ROUND SUMMARY for game on {} ===", map);
-        logger.info("Total rounds: {}", roundNumber);
-        logger.info("Events without round reference: {}", eventsWithoutRound);
+        logger.debug("=== ROUND SUMMARY for game on {} ===", map);
+        logger.debug("Total rounds: {}", roundNumber);
+        logger.debug("Events without round reference: {}", eventsWithoutRound);
         
         int totalWithRound = 0;
         for (Map.Entry<RoundStartEventEntity, Integer> entry : roundEventCounts.entrySet()) {
             totalWithRound += entry.getValue();
         }
-        logger.info("Total events with round reference: {}", totalWithRound);
-        logger.info("Total pending entities: {}", pendingEntities.size());
+        logger.debug("Total events with round reference: {}", totalWithRound);
+        logger.debug("Total pending entities: {}", pendingEntities.size());
         
         // Count entities by type
         Map<String, Integer> typeCounts = new HashMap<>();
@@ -329,10 +329,10 @@ public class EventProcessingContext {
             }
         }
         
-        logger.info("Events WITH roundStart reference: {}", withRoundRef);
-        logger.info("Events WITHOUT roundStart reference: {}", withoutRoundRef);
-        logger.info("Event type breakdown: {}", typeCounts);
-        logger.info("=== END ROUND SUMMARY ===");
+        logger.debug("Events WITH roundStart reference: {}", withRoundRef);
+        logger.debug("Events WITHOUT roundStart reference: {}", withoutRoundRef);
+        logger.debug("Event type breakdown: {}", typeCounts);
+        logger.debug("=== END ROUND SUMMARY ===");
     }
     
     // Getters

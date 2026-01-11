@@ -101,8 +101,8 @@ class UnprocessedEventsLoggerTest {
         
         // Track processed and unprocessed lines
         Set<String> processedEventTypes = new HashSet<>();
-        Set<String> unprocessedLines = new LinkedHashSet<>(); // Use LinkedHashSet to preserve order
-        Map<String, Integer> unprocessedLineCounts = new HashMap<>();
+        // Map from event pattern to count and example lines
+        Map<String, EventGroup> unprocessedEventGroups = new HashMap<>();
         
         int processedCount = 0;
         int unprocessedCount = 0;
@@ -136,8 +136,9 @@ class UnprocessedEventsLoggerTest {
                 } else {
                     // This line was not processed - check if it's a known skip pattern
                     if (!shouldSkipLine(logContent)) {
-                        unprocessedLines.add(logContent);
-                        unprocessedLineCounts.put(logContent, unprocessedLineCounts.getOrDefault(logContent, 0) + 1);
+                        String eventPattern = normalizeEventPattern(logContent);
+                        unprocessedEventGroups.computeIfAbsent(eventPattern, k -> new EventGroup())
+                                .increment();
                         unprocessedCount++;
                     }
                 }
@@ -154,28 +155,117 @@ class UnprocessedEventsLoggerTest {
         logger.info("Total lines processed: {}", lines.size());
         logger.info("Successfully processed events: {}", processedCount);
         logger.info("Unprocessed lines: {}", unprocessedCount);
+        logger.info("Unprocessed event groups (unique patterns): {}", unprocessedEventGroups.size());
         logger.info("Error lines: {}", errorCount);
         logger.info("");
         logger.info("Processed event types: {}", processedEventTypes);
         logger.info("");
         
-        // Log unique unprocessed lines
+        // Log grouped unprocessed events
         logger.info("=".repeat(80));
-        logger.info("UNIQUE UNPROCESSED EVENT LINES ({} unique)", unprocessedLines.size());
+        logger.info("UNPROCESSED EVENT PATTERNS ({} unique patterns)", unprocessedEventGroups.size());
         logger.info("=".repeat(80));
         
         // Sort by frequency (most common first) for easier analysis
-        List<Map.Entry<String, Integer>> sortedUnprocessed = unprocessedLineCounts.entrySet().stream()
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+        List<Map.Entry<String, EventGroup>> sortedUnprocessed = unprocessedEventGroups.entrySet().stream()
+                .sorted(Map.Entry.<String, EventGroup>comparingByValue(
+                    Comparator.comparing((EventGroup g) -> g.count).reversed()))
                 .collect(Collectors.toList());
         
-        for (Map.Entry<String, Integer> entry : sortedUnprocessed) {
-            logger.info("[Count: {}] {}", entry.getValue(), entry.getKey());
+        for (Map.Entry<String, EventGroup> entry : sortedUnprocessed) {
+            EventGroup group = entry.getValue();
+            logger.info("[Count: {}] {}", group.count, entry.getKey());
         }
         
         logger.info("=".repeat(80));
         logger.info("END OF UNPROCESSED EVENTS REPORT");
         logger.info("=".repeat(80));
+    }
+    
+    /**
+     * Normalize a log line to extract the event pattern.
+     * Replaces variable parts (player names, IDs, coordinates, timestamps, weapons, items) with placeholders.
+     */
+    private String normalizeEventPattern(String logContent) {
+        // Remove timestamp: "L MM/DD/YYYY - HH:MM:SS: " -> "L <DATE> - <TIME>: "
+        String pattern = logContent.replaceAll("L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}:", "L <DATE> - <TIME>:");
+        
+        // Generalize accolade events: "ACCOLADE, FINAL: {3k}, PlayerName<ID>, ..." -> "ACCOLADE, FINAL: {<TYPE>}, <PLAYER><ID>, ..."
+        // Format: ACCOLADE, FINAL: {type}, PlayerName<ID>, VALUE: X, POS: Y, SCORE: Z
+        if (pattern.contains("ACCOLADE, FINAL:")) {
+            // Replace accolade type: {3k} -> {<TYPE>}
+            pattern = pattern.replaceAll("ACCOLADE, FINAL: \\{[^}]+\\}", "ACCOLADE, FINAL: {<TYPE>}");
+            // Replace player name and ID in accolade: "PlayerName<ID>" -> "<PLAYER><ID>"
+            // Match: any text before <, then <, then digits, then >
+            pattern = pattern.replaceAll("([^<,\\t]+)<(\\d+)>", "<PLAYER><ID>");
+        }
+        
+        // Replace player names and IDs: "PlayerName<ID><[U:1:123456]><TEAM>" -> "<PLAYER><ID><<STEAM_ID>><TEAM>"
+        pattern = pattern.replaceAll("\"[^\"]+<\\d+><(?:\\[U:\\d+:\\d+\\]|BOT)><(?:CT|TERRORIST)>\"", "\"<PLAYER><ID><<STEAM_ID>><TEAM>\"");
+        
+        // Replace coordinates: "[123 456 789]" -> "[<COORDS>]"
+        pattern = pattern.replaceAll("\\[-?\\d+ -?\\d+ -?\\d+\\]", "[<COORDS>]");
+        
+        // Generalize "picked up" events: "picked up \"knife\"" -> "picked up \"<WEAPON>\""
+        pattern = pattern.replaceAll("picked up \"[^\"]+\"", "picked up \"<WEAPON>\"");
+        
+        // Generalize "purchased" events: "purchased \"item_assaultsuit\"" -> "purchased \"<ITEM>\""
+        pattern = pattern.replaceAll("purchased \"[^\"]+\"", "purchased \"<ITEM>\"");
+        
+        // Generalize "threw" events: "threw smokegrenade" -> "threw <PROJECTILE>"
+        // Also handles: "threw molotov", "threw decoy", etc.
+        pattern = pattern.replaceAll("threw \\w+", "threw <PROJECTILE>");
+        
+        // Generalize sv_throw_* events: "sv_throw_flashgrenade" -> "sv_throw_<PROJECTILE>"
+        pattern = pattern.replaceAll("sv_throw_\\w+", "sv_throw_<PROJECTILE>");
+        
+        // Generalize projectile spawned events: "Molotov projectile spawned" -> "projectile spawned"
+        // Also handles: "Flashbang projectile spawned", "Smokegrenade projectile spawned", etc.
+        pattern = pattern.replaceAll("\\w+ projectile spawned", "projectile spawned");
+        
+        // Generalize money change events: "money change 123-456 = $789" -> "money change <NUM>-<NUM> = $<NUM>"
+        pattern = pattern.replaceAll("money change \\d+-\\d+ = \\$\\d+", "money change <NUM>-<NUM> = $<NUM>");
+        
+        // Generalize purchase info in money change: "(purchase: weapon_hegrenade)" -> "(purchase: <ITEM>)"
+        pattern = pattern.replaceAll("\\(purchase: [^\\)]+\\)", "(purchase: <ITEM>)");
+        
+        // Generalize "left buyzone" events: "left buyzone with [ weapon_knife weapon_usp_silencer ]" -> "left buyzone with [ <WEAPONS> ]"
+        pattern = pattern.replaceAll("left buyzone with \\[ [^\\]]+ \\]", "left buyzone with [ <WEAPONS> ]");
+        
+        // Replace numbers in parentheses: "(damage \"123\")" -> "(damage \"<NUM>\")"
+        pattern = pattern.replaceAll("\\([^\"]+\"\\d+\"\\)", "(<PARAM>\"<NUM>\")");
+        
+        // Replace other quoted strings that might be specific values: "some value" -> "<VALUE>"
+        // But be careful not to replace already normalized patterns
+        pattern = pattern.replaceAll("\"([^\"]+)\"", "\"<VALUE>\"");
+        
+        // Collapse sequences of numbers (with optional decimals and signs) into a single placeholder
+        // This groups events like "sv_throw_<PROJECTILE> 1.2 3.4 -5.6 ..." into "sv_throw_<PROJECTILE> <NUMBERS>"
+        // Match sequences of 2+ numbers (with optional decimals and signs) separated by spaces
+        // Use a more greedy approach to capture the entire sequence
+        pattern = pattern.replaceAll("(-?\\d+(?:\\.\\d+)?(?:\\s+-?\\d+(?:\\.\\d+)?)+)", "<NUMBERS>");
+        
+        // Replace standalone numbers that might be IDs or values (but not in already normalized patterns)
+        pattern = pattern.replaceAll("\\b\\d+\\b", "<NUM>");
+        
+        // Clean up multiple spaces
+        pattern = pattern.replaceAll("\\s+", " ");
+        
+        // Clean up multiple <NUMBERS> placeholders (shouldn't happen, but just in case)
+        pattern = pattern.replaceAll("<NUMBERS>\\s*<NUMBERS>", "<NUMBERS>");
+        
+        return pattern.trim();
+    }
+    
+    /**
+     * Helper class to group similar events together
+     */
+    private static class EventGroup {
+        int count = 0;
+        
+        void increment() {
+            count++;
+        }
     }
     
     /**
@@ -233,6 +323,19 @@ class UnprocessedEventsLoggerTest {
             lowerContent.contains("json_begin") ||
             lowerContent.contains("json_end") ||
             lowerContent.contains("player_") ||
+            lowerContent.contains("server_cvar") ||
+            lowerContent.contains("steamauth") ||
+            lowerContent.contains("cvar") ||
+            lowerContent.contains("loading map") ||
+            lowerContent.contains("switched from team") ||
+            lowerContent.contains("vote") ||
+            lowerContent.contains("rcon from") ||
+            lowerContent.contains("steam userid validated") ||
+            lowerContent.contains("disconnected") ||
+            lowerContent.contains("starting freeze period") ||
+            lowerContent.contains("left buyzone") ||
+            lowerContent.contains("connected, address") ||
+            lowerContent.contains("say_team") ||
             lowerContent.trim().isEmpty()) {
             return true;
         }
