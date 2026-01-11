@@ -123,7 +123,16 @@ export class GameDetailsPage extends BasePage {
 
   async getPlayerStatData(index: number) {
     const row = await this.getPlayerStatRow(index);
-    const playerName = await row.locator('.player-name-cell').textContent();
+    // Get player name from the link or the cell (excluding rank icon)
+    const playerLink = row.locator('.player-profile-link');
+    let playerName: string | null = null;
+    if (await playerLink.count() > 0) {
+      playerName = await playerLink.textContent();
+    } else {
+      // If no link, get text from cell and remove rank icon text
+      const cellText = await row.locator('.player-name-cell').textContent();
+      playerName = cellText?.replace(/[🥇🥈🥉]/g, '').trim() || null;
+    }
     const kills = await row.locator('.kills-cell').textContent();
     const deaths = await row.locator('.deaths-cell').textContent();
     const assists = await row.locator('.assists-cell').textContent();
@@ -136,6 +145,20 @@ export class GameDetailsPage extends BasePage {
       assists: assists?.trim() || '',
       kd: kd?.trim() || '',
     };
+  }
+
+  async getPlayerRowClass(index: number): Promise<string | null> {
+    const row = await this.getPlayerStatRow(index);
+    return await row.getAttribute('class');
+  }
+
+  async getRankIcon(index: number): Promise<string | null> {
+    const row = await this.getPlayerStatRow(index);
+    const rankIcon = row.locator('.rank-icon');
+    if (await rankIcon.count() > 0) {
+      return await rankIcon.textContent();
+    }
+    return null;
   }
 
   async clickPlayerLink(index: number) {

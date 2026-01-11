@@ -138,6 +138,59 @@ test.describe('Game Details Page', () => {
       console.log('[TEST] ✓ Player statistics data is valid');
     }
 
+    // Assert player statistics are sorted by kills (descending)
+    console.log('[TEST] Asserting player statistics are sorted by kills (descending)');
+    if (playerStatsCount > 1) {
+      const firstPlayer = await gameDetailsPage.getPlayerStatData(0);
+      const secondPlayer = await gameDetailsPage.getPlayerStatData(1);
+      const firstKills = parseInt(firstPlayer.kills) || 0;
+      const secondKills = parseInt(secondPlayer.kills) || 0;
+      expect(firstKills).toBeGreaterThanOrEqual(secondKills);
+      console.log(`[TEST] ✓ First player has ${firstKills} kills, second has ${secondKills} kills (sorted correctly)`);
+      
+      // Verify all players are sorted
+      let previousKills = firstKills;
+      for (let i = 1; i < Math.min(playerStatsCount, 5); i++) {
+        const playerStat = await gameDetailsPage.getPlayerStatData(i);
+        const currentKills = parseInt(playerStat.kills) || 0;
+        expect(currentKills).toBeLessThanOrEqual(previousKills);
+        previousKills = currentKills;
+      }
+      console.log('[TEST] ✓ All players are sorted by kills in descending order');
+    } else {
+      console.log('[TEST] ⚠ Only one player found, skipping sort verification');
+    }
+
+    // Assert top 3 players have gold/silver/bronze styling
+    console.log('[TEST] Asserting top 3 players have gold/silver/bronze styling');
+    if (playerStatsCount >= 1) {
+      // Check rank 1 (gold)
+      const rank1Class = await gameDetailsPage.getPlayerRowClass(0);
+      expect(rank1Class).toContain('rank-gold');
+      const rank1Icon = await gameDetailsPage.getRankIcon(0);
+      expect(rank1Icon).toBe('🥇');
+      console.log('[TEST] ✓ Rank 1 player has gold styling and 🥇 icon');
+    }
+    if (playerStatsCount >= 2) {
+      // Check rank 2 (silver)
+      const rank2Class = await gameDetailsPage.getPlayerRowClass(1);
+      expect(rank2Class).toContain('rank-silver');
+      const rank2Icon = await gameDetailsPage.getRankIcon(1);
+      expect(rank2Icon).toBe('🥈');
+      console.log('[TEST] ✓ Rank 2 player has silver styling and 🥈 icon');
+    }
+    if (playerStatsCount >= 3) {
+      // Check rank 3 (bronze)
+      const rank3Class = await gameDetailsPage.getPlayerRowClass(2);
+      expect(rank3Class).toContain('rank-bronze');
+      const rank3Icon = await gameDetailsPage.getRankIcon(2);
+      expect(rank3Icon).toBe('🥉');
+      console.log('[TEST] ✓ Rank 3 player has bronze styling and 🥉 icon');
+    }
+    if (playerStatsCount < 3) {
+      console.log(`[TEST] ⚠ Only ${playerStatsCount} player(s) found, skipping rank 3 verification`);
+    }
+
     // Assert accolades section (if it exists)
     console.log('[TEST] Asserting accolades section');
     const accoladesVisible = await gameDetailsPage.accoladesSection().isVisible();
