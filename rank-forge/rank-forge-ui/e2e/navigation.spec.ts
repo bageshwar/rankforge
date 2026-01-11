@@ -124,9 +124,12 @@ test.describe('Navigation - Profile Links', () => {
         console.log('[TEST] ✓ Player link in event timeline works');
         
         // Navigate back to round details
+        console.log('[TEST] Navigating back to round details');
         await page.goBack();
         await page.waitForURL(/.*\/games\/\d+\/rounds\/\d+/, { timeout: 30000 });
         await page.waitForSelector('.round-header', { timeout: 30000 });
+        await page.waitForLoadState('networkidle', { timeout: 70000 });
+        console.log('[TEST] ✓ Back navigation complete, round details page loaded');
       }
     } else {
       console.log('[TEST] ⚠ No events found, skipping event timeline link test');
@@ -134,14 +137,21 @@ test.describe('Navigation - Profile Links', () => {
 
     // Test player link in kill feed
     console.log('[TEST] Testing player link in kill feed');
-    const killFeedVisible = await roundDetailsPage.killFeedSection().isVisible();
+    // Recreate page object after navigation to ensure it's fresh
+    const roundDetailsPageAfterNav = new RoundDetailsPage(page);
+    // Wait for kill feed section to be ready
+    await page.waitForLoadState('networkidle', { timeout: 70000 });
+    const killFeedVisible = await roundDetailsPageAfterNav.killFeedSection().isVisible();
     if (killFeedVisible) {
-      const killFeedCount = await roundDetailsPage.getKillFeedCount();
+      const killFeedCount = await roundDetailsPageAfterNav.getKillFeedCount();
       if (killFeedCount > 0) {
-        await roundDetailsPage.clickKillFeedPlayerLink(0, 'killer');
+        console.log('[TEST] Clicking kill feed player link');
+        await roundDetailsPageAfterNav.clickKillFeedPlayerLink(0, 'killer');
         await expect(page).toHaveURL(/.*\/players\/\d+/);
         await expect(page.locator('.player-name')).toBeVisible();
         console.log('[TEST] ✓ Player link in kill feed works');
+      } else {
+        console.log('[TEST] ⚠ No kill feed items found');
       }
     } else {
       console.log('[TEST] ⚠ Kill feed not visible, skipping kill feed link test');

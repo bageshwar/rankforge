@@ -74,6 +74,8 @@ test.describe('Rankings Page', () => {
     }
     console.log('[TEST] ✓ Statistics are valid for multiple players');
 
+    // Ensure page is fully idle before test completes
+    await page.waitForLoadState('networkidle', { timeout: 70000 });
     console.log('[TEST] ✓ All rankings page assertions passed');
   });
 

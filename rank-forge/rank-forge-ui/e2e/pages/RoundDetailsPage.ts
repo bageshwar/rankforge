@@ -115,11 +115,23 @@ export class RoundDetailsPage extends BasePage {
   }
 
   async clickEventPlayerLink(index: number, linkType: 'attacker' | 'victim' | 'assister' | 'bomber' = 'attacker') {
+    console.log(`[RoundDetailsPage] Clicking event player link (${linkType}) for event at index ${index}`);
+    // Wait for event cards to be visible
+    await this.eventCards().first().waitFor({ state: 'visible', timeout: 30000 });
     const card = await this.getEventCard(index);
     const playerLink = card.locator(`.player-link.${linkType}`);
+    
+    // Wait for the link to be visible
+    await playerLink.waitFor({ state: 'visible', timeout: 30000 });
+    
     if (await playerLink.count() > 0) {
       await playerLink.click();
+      console.log(`[RoundDetailsPage] Event player link clicked, waiting for navigation`);
       await this.waitForLoadState();
+      await this.waitForApiResponse(new RegExp(`.*/api/players/.*`), 70000);
+      console.log(`[RoundDetailsPage] Navigated to player profile from event timeline (${linkType})`);
+    } else {
+      console.log(`[RoundDetailsPage] ⚠ No player link found in event card at index ${index}`);
     }
   }
 
@@ -133,12 +145,24 @@ export class RoundDetailsPage extends BasePage {
   }
 
   async clickKillFeedPlayerLink(index: number, linkType: 'killer' | 'victim' = 'killer') {
+    console.log(`[RoundDetailsPage] Clicking kill feed player link (${linkType}) for item at index ${index}`);
+    // Wait for kill feed items to be visible
+    await this.killFeedItems().first().waitFor({ state: 'visible', timeout: 30000 });
     const item = await this.getKillFeedItem(index);
     const linkSelector = linkType === 'killer' ? '.killer-name' : '.victim-name';
     const playerLink = item.locator(linkSelector);
+    
+    // Wait for the link to be visible
+    await playerLink.waitFor({ state: 'visible', timeout: 30000 });
+    
     if (await playerLink.count() > 0) {
       await playerLink.click();
+      console.log(`[RoundDetailsPage] Kill feed player link clicked, waiting for navigation`);
       await this.waitForLoadState();
+      await this.waitForApiResponse(new RegExp(`.*/api/players/.*`), 70000);
+      console.log(`[RoundDetailsPage] Navigated to player profile from kill feed (${linkType})`);
+    } else {
+      console.log(`[RoundDetailsPage] ⚠ No player link found in kill feed item at index ${index}`);
     }
   }
 }
