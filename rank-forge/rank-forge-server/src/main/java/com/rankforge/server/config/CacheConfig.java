@@ -20,12 +20,19 @@ package com.rankforge.server.config;
 
 import com.rankforge.core.interfaces.RankingAlgorithm;
 import com.rankforge.pipeline.EloBasedRankingAlgorithm;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurerSupport;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Collection;
+import java.util.Collections;
 
 /**
  * Cache configuration for RankForge Server
@@ -52,23 +59,121 @@ import org.springframework.context.annotation.Configuration;
 @EnableCaching
 public class CacheConfig extends CachingConfigurerSupport {
     
+    private static final Logger LOGGER = LoggerFactory.getLogger(CacheConfig.class);
+    
     /**
-     * Configure cache manager
+     * Configure cache manager with logging
      * Using ConcurrentMapCacheManager for simple in-memory caching
      * For production with high traffic, consider Redis or EhCache
      */
     @Bean
     @Override
     public CacheManager cacheManager() {
-        ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
-        // Define cache names
-        cacheManager.setCacheNames(java.util.Arrays.asList(
-            "monthlyLeaderboard",
-            "allTimeLeaderboard",
-            "topLeaderboard"
-        ));
-        cacheManager.setAllowNullValues(false);
-        return cacheManager;
+        return new LoggingCacheManager();
+    }
+    
+    /**
+     * Custom CacheManager that logs cache hits and misses
+     */
+    private static class LoggingCacheManager implements CacheManager {
+        private final ConcurrentMapCacheManager delegate;
+        
+        public LoggingCacheManager() {
+            this.delegate = new ConcurrentMapCacheManager();
+            this.delegate.setCacheNames(java.util.Arrays.asList(
+                "monthlyLeaderboard",
+                "allTimeLeaderboard",
+                "topLeaderboard"
+            ));
+            this.delegate.setAllowNullValues(false);
+        }
+        
+        @Override
+        public Cache getCache(String name) {
+            Cache cache = delegate.getCache(name);
+            if (cache != null) {
+                return new LoggingCache(cache);
+            }
+            return null;
+        }
+        
+        @Override
+        public Collection<String> getCacheNames() {
+            return delegate.getCacheNames();
+        }
+    }
+    
+    /**
+     * Cache wrapper that logs cache operations
+     */
+    private static class LoggingCache implements Cache {
+        private final Cache delegate;
+        private static final Logger CACHE_LOGGER = LoggerFactory.getLogger("Cache");
+        
+        public LoggingCache(Cache delegate) {
+            this.delegate = delegate;
+        }
+        
+        @Override
+        public String getName() {
+            return delegate.getName();
+        }
+        
+        @Override
+        public Object getNativeCache() {
+            return delegate.getNativeCache();
+        }
+        
+        @Override
+        public ValueWrapper get(Object key) {
+            ValueWrapper value = delegate.get(key);
+            if (value != null) {
+                CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+            } else {
+                CACHE_LOGGER.debug("Cache MISS: cache='{}', key='{}'", getName(), key);
+            }
+            return value;
+        }
+        
+        @Override
+        public <T> T get(Object key, Class<T> type) {
+            T value = delegate.get(key, type);
+            if (value != null) {
+                CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+            } else {
+                CACHE_LOGGER.debug("Cache MISS: cache='{}', key='{}'", getName(), key);
+            }
+            return value;
+        }
+        
+        @Override
+        public <T> T get(Object key, java.util.concurrent.Callable<T> valueLoader) {
+            // This method is called when cache miss occurs and value needs to be loaded
+            CACHE_LOGGER.debug("Cache MISS - loading value: cache='{}', key='{}'", getName(), key);
+            T value = delegate.get(key, valueLoader);
+            if (value != null) {
+                CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+            }
+            return value;
+        }
+        
+        @Override
+        public void put(Object key, Object value) {
+            delegate.put(key, value);
+            CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+        }
+        
+        @Override
+        public void evict(Object key) {
+            delegate.evict(key);
+            CACHE_LOGGER.info("Cache EVICT: cache='{}', key='{}'", getName(), key);
+        }
+        
+        @Override
+        public void clear() {
+            delegate.clear();
+            CACHE_LOGGER.info("Cache CLEAR: cache='{}'", getName());
+        }
     }
     
     /**

@@ -45,6 +45,12 @@ export const RankingsPage = () => {
   const [activeTab, setActiveTab] = useState<TabType>(getTabFromUrl());
   const [selectedYear, setSelectedYear] = useState<number>(getYearFromUrl());
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonthFromUrl());
+  
+  // Sorting state - default to rank descending (higher rank/ELO is better)
+  type SortColumn = 'rank' | 'elo' | 'kd' | 'kills' | 'deaths' | 'assists' | 'hs' | 'rounds' | 'games' | 'clutches' | 'damage' | null;
+  type SortDirection = 'asc' | 'desc';
+  const [sortColumn, setSortColumn] = useState<SortColumn>('rank');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Update URL when state changes
   useEffect(() => {
@@ -146,6 +152,89 @@ export const RankingsPage = () => {
     ];
     return months[month - 1];
   };
+
+  // Sorting functions
+  const handleSort = (column: SortColumn) => {
+    if (column === null) return;
+    
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to descending
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortedRankings = (): PlayerRankingDTO[] => {
+    if (!sortColumn) {
+      return rankings;
+    }
+
+    const sorted = [...rankings].sort((a, b) => {
+      let aValue: number;
+      let bValue: number;
+
+      switch (sortColumn) {
+        case 'rank':
+          aValue = a.rank;
+          bValue = b.rank;
+          break;
+        case 'elo':
+          aValue = a.rank; // ELO is the rank value
+          bValue = b.rank;
+          break;
+        case 'kd':
+          aValue = a.killDeathRatio;
+          bValue = b.killDeathRatio;
+          break;
+        case 'kills':
+          aValue = a.kills;
+          bValue = b.kills;
+          break;
+        case 'deaths':
+          aValue = a.deaths;
+          bValue = b.deaths;
+          break;
+        case 'assists':
+          aValue = a.assists;
+          bValue = b.assists;
+          break;
+        case 'hs':
+          aValue = a.headshotPercentage;
+          bValue = b.headshotPercentage;
+          break;
+        case 'rounds':
+          aValue = a.roundsPlayed;
+          bValue = b.roundsPlayed;
+          break;
+        case 'games':
+          aValue = a.gamesPlayed || 0;
+          bValue = b.gamesPlayed || 0;
+          break;
+        case 'clutches':
+          aValue = a.clutchesWon;
+          bValue = b.clutchesWon;
+          break;
+        case 'damage':
+          aValue = a.damageDealt;
+          bValue = b.damageDealt;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    return sorted;
+  };
+
 
   const generateYearOptions = () => {
     const currentYear = new Date().getFullYear();
@@ -356,33 +445,122 @@ export const RankingsPage = () => {
         <table className="rankings-table">
           <thead>
             <tr>
-              <th className="rank-col">Rank</th>
+              <th 
+                className="rank-col sortable" 
+                onClick={() => handleSort('rank')}
+                title="Click to sort by rank"
+                data-sort-active={sortColumn === 'rank' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'rank' ? sortDirection : undefined}
+              >
+                Rank
+              </th>
               <th className="player-col">Player</th>
-              <th className="stat-col">ELO</th>
-              <th className="stat-col">K/D</th>
-              <th className="stat-col">K</th>
-              <th className="stat-col">D</th>
-              <th className="stat-col">A</th>
-              <th className="stat-col">HS%</th>
-              <th className="stat-col">Rnd</th>
-              <th className="stat-col">G</th>
-              <th className="stat-col">Cl</th>
-              <th className="stat-col">DMG</th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('elo')}
+                title="Click to sort by ELO"
+                data-sort-active={sortColumn === 'elo' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'elo' ? sortDirection : undefined}
+              >
+                ELO
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('kd')}
+                title="Click to sort by K/D ratio"
+                data-sort-active={sortColumn === 'kd' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'kd' ? sortDirection : undefined}
+              >
+                K/D
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('kills')}
+                title="Click to sort by kills"
+                data-sort-active={sortColumn === 'kills' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'kills' ? sortDirection : undefined}
+              >
+                K
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('deaths')}
+                title="Click to sort by deaths"
+                data-sort-active={sortColumn === 'deaths' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'deaths' ? sortDirection : undefined}
+              >
+                D
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('assists')}
+                title="Click to sort by assists"
+                data-sort-active={sortColumn === 'assists' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'assists' ? sortDirection : undefined}
+              >
+                A
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('hs')}
+                title="Click to sort by headshot percentage"
+                data-sort-active={sortColumn === 'hs' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'hs' ? sortDirection : undefined}
+              >
+                HS%
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('rounds')}
+                title="Click to sort by rounds"
+                data-sort-active={sortColumn === 'rounds' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'rounds' ? sortDirection : undefined}
+              >
+                Rnd
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('games')}
+                title="Click to sort by games"
+                data-sort-active={sortColumn === 'games' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'games' ? sortDirection : undefined}
+              >
+                G
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('clutches')}
+                title="Click to sort by clutches"
+                data-sort-active={sortColumn === 'clutches' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'clutches' ? sortDirection : undefined}
+              >
+                Cl
+              </th>
+              <th 
+                className="stat-col sortable" 
+                onClick={() => handleSort('damage')}
+                title="Click to sort by damage"
+                data-sort-active={sortColumn === 'damage' ? 'true' : 'false'}
+                data-sort-direction={sortColumn === 'damage' ? sortDirection : undefined}
+              >
+                DMG
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rankings.map((player, index) => {
-              const position = index + 1;
-              const rankClass = position === 1 ? 'rank-gold' : position === 2 ? 'rank-silver' : position === 3 ? 'rank-bronze' : '';
+            {getSortedRankings().map((player, displayIndex) => {
+              // Use original rank from player data, not display position
+              const originalRank = rankings.findIndex(p => p.playerId === player.playerId) + 1;
+              const rankClass = originalRank === 1 ? 'rank-gold' : originalRank === 2 ? 'rank-silver' : originalRank === 3 ? 'rank-bronze' : '';
               return (
               <tr
                 key={player.playerId}
                 className={`player-row ${rankClass}`}
               >
                 <td className="rank-cell">
-                  <span className={`rank-number ${rankClass}`}>{position}</span>
-                  {position <= 3 && (
-                    <span className={`rank-icon ${rankClass}`}>{getRankIcon(position)}</span>
+                  <span className={`rank-number ${rankClass}`}>{originalRank}</span>
+                  {originalRank <= 3 && (
+                    <span className={`rank-icon ${rankClass}`}>{getRankIcon(originalRank)}</span>
                   )}
                 </td>
                 <td className="player-cell">
