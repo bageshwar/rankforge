@@ -31,7 +31,8 @@ import java.time.Instant;
 public class AccoladeEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "accolade_seq")
+    @SequenceGenerator(name = "accolade_seq", sequenceName = "accolade_seq", allocationSize = 50)
     private Long id;
     
     @Column(name = "type", nullable = false, length = 255)

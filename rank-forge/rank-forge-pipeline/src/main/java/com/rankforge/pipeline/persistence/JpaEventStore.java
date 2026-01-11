@@ -362,155 +362,97 @@ public class JpaEventStore implements EventStore, GameEventListener {
      */
     private void persistGameData() {
         long startTime = System.currentTimeMillis();
-        logger.info("=== persistGameData() START ===");
         // Use EntityManager directly to ensure all entities stay in the same persistence context
         // This avoids the "detached entity" issue when repository calls create boundaries
         
         // 1. First, persist or merge GameEntity to get its ID
-        long getGameStart = System.currentTimeMillis();
         GameEntity game = context.getCurrentGame();
-        long getGameTime = System.currentTimeMillis() - getGameStart;
-        logger.info("TIMING: Get current game from context: {}ms", getGameTime);
         
         if (game != null) {
             long gameStartTime = System.currentTimeMillis();
             // Use merge instead of persist to handle both new and detached entities
             // If game.id is null, merge behaves like persist
             // If game.id is set (detached entity), merge re-attaches it
-            long persistOrMergeStart = System.currentTimeMillis();
             if (game.getId() == null) {
                 entityManager.persist(game);
-                logger.info("TIMING: GameEntity persist: {}ms", System.currentTimeMillis() - persistOrMergeStart);
             } else {
                 game = entityManager.merge(game);
-                logger.info("TIMING: GameEntity merge: {}ms", System.currentTimeMillis() - persistOrMergeStart);
             }
             
-            long gameFlushStart = System.currentTimeMillis();
             entityManager.flush(); // Flush to get the generated ID
-            long gameFlushTime = System.currentTimeMillis() - gameFlushStart;
-            logger.info("TIMING: GameEntity flush: {}ms", gameFlushTime);
             
             long gameTime = System.currentTimeMillis() - gameStartTime;
-            logger.info("Persisted GameEntity with ID {} for game on map {} (total took {}ms)", 
+            logger.info("Persisted GameEntity with ID {} for game on map {} (took {}ms)", 
                     game.getId(), game.getMap(), gameTime);
             
             // Update all references to point to the managed entity
             // Important: must use the returned entity from merge
-            long updateRefsStart = System.currentTimeMillis();
             updateGameReferences(game);
-            long updateRefsTime = System.currentTimeMillis() - updateRefsStart;
-            logger.info("TIMING: Update game references: {}ms", updateRefsTime);
         }
         
         // 2. Persist all game events using EntityManager (same persistence context)
         // First pass: persist RoundStartEventEntity instances to get their IDs
         // This is needed because other events may reference them
-        long copyEntitiesStart = System.currentTimeMillis();
         // Create defensive copy to prevent ConcurrentModificationException
         List<GameEventEntity> entitiesToSave = new ArrayList<>(context.getPendingEntities());
-        long copyEntitiesTime = System.currentTimeMillis() - copyEntitiesStart;
-        logger.info("TIMING: Create defensive copy of {} entities: {}ms", entitiesToSave.size(), copyEntitiesTime);
-        
         Map<RoundStartEventEntity, RoundStartEventEntity> roundStartMap = new HashMap<>();
         
-        logger.info("Persisting {} total events for game", entitiesToSave.size());
+        logger.debug("Persisting {} total events for game", entitiesToSave.size());
         
         long roundStartPersistStart = System.currentTimeMillis();
         int roundStartCount = 0;
-        long containsCheckTime = 0;
-        long mergeTime = 0;
-        long persistTime = 0;
-        int containsCheckCount = 0;
-        int mergeCount = 0;
-        int persistCount = 0;
         
         for (GameEventEntity entity : entitiesToSave) {
             if (entity instanceof RoundStartEventEntity roundStart) {
                 // Ensure game reference is managed
-                if (game != null) {
-                    long containsStart = System.currentTimeMillis();
-                    boolean isManaged = entityManager.contains(game);
-                    containsCheckTime += System.currentTimeMillis() - containsStart;
-                    containsCheckCount++;
-                    
-                    if (!isManaged) {
-                        long mergeStart = System.currentTimeMillis();
-                        game = entityManager.merge(game);
-                        mergeTime += System.currentTimeMillis() - mergeStart;
-                        mergeCount++;
-                    }
+                if (game != null && !entityManager.contains(game)) {
+                    game = entityManager.merge(game);
                 }
                 roundStart.setGame(game);
                 
                 // Check if entity already has an ID (detached entity) - use merge instead of persist
                 if (roundStart.getId() == null) {
-                    long persistStart = System.currentTimeMillis();
                     entityManager.persist(roundStart);
-                    persistTime += System.currentTimeMillis() - persistStart;
-                    persistCount++;
                 } else {
                     // Entity already has ID, merge it to re-attach to persistence context
-                    long mergeStart = System.currentTimeMillis();
                     roundStart = entityManager.merge(roundStart);
-                    mergeTime += System.currentTimeMillis() - mergeStart;
-                    mergeCount++;
                 }
                 roundStartMap.put(roundStart, roundStart); // Track for reference updates
                 roundStartCount++;
             }
         }
         long roundStartPersistTime = System.currentTimeMillis() - roundStartPersistStart;
-        logger.info("Persisted {} RoundStartEventEntity instances (total took {}ms)", roundStartCount, roundStartPersistTime);
-        logger.info("TIMING: RoundStart loop breakdown - contains checks: {}ms ({} calls), merge: {}ms ({} calls), persist: {}ms ({} calls)", 
-                containsCheckTime, containsCheckCount, mergeTime, mergeCount, persistTime, persistCount);
+        logger.debug("Persisted {} RoundStartEventEntity instances (took {}ms)", roundStartCount, roundStartPersistTime);
         
         // Flush to get RoundStartEventEntity IDs assigned
         if (!roundStartMap.isEmpty()) {
-            long roundStartFlushStart = System.currentTimeMillis();
             entityManager.flush();
-            long roundStartFlushTime = System.currentTimeMillis() - roundStartFlushStart;
-            logger.info("Flushed {} RoundStartEventEntity instances (took {}ms)", roundStartCount, roundStartFlushTime);
         }
         
         // Build cache of managed roundStart entities by ID (after flush, they're all managed)
         // This avoids expensive contains() checks in the loop
-        long buildCacheStart = System.currentTimeMillis();
         Map<Long, RoundStartEventEntity> managedRoundStartCache = new HashMap<>();
         for (RoundStartEventEntity roundStart : roundStartMap.keySet()) {
             if (roundStart.getId() != null) {
                 managedRoundStartCache.put(roundStart.getId(), roundStart);
             }
         }
-        long buildCacheTime = System.currentTimeMillis() - buildCacheStart;
-        logger.info("TIMING: Built managed roundStart cache ({} entries): {}ms", managedRoundStartCache.size(), buildCacheTime);
         
         // Ensure game is managed (check once, not 744 times)
-        long ensureGameManagedStart = System.currentTimeMillis();
         if (game != null && !entityManager.contains(game)) {
             game = entityManager.merge(game);
         }
-        boolean gameIsManaged = (game != null && entityManager.contains(game));
-        long ensureGameManagedTime = System.currentTimeMillis() - ensureGameManagedStart;
-        logger.info("TIMING: Ensure game is managed: {}ms (game is managed: {})", ensureGameManagedTime, gameIsManaged);
         
         // Second pass: persist all other events
-        // Note: With IDENTITY generation, Hibernate can't batch inserts, but we can optimize by:
-        // 1. Removing per-call timing overhead
-        // 2. Flushing periodically to reduce memory pressure
-        // 3. Using prepared statements (enabled via hibernate.jdbc.batch_size)
+        // With SEQUENCE generation, Hibernate can batch inserts for better performance
         long otherEventsPersistStart = System.currentTimeMillis();
         int otherEventCount = 0;
         int eventsWithRoundRef = 0;
         int eventsWithoutRoundRef = 0;
         Map<Long, Integer> eventsPerRound = new HashMap<>();
         
-        int otherMergeCount = 0;
-        int otherPersistCount = 0;
         final int BATCH_SIZE = 50; // Match hibernate.jdbc.batch_size
         int batchCount = 0;
-        long batchFlushTime = 0;
-        int batchFlushCount = 0;
         
         for (GameEventEntity entity : entitiesToSave) {
             if (!(entity instanceof RoundStartEventEntity)) {
@@ -540,7 +482,6 @@ public class JpaEventStore implements EventStore, GameEventListener {
                             logger.debug("PERSIST_ROUND: RoundStart ID {} not in cache, merging for event {}", 
                                     roundStart.getId(), entity.getGameEventType());
                             managedRoundStart = entityManager.merge(roundStart);
-                            otherMergeCount++;
                             entity.setRoundStart(managedRoundStart);
                             // Add to cache for future use
                             managedRoundStartCache.put(roundStart.getId(), managedRoundStart);
@@ -562,22 +503,16 @@ public class JpaEventStore implements EventStore, GameEventListener {
                 // Check if entity already has an ID (detached entity) - use merge instead of persist
                 if (entity.getId() == null) {
                     entityManager.persist(entity);
-                    otherPersistCount++;
                 } else {
                     // Entity already has ID, merge it to re-attach to persistence context
                     entityManager.merge(entity);
-                    otherMergeCount++;
                 }
                 otherEventCount++;
                 batchCount++;
                 
-                // Flush periodically to reduce memory pressure and potentially improve performance
-                // Note: With IDENTITY, each persist executes immediately, but flushing helps with memory
+                // Flush periodically to reduce memory pressure and enable batch processing
                 if (batchCount >= BATCH_SIZE) {
-                    long batchFlushStart = System.currentTimeMillis();
                     entityManager.flush();
-                    batchFlushTime += System.currentTimeMillis() - batchFlushStart;
-                    batchFlushCount++;
                     batchCount = 0;
                 }
             }
@@ -585,91 +520,55 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Flush any remaining entities
         if (batchCount > 0) {
-            long batchFlushStart = System.currentTimeMillis();
             entityManager.flush();
-            batchFlushTime += System.currentTimeMillis() - batchFlushStart;
-            batchFlushCount++;
         }
         
         long otherEventsPersistTime = System.currentTimeMillis() - otherEventsPersistStart;
-        logger.info("Persisted {} other events (total took {}ms)", otherEventCount, otherEventsPersistTime);
-        logger.info("TIMING: Other events - merge: {} calls, persist: {} calls, batch flushes: {} (total flush time: {}ms)", 
-                otherMergeCount, otherPersistCount, batchFlushCount, batchFlushTime);
+        logger.info("Persisted {} other events (took {}ms)", otherEventCount, otherEventsPersistTime);
         
         if (!entitiesToSave.isEmpty()) {
-            logger.info("Persisted {} game events ({} round starts, {} other events)", 
+            logger.debug("Persisted {} game events ({} round starts, {} other events)", 
                     entitiesToSave.size(), roundStartCount, otherEventCount);
-            logger.info("PERSIST_ROUND: Events with roundStart: {}, without: {}", 
+            logger.debug("Events with roundStart: {}, without: {}", 
                     eventsWithRoundRef, eventsWithoutRoundRef);
-            logger.info("PERSIST_ROUND: Events per round: {}", eventsPerRound);
         }
         
         // 3. Persist all accolades using EntityManager (same persistence context)
         long accoladesStart = System.currentTimeMillis();
-        long copyAccoladesStart = System.currentTimeMillis();
         // Create defensive copy to prevent ConcurrentModificationException
         List<AccoladeEntity> accoladesToSave = new ArrayList<>(context.getPendingAccolades());
-        long copyAccoladesTime = System.currentTimeMillis() - copyAccoladesStart;
-        logger.info("TIMING: Create defensive copy of {} accolades: {}ms", accoladesToSave.size(), copyAccoladesTime);
         
-        long accoladeContainsCheckTime = 0;
-        long accoladeMergeTime = 0;
-        long accoladePersistTime = 0;
-        int accoladeContainsCheckCount = 0;
-        int accoladeMergeCount = 0;
-        int accoladePersistCount = 0;
         
         for (AccoladeEntity accolade : accoladesToSave) {
             // Check if the game reference is managed; if not, re-attach it
             GameEntity accoladeGame = accolade.getGame();
-            if (accoladeGame != null && accoladeGame.getId() != null) {
-                long containsStart = System.currentTimeMillis();
-                boolean isManaged = entityManager.contains(accoladeGame);
-                accoladeContainsCheckTime += System.currentTimeMillis() - containsStart;
-                accoladeContainsCheckCount++;
-                
-                if (!isManaged) {
-                    long mergeStart = System.currentTimeMillis();
-                    accolade.setGame(entityManager.merge(accoladeGame));
-                    accoladeMergeTime += System.currentTimeMillis() - mergeStart;
-                    accoladeMergeCount++;
-                }
+            if (accoladeGame != null && accoladeGame.getId() != null && !entityManager.contains(accoladeGame)) {
+                accolade.setGame(entityManager.merge(accoladeGame));
             }
             
             // Check if entity already has an ID (detached entity) - use merge instead of persist
             if (accolade.getId() == null) {
-                long persistStart = System.currentTimeMillis();
                 entityManager.persist(accolade);
-                accoladePersistTime += System.currentTimeMillis() - persistStart;
-                accoladePersistCount++;
             } else {
                 // Entity already has ID, merge it to re-attach to persistence context
-                long mergeStart = System.currentTimeMillis();
                 entityManager.merge(accolade);
-                accoladeMergeTime += System.currentTimeMillis() - mergeStart;
-                accoladeMergeCount++;
             }
         }
         long accoladesTime = System.currentTimeMillis() - accoladesStart;
         if (!accoladesToSave.isEmpty()) {
-            logger.info("Persisted {} accolades (total took {}ms)", accoladesToSave.size(), accoladesTime);
-            logger.info("TIMING: Accolades loop breakdown - contains checks: {}ms ({} calls), merge: {}ms ({} calls), persist: {}ms ({} calls)", 
-                    accoladeContainsCheckTime, accoladeContainsCheckCount, accoladeMergeTime, accoladeMergeCount, accoladePersistTime, accoladePersistCount);
+            logger.info("Persisted {} accolades (took {}ms)", accoladesToSave.size(), accoladesTime);
         }
         
         // Flush all pending changes to database
         long finalFlushStart = System.currentTimeMillis();
         entityManager.flush();
         long finalFlushTime = System.currentTimeMillis() - finalFlushStart;
-        logger.info("Final flush complete (took {}ms) - This is likely the bottleneck for large batches", finalFlushTime);
+        logger.debug("Final flush complete (took {}ms)", finalFlushTime);
         
-        long clearContextStart = System.currentTimeMillis();
         context.clear();
-        long clearContextTime = System.currentTimeMillis() - clearContextStart;
-        logger.info("TIMING: Clear context: {}ms", clearContextTime);
         
         long totalTime = System.currentTimeMillis() - startTime;
-        logger.info("=== persistGameData() END - Total time: {}ms ===", totalTime);
+        logger.info("Total persistGameData() time: {}ms", totalTime);
     }
     
     /**
