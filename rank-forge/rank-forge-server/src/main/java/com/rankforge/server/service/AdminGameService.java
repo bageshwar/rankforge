@@ -114,10 +114,7 @@ public class AdminGameService {
         
         // 3. Delete player stats entries that match this game's timestamp
         // PlayerStats are stored with gameTimestamp matching the game's gameOverTimestamp
-        List<PlayerStatsEntity> playerStats = playerStatsRepository.findAll().stream()
-                .filter(ps -> ps.getGameTimestamp() != null && 
-                             ps.getGameTimestamp().equals(gameTimestamp))
-                .toList();
+        List<PlayerStatsEntity> playerStats = playerStatsRepository.findByGameTimestamp(gameTimestamp);
         int statsCount = playerStats.size();
         if (statsCount > 0) {
             playerStatsRepository.deleteAll(playerStats);

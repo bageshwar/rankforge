@@ -24,6 +24,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,4 +96,14 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
         List<PlayerStatsEntity> results = findByLastSeenNicknameIgnoreCaseOrderByGameTimestampDesc(nickname);
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
+    
+    /**
+     * Find all player stats entries for a specific game timestamp.
+     * Used for cascade deletion when a game is deleted.
+     * 
+     * @param gameTimestamp The game timestamp to match
+     * @return List of PlayerStatsEntity entries for that game
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE p.gameTimestamp = :gameTimestamp")
+    List<PlayerStatsEntity> findByGameTimestamp(@Param("gameTimestamp") Instant gameTimestamp);
 }
