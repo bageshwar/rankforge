@@ -48,3 +48,5 @@ rank-forge-ui/.vscode/
 Thumbs.db
 cursor-help-log.log
 rank-forge/log-for-cursor.log
+
+.local/**
