@@ -295,33 +295,58 @@ public class JpaEventStore implements EventStore, GameEventListener {
     @Transactional
     public void onGameEnded(GameProcessedEvent event) {
         try {
-            // Validate EntityManager is available
+            // Validate EntityManager is available and open
             if (entityManager == null) {
                 throw new IllegalStateException("EntityManager is not available. " +
                         "Ensure JpaEventStore is properly configured with an EntityManager.");
+            }
+            
+            if (!entityManager.isOpen()) {
+                throw new IllegalStateException("EntityManager is closed. " +
+                        "Cannot persist game data with a closed EntityManager.");
             }
             
             // Check if we need to manage the transaction ourselves
             // This happens when JpaEventStore is created manually (not via Spring DI)
             // and the @Transactional annotation is not intercepted by Spring's proxy
             boolean managedTransaction = false;
-            if (!entityManager.getTransaction().isActive()) {
-                entityManager.getTransaction().begin();
-                managedTransaction = true;
-                logger.debug("Started manual transaction for game persistence");
+            try {
+                if (!entityManager.getTransaction().isActive()) {
+                    entityManager.getTransaction().begin();
+                    managedTransaction = true;
+                    logger.debug("Started manual transaction for game persistence");
+                }
+            } catch (IllegalStateException e) {
+                // EntityManager might be closed or in an invalid state
+                logger.error("Cannot begin transaction - EntityManager may be closed", e);
+                throw new IllegalStateException("Cannot begin transaction", e);
             }
             
             try {
                 persistGameData();
                 
                 if (managedTransaction) {
-                    entityManager.getTransaction().commit();
-                    logger.debug("Committed manual transaction for game persistence");
+                    try {
+                        if (entityManager.getTransaction().isActive()) {
+                            entityManager.getTransaction().commit();
+                            logger.debug("Committed manual transaction for game persistence");
+                        }
+                    } catch (Exception e) {
+                        logger.error("Error committing transaction", e);
+                        throw e;
+                    }
                 }
             } catch (Exception e) {
-                if (managedTransaction && entityManager.getTransaction().isActive()) {
-                    entityManager.getTransaction().rollback();
-                    logger.debug("Rolled back manual transaction due to error");
+                if (managedTransaction) {
+                    try {
+                        if (entityManager.getTransaction().isActive()) {
+                            entityManager.getTransaction().rollback();
+                            logger.debug("Rolled back manual transaction due to error");
+                        }
+                    } catch (Exception rollbackException) {
+                        logger.error("Error rolling back transaction", rollbackException);
+                        // Don't throw - the original exception is more important
+                    }
                 }
                 throw e;
             }
