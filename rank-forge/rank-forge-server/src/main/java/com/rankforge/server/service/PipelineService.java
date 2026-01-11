@@ -110,7 +110,7 @@ public class PipelineService {
         
         // Create event processor with shared context for direct entity reference linking
         EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService, 
-                eventProcessingContext);
+                eventProcessingContext, gameRepository);
         
         // Wire event listeners
         eventProcessor.addGameEventListener((GameEventListener) eventStore);

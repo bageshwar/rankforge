@@ -37,12 +37,14 @@ import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.EventProcessingContext;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * This class processes the incoming GameEvent.
@@ -56,12 +58,14 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final RankingService rankingService;
     private final List<GameEventListener> eventListeners;
     private final EventProcessingContext context;
+    private final GameRepository gameRepository;
 
     public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
-                              EventProcessingContext context) {
+                              EventProcessingContext context, GameRepository gameRepository) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
         this.context = context;
+        this.gameRepository = gameRepository;
         this.eventListeners = new ArrayList<>();
     }
 
@@ -208,6 +212,18 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     @Override
     public void visit(GameOverEvent event, PlayerStats player1Stats, PlayerStats player2Stats) {
         logger.info("Processing GAME_OVER event at {} on map {}", event.getTimestamp(), event.getMap());
+        
+        // Check for duplicate game (same timestamp and map)
+        Optional<GameEntity> existingGame = gameRepository.findDuplicate(event.getTimestamp(), event.getMap());
+        if (existingGame.isPresent()) {
+            GameEntity duplicate = existingGame.get();
+            logger.warn("Duplicate game detected - skipping ingestion. Existing game ID: {}, timestamp: {}, map: {}", 
+                    duplicate.getId(), event.getTimestamp(), event.getMap());
+            // Skip processing - don't create game entity, don't process events, don't update stats
+            // Clear any pending accolades that were queued before we detected the duplicate
+            context.clear();
+            return;
+        }
         
         // Create transient GameEntity from GameOverEvent
         GameEntity gameEntity = new GameEntity();

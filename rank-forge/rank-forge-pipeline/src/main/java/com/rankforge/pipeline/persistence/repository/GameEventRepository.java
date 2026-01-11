@@ -51,10 +51,16 @@ public interface GameEventRepository extends JpaRepository<GameEventEntity, Long
     List<GameEventEntity> findByGameEventTypeAndTimestamp(GameEventType type, Instant timestamp);
     
     /**
-     * Find events by game entity
+     * Find events by game entity (excludes GAME_OVER for normal queries)
      */
     @Query("SELECT e FROM GameEventEntity e WHERE e.game.id = :gameId AND e.gameEventType != 'GAME_OVER' ORDER BY e.timestamp ASC")
     List<GameEventEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find all events by game ID including GAME_OVER (for deletion purposes)
+     */
+    @Query("SELECT e FROM GameEventEntity e WHERE e.game.id = :gameId ORDER BY e.timestamp ASC")
+    List<GameEventEntity> findAllByGameId(@Param("gameId") Long gameId);
     
     /**
      * Find events by round start entity
