@@ -110,14 +110,16 @@ class UnprocessedEventsLoggerTest {
         int unprocessedCount = 0;
         int errorCount = 0;
         
-        // Process each line
-        for (int i = 0; i < lines.size(); i++) {
+        // Process each line - respect the parser's nextIndex to handle rewind logic
+        int i = 0;
+        while (i < lines.size()) {
             String line = lines.get(i);
             
             try {
                 // Extract the actual log content from JSON wrapper
                 JsonNode jsonNode = objectMapper.readTree(line);
                 if (!jsonNode.has("log")) {
+                    i++; // Move to next line
                     continue; // Skip lines without "log" field
                 }
                 
@@ -125,6 +127,7 @@ class UnprocessedEventsLoggerTest {
                 
                 // Skip empty lines and non-game log lines
                 if (logContent.isEmpty() || !logContent.startsWith("L ")) {
+                    i++; // Move to next line
                     continue;
                 }
                 
@@ -132,9 +135,16 @@ class UnprocessedEventsLoggerTest {
                 Optional<ParseLineResponse> response = parser.parseLine(line, lines, i);
                 
                 if (response.isPresent()) {
-                    GameEvent event = response.get().getGameEvent();
+                    ParseLineResponse parseResponse = response.get();
+                    GameEvent event = parseResponse.getGameEvent();
                     processedEventTypes.add(event.getGameEventType().name());
                     processedCount++;
+                    
+                    // Respect the parser's nextIndex (important for rewind logic)
+                    int nextIndex = parseResponse.getNextIndex();
+                    // If nextIndex is same as current (parser returned currentIndex), 
+                    // we need to manually advance to avoid infinite loop
+                    i = (nextIndex == i) ? i + 1 : nextIndex;
                 } else {
                     // This line was not processed - check if it's a known skip pattern
                     if (!shouldSkipLine(logContent)) {
@@ -144,10 +154,12 @@ class UnprocessedEventsLoggerTest {
                         group.addExample(logContent); // Store actual log line
                         unprocessedCount++;
                     }
+                    i++; // Move to next line
                 }
             } catch (Exception e) {
                 errorCount++;
                 logger.debug("Error processing line {}: {}", i, e.getMessage());
+                i++; // Move to next line even on error
             }
         }
         
