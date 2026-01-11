@@ -14,6 +14,9 @@ export class PlayerProfilePage extends BasePage {
   readonly recentAccolades = () => this.page.locator('.recent-accolades');
   readonly accoladesList = () => this.page.locator('.accolades-list .accolade-item');
   readonly backToRankingsLink = () => this.page.locator('.back-btn');
+  readonly pastNicksSection = () => this.page.locator('.past-nicks-section');
+  readonly pastNicksList = () => this.page.locator('.past-nicks-list');
+  readonly pastNickItems = () => this.page.locator('.past-nick-item');
 
   constructor(page: Page) {
     super(page);
@@ -121,5 +124,31 @@ export class PlayerProfilePage extends BasePage {
       await gameLink.click();
       await this.waitForLoadState();
     }
+  }
+
+  async hasPastNicksSection(): Promise<boolean> {
+    return await this.pastNicksSection().isVisible();
+  }
+
+  async getPastNicksCount(): Promise<number> {
+    return await this.pastNickItems().count();
+  }
+
+  async getPastNickText(index: number): Promise<string | null> {
+    const items = await this.pastNickItems();
+    return await items.nth(index).textContent();
+  }
+
+  async getAllPastNicks(): Promise<string[]> {
+    const items = await this.pastNickItems();
+    const count = await items.count();
+    const nicks: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const text = await items.nth(i).textContent();
+      if (text) {
+        nicks.push(text.trim());
+      }
+    }
+    return nicks;
   }
 }
