@@ -31,7 +31,8 @@ import java.time.Instant;
 public class GameEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "game_seq")
+    @SequenceGenerator(name = "game_seq", sequenceName = "game_seq", allocationSize = 50)
     private Long id;
     
     @Column(name = "gameOverTimestamp", nullable = false)

@@ -54,6 +54,9 @@ public class PlayerProfileDTO {
     private String mostFrequentAccolade;
     private int totalAccolades;
     
+    // Past nicks
+    private List<String> pastNicks;
+    
     public PlayerProfileDTO() {}
     
     // Getters and setters
@@ -199,6 +202,14 @@ public class PlayerProfileDTO {
     
     public void setTotalAccolades(int totalAccolades) {
         this.totalAccolades = totalAccolades;
+    }
+    
+    public List<String> getPastNicks() {
+        return pastNicks;
+    }
+    
+    public void setPastNicks(List<String> pastNicks) {
+        this.pastNicks = pastNicks;
     }
     
     /**

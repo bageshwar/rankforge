@@ -126,6 +126,7 @@ export const GamesPage = () => {
                       <Link
                         to={`/games/${game.id}`}
                         className="details-btn"
+                        data-testid={`testid-game-details-link-${game.id}`}
                       >
                         📊 Details
                       </Link>

@@ -124,6 +124,52 @@ class AccoladeLinkingTest {
                 () -> assertSame(game, accolade3.getGame())
             );
         }
+        
+        @Test
+        @DisplayName("Should set accolade timestamp to game end time when linking")
+        void shouldSetAccoladeTimestampToGameEndTime() {
+            // Given - accolade with different timestamp
+            Instant gameEndTime = Instant.parse("2026-01-15T14:30:00Z");
+            Instant originalCreatedAt = Instant.parse("2026-01-15T14:35:00Z");
+            
+            AccoladeEntity accolade = createAccolade("MVP", "Player1", "[U:1:123]", 1.0, 1, 100.0);
+            accolade.setCreatedAt(originalCreatedAt);
+            
+            context.addAccolade(accolade);
+            
+            GameEntity game = createGame("de_dust2", 16, 14);
+            game.setEndTime(gameEndTime);
+            game.setGameOverTimestamp(gameEndTime);
+            
+            // When
+            context.setCurrentGame(game);
+            context.linkAccoladesToGame();
+            
+            // Then - timestamp should be updated to game end time
+            assertEquals(gameEndTime, accolade.getCreatedAt(), 
+                    "Accolade timestamp should be set to game end time");
+        }
+        
+        @Test
+        @DisplayName("Should use gameOverTimestamp if endTime is null")
+        void shouldUseGameOverTimestampIfEndTimeIsNull() {
+            // Given
+            Instant gameOverTimestamp = Instant.parse("2026-01-15T14:30:00Z");
+            
+            AccoladeEntity accolade = createAccolade("MVP", "Player1", "[U:1:123]", 1.0, 1, 100.0);
+            context.addAccolade(accolade);
+            
+            GameEntity game = createGame("de_dust2", 16, 14);
+            game.setEndTime(null);
+            game.setGameOverTimestamp(gameOverTimestamp);
+            
+            // When
+            context.setCurrentGame(game);
+            context.linkAccoladesToGame();
+            
+            // Then
+            assertEquals(gameOverTimestamp, accolade.getCreatedAt());
+        }
 
         @Test
         @DisplayName("Should not fail if linkAccoladesToGame called before setCurrentGame")

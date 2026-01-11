@@ -17,7 +17,7 @@ export const HomePage = () => {
       </div>
 
       <div className="nav-cards">
-        <Link to="/rankings" className="nav-card card-bg hover-glow">
+        <Link to="/rankings" className="nav-card card-bg hover-glow" data-testid="testid-home-rankings-link">
           <div className="nav-card-icon">🏆</div>
           <h2 className="nav-card-title">Player Rankings</h2>
           <p className="nav-card-description">
@@ -26,7 +26,7 @@ export const HomePage = () => {
           </p>
         </Link>
 
-        <Link to="/games" className="nav-card card-bg hover-glow">
+        <Link to="/games" className="nav-card card-bg hover-glow" data-testid="testid-home-games-link">
           <div className="nav-card-icon">🎮</div>
           <h2 className="nav-card-title">Processed Games</h2>
           <p className="nav-card-description">

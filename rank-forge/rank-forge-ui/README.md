@@ -1,4 +1,66 @@
-# React + TypeScript + Vite
+# RankForge UI
+
+React + TypeScript + Vite frontend for the RankForge CS2 player rankings and game analytics platform.
+
+## Features
+
+- Player rankings with detailed statistics
+- Game details and round-by-round analysis
+- Player profiles with performance history
+- Accolades and achievements tracking
+- Responsive design with modern UI
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Backend API running on `http://localhost:8080`
+
+### Setup
+
+```bash
+npm install
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`.
+
+### Build
+
+```bash
+npm run build
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+## E2E Testing
+
+This project includes comprehensive end-to-end tests using Playwright. See [e2e/README.md](./e2e/README.md) for detailed documentation.
+
+### Quick Start
+
+1. Install dependencies: `npm install`
+2. Install Playwright browsers: `npx playwright install`
+3. Ensure staging backend is running on `localhost:8080`
+4. Run tests: `npm run test:e2e`
+
+### Available Commands
+
+- `npm run test:e2e` - Run all E2E tests
+- `npm run test:e2e:ui` - Run tests in interactive UI mode
+- `npm run test:e2e:debug` - Run tests in debug mode
+- `npm run test:e2e:capture-api` - Capture API responses from staging to generate test fixtures
+
+For more information, see the [E2E Testing Guide](./e2e/README.md).
+
+---
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

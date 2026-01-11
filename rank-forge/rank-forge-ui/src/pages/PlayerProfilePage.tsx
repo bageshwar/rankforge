@@ -157,6 +157,25 @@ export const PlayerProfilePage = () => {
         </div>
       </motion.div>
 
+      {/* Past Nicks Section */}
+      {profile.pastNicks && profile.pastNicks.length > 0 && (
+        <motion.div
+          className="section-card past-nicks-section"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+        >
+          <h2 className="section-title">👤 Past Nicknames</h2>
+          <div className="past-nicks-list">
+            {profile.pastNicks.map((nick, idx) => (
+              <div key={idx} className="past-nick-item">
+                {nick}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Rating History Chart */}
       {profile.ratingHistory && profile.ratingHistory.length > 0 && (
         <motion.div

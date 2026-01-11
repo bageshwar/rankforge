@@ -36,12 +36,13 @@ public class PlayerRankingDTO {
     private int roundsPlayed;
     private int clutchesWon;
     private double damageDealt;
+    private int gamesPlayed;
 
     public PlayerRankingDTO() {}
 
     public PlayerRankingDTO(int rank, String playerName, String playerId, int kills, int deaths, 
                            int assists, int headshotKills, int roundsPlayed, int clutchesWon, 
-                           double damageDealt) {
+                           double damageDealt, int gamesPlayed) {
         this.rank = rank;
         this.playerName = playerName;
         this.playerId = playerId;
@@ -52,6 +53,7 @@ public class PlayerRankingDTO {
         this.roundsPlayed = roundsPlayed;
         this.clutchesWon = clutchesWon;
         this.damageDealt = damageDealt;
+        this.gamesPlayed = gamesPlayed;
         
         // Calculate derived stats
         this.killDeathRatio = deaths > 0 ? (double) kills / deaths : kills;
@@ -153,5 +155,13 @@ public class PlayerRankingDTO {
 
     public void setDamageDealt(double damageDealt) {
         this.damageDealt = damageDealt;
+    }
+
+    public int getGamesPlayed() {
+        return gamesPlayed;
+    }
+
+    public void setGamesPlayed(int gamesPlayed) {
+        this.gamesPlayed = gamesPlayed;
     }
 }
