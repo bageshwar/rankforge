@@ -157,6 +157,8 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     if (killEvent.getPlayer2() != null) {
                         killEntity.setPlayer2(killEvent.getPlayer2().getSteamId());
                     }
+                    // Serialize coordinates to JSON
+                    killEntity.setCoordinates(serializeCoordinates(killEvent));
                 }
                 entity = killEntity;
                 break;
@@ -171,6 +173,8 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     if (assistEvent.getPlayer2() != null) {
                         assistEntity.setPlayer2(assistEvent.getPlayer2().getSteamId());
                     }
+                    // Serialize coordinates to JSON (may be null if not present in log)
+                    assistEntity.setCoordinates(serializeCoordinates(assistEvent));
                 }
                 entity = assistEntity;
                 break;
@@ -187,6 +191,8 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     if (attackEvent.getPlayer2() != null) {
                         attackEntity.setPlayer2(attackEvent.getPlayer2().getSteamId());
                     }
+                    // Serialize coordinates to JSON
+                    attackEntity.setCoordinates(serializeCoordinates(attackEvent));
                 }
                 entity = attackEntity;
                 break;
@@ -232,6 +238,47 @@ public class JpaEventStore implements EventStore, GameEventListener {
         }
         
         return entity;
+    }
+    
+    /**
+     * Serialize coordinates from GameActionEvent to JSON string.
+     * Format: {"player1": {"x": 100, "y": 200, "z": 50}, "player2": {"x": 150, "y": 250, "z": 60}}
+     * Returns null if no coordinates are present.
+     */
+    private String serializeCoordinates(GameActionEvent event) throws JsonProcessingException {
+        // Check if any coordinates are present
+        if (event.getPlayer1X() == null && event.getPlayer1Y() == null && event.getPlayer1Z() == null &&
+            event.getPlayer2X() == null && event.getPlayer2Y() == null && event.getPlayer2Z() == null) {
+            return null; // No coordinates to store
+        }
+        
+        // Build coordinate map
+        Map<String, Object> coordinates = new HashMap<>();
+        
+        // Player1 coordinates
+        if (event.getPlayer1X() != null || event.getPlayer1Y() != null || event.getPlayer1Z() != null) {
+            Map<String, Integer> player1Coords = new HashMap<>();
+            if (event.getPlayer1X() != null) player1Coords.put("x", event.getPlayer1X());
+            if (event.getPlayer1Y() != null) player1Coords.put("y", event.getPlayer1Y());
+            if (event.getPlayer1Z() != null) player1Coords.put("z", event.getPlayer1Z());
+            coordinates.put("player1", player1Coords);
+        }
+        
+        // Player2 coordinates
+        if (event.getPlayer2X() != null || event.getPlayer2Y() != null || event.getPlayer2Z() != null) {
+            Map<String, Integer> player2Coords = new HashMap<>();
+            if (event.getPlayer2X() != null) player2Coords.put("x", event.getPlayer2X());
+            if (event.getPlayer2Y() != null) player2Coords.put("y", event.getPlayer2Y());
+            if (event.getPlayer2Z() != null) player2Coords.put("z", event.getPlayer2Z());
+            coordinates.put("player2", player2Coords);
+        }
+        
+        // Return null if no coordinates were added
+        if (coordinates.isEmpty()) {
+            return null;
+        }
+        
+        return objectMapper.writeValueAsString(coordinates);
     }
     
     /**

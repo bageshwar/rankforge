@@ -54,29 +54,33 @@ public class CS2LogParser implements LogParser {
                     "<\\d+>" +
                     "<(?:BOT|(?<killerSteamId>\\[U:\\d+:\\d+\\]))>" + // Killer steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] killed " +
+                    "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed " +  // Killer position
                     "\"(?<victimName>.+?)" +                          // Victim name
                     "<\\d+>" +
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] with " +
+                    "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] with " +  // Victim position
                     "\"(?<weapon>[^\"]+)\"" +                         // Weapon used
                     "(?<isHeadshot> \\(headshot\\))?\\n?"
     );
 
 
-    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>
+    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" [1987 2835 124] assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>" [2493 2090 133]
+    // Note: Coordinates are required for assist events
     private static final Pattern ASSIST_PATTERN = Pattern.compile(
             "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
                     "\"(?<assistingPlayerName>.+?)" +                 // Assisting player name
                     "<\\d+>" +                                          // Player number
                     "<(?:BOT|(?<assistingPlayerSteamId>\\[U:\\d+:\\d+\\]))>" + // Steam ID or BOT
                     "<(?:CT|TERRORIST)>\" " +                           // Team
+                    "\\[(?<assistingPlayerX>-?\\d+) (?<assistingPlayerY>-?\\d+) (?<assistingPlayerZ>-?\\d+)\\] " + // Required assisting player position
                     "(?<assistType>(?:flash-)?assisted) killing " +     // Assist type (flash or regular)
                     "\"(?<victimName>.+?)" +                         // Victim name
                     "<\\d+>" +                                         // Victim number
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim Steam ID or BOT
-                    "<(?:CT|TERRORIST)>\"\\n?"
+                    "<(?:CT|TERRORIST)>\" " +                          // Team
+                    "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\]" + // Required victim position
+                    "\\n?"
     );
 
     // L 04/20/2024 - 16:21:52: "theWhiteNinja<1><[U:1:1135799416]><TERRORIST>" [-538 758 -23] attacked "Buckshot<5><BOT><CT>" [81 907 80] with "ak47" (damage "109") (damage_armor "15") (health "0") (armor "76") (hitgroup "head")
@@ -422,7 +426,14 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseAssistEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AssistEvent(
+        Integer assistingPlayerX = parseCoordinate(matcher.group("assistingPlayerX"));
+        Integer assistingPlayerY = parseCoordinate(matcher.group("assistingPlayerY"));
+        Integer assistingPlayerZ = parseCoordinate(matcher.group("assistingPlayerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        AssistEvent assistEvent = new AssistEvent(
                 timestamp,
                 Map.of(),
                 new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId")),
@@ -431,8 +442,15 @@ public class CS2LogParser implements LogParser {
                 matcher.group("assistType").contains("flash")
                         ? AssistEvent.AssistType.Flash
                         : AssistEvent.AssistType.Regular
-
-        ), currentIndex);
+        );
+        assistEvent.setPlayer1X(assistingPlayerX);
+        assistEvent.setPlayer1Y(assistingPlayerY);
+        assistEvent.setPlayer1Z(assistingPlayerZ);
+        assistEvent.setPlayer2X(victimX);
+        assistEvent.setPlayer2Y(victimY);
+        assistEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(assistEvent, currentIndex);
     }
 
     private Instant parseTimestamp(String group) {
@@ -441,17 +459,48 @@ public class CS2LogParser implements LogParser {
 
     private ParseLineResponse parseKillEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
         // TODO Fix parse for killing bots, its steamId gets set as Null right now
-        return new ParseLineResponse(new KillEvent(
+        Integer killerX = parseCoordinate(matcher.group("killerX"));
+        Integer killerY = parseCoordinate(matcher.group("killerY"));
+        Integer killerZ = parseCoordinate(matcher.group("killerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        KillEvent killEvent = new KillEvent(
                 timestamp, Map.of(),
                 new Player(matcher.group("killerName"), matcher.group("killerSteamId")),
                 new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
                 matcher.group("weapon"),
                 matcher.group(0).contains("headshot")
-        ), currentIndex);
+        );
+        killEvent.setPlayer1X(killerX);
+        killEvent.setPlayer1Y(killerY);
+        killEvent.setPlayer1Z(killerZ);
+        killEvent.setPlayer2X(victimX);
+        killEvent.setPlayer2Y(victimY);
+        killEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(killEvent, currentIndex);
+    }
+    
+    private Integer parseCoordinate(String coordStr) {
+        try {
+            return coordStr != null ? Integer.parseInt(coordStr) : null;
+        } catch (NumberFormatException e) {
+            logger.warn("Failed to parse coordinate: {}", coordStr);
+            return null;
+        }
     }
 
     private ParseLineResponse parseAttackEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AttackEvent(
+        Integer attackerX = parseCoordinate(matcher.group("attackerX"));
+        Integer attackerY = parseCoordinate(matcher.group("attackerY"));
+        Integer attackerZ = parseCoordinate(matcher.group("attackerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        AttackEvent attackEvent = new AttackEvent(
                 timestamp, Map.of(),
                 new Player(matcher.group("attackerName"), matcher.group("attackerSteamId")),
                 new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
@@ -459,6 +508,14 @@ public class CS2LogParser implements LogParser {
                 matcher.group("damage"),
                 matcher.group("damageArmor"),
                 matcher.group("hitgroup")
-        ), currentIndex);
+        );
+        attackEvent.setPlayer1X(attackerX);
+        attackEvent.setPlayer1Y(attackerY);
+        attackEvent.setPlayer1Z(attackerZ);
+        attackEvent.setPlayer2X(victimX);
+        attackEvent.setPlayer2Y(victimY);
+        attackEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(attackEvent, currentIndex);
     }
 }
