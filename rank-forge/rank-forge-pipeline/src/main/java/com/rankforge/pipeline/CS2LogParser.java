@@ -54,18 +54,19 @@ public class CS2LogParser implements LogParser {
                     "<\\d+>" +
                     "<(?:BOT|(?<killerSteamId>\\[U:\\d+:\\d+\\]))>" + // Killer steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] killed " +
+                    "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed " +  // Killer position
                     "\"(?<victimName>.+?)" +                          // Victim name
                     "<\\d+>" +
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim steam ID (if not BOT)
                     "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] with " +
+                    "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] with " +  // Victim position
                     "\"(?<weapon>[^\"]+)\"" +                         // Weapon used
                     "(?<isHeadshot> \\(headshot\\))?\\n?"
     );
 
 
-    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>
+    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>"
+    // Note: Assist events do NOT have coordinates in the log format
     private static final Pattern ASSIST_PATTERN = Pattern.compile(
             "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
                     "\"(?<assistingPlayerName>.+?)" +                 // Assisting player name
@@ -182,12 +183,9 @@ public class CS2LogParser implements LogParser {
 
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
             line = jsonNode.get("log").asText();
-            
-            //logger.debug("Parsing line {} (matchStarted={}, matchProcessingIndex={}): {}",
-            //        currentIndex, matchStarted, matchProcessingIndex, line);
 
             if (matchProcessingIndex == currentIndex && matchStarted) {
-                logger.info("Resetting round at {}", currentIndex);
+                logger.debug("Resetting match state at {} after processing all rounds", currentIndex);
                 // reset all state, we have processed all rounds of this match
                 this.matchStarted = false;
                 this.matchProcessingIndex = 0;
@@ -195,10 +193,26 @@ public class CS2LogParser implements LogParser {
             }
 
             // track rounds till match is not started (then process them)
-            if (!matchStarted && line.contains("World triggered \"Round_Start\"")) {
-                this.roundStartLineIndices.add(currentIndex);
-                logger.debug("Tracking round start at {} (total tracked: {})", currentIndex, roundStartLineIndices.size());
-                return Optional.empty();
+            if (line.contains("World triggered \"Round_Start\"")) {
+                // We're processing a game if matchProcessingIndex > 0 and currentIndex < matchProcessingIndex
+                // (we're between the rewind point and the game over)
+                boolean isProcessingGame = matchProcessingIndex > 0 && currentIndex < matchProcessingIndex;
+                
+                // If matchStarted is true but we have no rounds tracked AND we're not currently processing a game,
+                // we're starting a new game after a previous game finished. Reset matchStarted to false so we can 
+                // track round starts for this new game.
+                if (matchStarted && roundStartLineIndices.size() == 0 && !isProcessingGame) {
+                    logger.debug("Detected new game: resetting matchStarted=false to track round starts at {}", currentIndex);
+                    this.matchStarted = false;
+                    this.matchProcessingIndex = 0;
+                }
+                
+                if (!matchStarted) {
+                    this.roundStartLineIndices.add(currentIndex);
+                    logger.debug("Tracking round start at {} (total tracked: {})", 
+                            currentIndex, roundStartLineIndices.size());
+                    return Optional.empty();
+                }
             }
 
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
@@ -208,7 +222,9 @@ public class CS2LogParser implements LogParser {
                     return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
                 } else {
                     logger.info("Skipping Game at index {}: {}", currentIndex, line);
+                    // Reset state so we can track round starts for the next game
                     this.roundStartLineIndices.clear();
+                    this.matchStarted = false;
                     return Optional.empty();
                 }
 
@@ -310,12 +326,22 @@ public class CS2LogParser implements LogParser {
         parseAndQueueAccolades(lines, currentIndex);
         
         // rewind back team1+team2 score rounds to start the tracking
-        int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
+        int totalRounds = scoreTeam1 + scoreTeam2;
+        
+        if (this.roundStartLineIndices.size() < totalRounds) {
+            throw new IllegalStateException(String.format(
+                    "Catastrophic failure: Not enough round starts tracked. Expected at least %d rounds (score %d:%d), " +
+                    "but only tracked %d round starts. Log file may be incomplete or missing Round_Start events.",
+                    totalRounds, scoreTeam1, scoreTeam2, this.roundStartLineIndices.size()));
+        }
+        
+        // We have tracked enough rounds, rewind back to the start of the match
+        int roundToStart = this.roundStartLineIndices.size() - totalRounds;
         int indexToStart = this.roundStartLineIndices.get(roundToStart) - 1;
         this.matchProcessingIndex = currentIndex;
         this.roundStartLineIndices.clear();
         logger.info("In game over, moving pointer back {} rounds to {}, game over at {}, duration: {} min", 
-                (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex, duration);
+                totalRounds, indexToStart, matchProcessingIndex, duration);
         return new ParseLineResponse(new GameOverEvent(
                 timestamp,
                 new HashMap<String, String>(),
@@ -380,7 +406,7 @@ public class CS2LogParser implements LogParser {
             // Queue accolades for deferred persistence (will be linked to GameEntity later)
             if (!accolades.isEmpty()) {
                 accoladeStore.queueAccolades(accolades);
-                logger.info("Parsed and queued {} accolades for game over event", accolades.size());
+                logger.debug("Parsed and queued {} accolades for game over event", accolades.size());
             } else {
                 logger.debug("No accolades found for game over event");
             }
@@ -422,7 +448,8 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseAssistEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AssistEvent(
+        // Assist events do NOT have coordinates in the log format
+        AssistEvent assistEvent = new AssistEvent(
                 timestamp,
                 Map.of(),
                 new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId")),
@@ -431,8 +458,10 @@ public class CS2LogParser implements LogParser {
                 matcher.group("assistType").contains("flash")
                         ? AssistEvent.AssistType.Flash
                         : AssistEvent.AssistType.Regular
-
-        ), currentIndex);
+        );
+        // Coordinates remain null for assist events
+        
+        return new ParseLineResponse(assistEvent, currentIndex);
     }
 
     private Instant parseTimestamp(String group) {
@@ -441,17 +470,48 @@ public class CS2LogParser implements LogParser {
 
     private ParseLineResponse parseKillEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
         // TODO Fix parse for killing bots, its steamId gets set as Null right now
-        return new ParseLineResponse(new KillEvent(
+        Integer killerX = parseCoordinate(matcher.group("killerX"));
+        Integer killerY = parseCoordinate(matcher.group("killerY"));
+        Integer killerZ = parseCoordinate(matcher.group("killerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        KillEvent killEvent = new KillEvent(
                 timestamp, Map.of(),
                 new Player(matcher.group("killerName"), matcher.group("killerSteamId")),
                 new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
                 matcher.group("weapon"),
                 matcher.group(0).contains("headshot")
-        ), currentIndex);
+        );
+        killEvent.setPlayer1X(killerX);
+        killEvent.setPlayer1Y(killerY);
+        killEvent.setPlayer1Z(killerZ);
+        killEvent.setPlayer2X(victimX);
+        killEvent.setPlayer2Y(victimY);
+        killEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(killEvent, currentIndex);
+    }
+    
+    private Integer parseCoordinate(String coordStr) {
+        try {
+            return coordStr != null ? Integer.parseInt(coordStr) : null;
+        } catch (NumberFormatException e) {
+            logger.warn("Failed to parse coordinate: {}", coordStr);
+            return null;
+        }
     }
 
     private ParseLineResponse parseAttackEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AttackEvent(
+        Integer attackerX = parseCoordinate(matcher.group("attackerX"));
+        Integer attackerY = parseCoordinate(matcher.group("attackerY"));
+        Integer attackerZ = parseCoordinate(matcher.group("attackerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        AttackEvent attackEvent = new AttackEvent(
                 timestamp, Map.of(),
                 new Player(matcher.group("attackerName"), matcher.group("attackerSteamId")),
                 new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
@@ -459,6 +519,14 @@ public class CS2LogParser implements LogParser {
                 matcher.group("damage"),
                 matcher.group("damageArmor"),
                 matcher.group("hitgroup")
-        ), currentIndex);
+        );
+        attackEvent.setPlayer1X(attackerX);
+        attackEvent.setPlayer1Y(attackerY);
+        attackEvent.setPlayer1Z(attackerZ);
+        attackEvent.setPlayer2X(victimX);
+        attackEvent.setPlayer2Y(victimY);
+        attackEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(attackEvent, currentIndex);
     }
 }

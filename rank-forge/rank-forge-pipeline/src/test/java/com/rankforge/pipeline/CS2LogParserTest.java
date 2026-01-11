@@ -120,6 +120,22 @@ class CS2LogParserTest {
             // Check weapon and headshot
             assertEquals("ak47", killEvent.getWeapon());
             assertFalse(killEvent.isHeadshot());
+            
+            // Verify coordinates are required and present
+            assertNotNull(killEvent.getPlayer1X(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Y(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Z(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2X(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Y(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Z(), "Kill events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), killEvent.getPlayer1X(), "Killer X coordinate");
+            assertEquals(Integer.valueOf(758), killEvent.getPlayer1Y(), "Killer Y coordinate");
+            assertEquals(Integer.valueOf(-23), killEvent.getPlayer1Z(), "Killer Z coordinate");
+            assertEquals(Integer.valueOf(-81), killEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), killEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), killEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -139,6 +155,22 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             KillEvent killEvent = (KillEvent) result.get().getGameEvent();
             assertTrue(killEvent.isHeadshot());
+            
+            // Verify coordinates are required and present
+            assertNotNull(killEvent.getPlayer1X(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Y(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Z(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2X(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Y(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Z(), "Headshot kill events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), killEvent.getPlayer1X(), "Killer X coordinate");
+            assertEquals(Integer.valueOf(758), killEvent.getPlayer1Y(), "Killer Y coordinate");
+            assertEquals(Integer.valueOf(-23), killEvent.getPlayer1Z(), "Killer Z coordinate");
+            assertEquals(Integer.valueOf(-81), killEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), killEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), killEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -174,7 +206,7 @@ class CS2LogParserTest {
         void shouldParseRegularAssistEvent() {
 
 
-            // Given
+            // Given - assist events do NOT have coordinates in log format
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -203,12 +235,20 @@ class CS2LogParserTest {
             
             // Check assist type
             assertEquals(AssistEvent.AssistType.Regular, assistEvent.getAssistType());
+            
+            // Verify assist events do NOT have coordinates (they're not in the log format)
+            assertNull(assistEvent.getPlayer1X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Assist events do not have coordinates");
         }
-
+        
         @Test
         @DisplayName("Should parse flash assist event correctly")
         void shouldParseFlashAssistEvent() {
-            // Given
+            // Given - flash assist event (no coordinates in log format)
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "flash-assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -220,12 +260,20 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             AssistEvent assistEvent = (AssistEvent) result.get().getGameEvent();
             assertEquals(AssistEvent.AssistType.Flash, assistEvent.getAssistType());
+            
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Flash assist events do not have coordinates");
         }
 
         @Test
         @DisplayName("Should parse assist event with BOT correctly")
         void shouldParseAssistEventWithBot() {
-            // Given
+            // Given - assist events do NOT have coordinates (even for BOT)
             String logContent = "L 04/20/2024 - 17:52:34: \"Bot Helper<9><BOT><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -241,6 +289,14 @@ class CS2LogParserTest {
             assertEquals("Bot Helper", assister.getName());
             assertNull(assister.getSteamId());
             assertTrue(assister.isBot());
+            
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "BOT assist events do not have coordinates");
         }
     }
 
@@ -319,6 +375,22 @@ class CS2LogParserTest {
             assertEquals(109, attackEvent.getDamage());
             assertEquals(15, attackEvent.getArmorDamage());
             assertEquals("head", attackEvent.getHitGroup());
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(758), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(-23), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(81), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), attackEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -342,6 +414,63 @@ class CS2LogParserTest {
             assertEquals(35, attackEvent.getDamage());
             assertEquals(8, attackEvent.getArmorDamage());
             assertEquals("chest", attackEvent.getHitGroup());
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(758), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(-23), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(81), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), attackEvent.getPlayer2Z(), "Victim Z coordinate");
+        }
+
+        @Test
+        @DisplayName("Should parse attack event with production log format and coordinates")
+        void shouldParseAttackEventWithProductionFormat() {
+            // Given - using actual production log format from user sample
+            String logContent = "L 01/07/2026 - 16:14:50: \"Khanjer<2><[U:1:1098204826]><TERRORIST>\" " +
+                              "[1987 2835 124] attacked \"UN1QUe<3><[U:1:142988271]><CT>\" " +
+                              "[2493 2090 133] with \"ak47\" (damage \"26\") (damage_armor \"0\") " +
+                              "(health \"74\") (armor \"0\") (hitgroup \"right leg\")";
+            initiateGameEventParsing(logContent);
+
+            // When
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 1);
+
+            // Then
+            assertTrue(result.isPresent());
+            AttackEvent attackEvent = (AttackEvent) result.get().getGameEvent();
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinates match production log format
+            assertEquals(Integer.valueOf(1987), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(2835), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(124), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(2493), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(2090), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(133), attackEvent.getPlayer2Z(), "Victim Z coordinate");
+            
+            // Verify other fields
+            assertEquals("Khanjer", attackEvent.getPlayer1().getName());
+            assertEquals("UN1QUe", attackEvent.getPlayer2().getName());
+            assertEquals("ak47", attackEvent.getWeapon());
+            assertEquals(26, attackEvent.getDamage());
+            assertEquals("right leg", attackEvent.getHitGroup());
         }
     }
 

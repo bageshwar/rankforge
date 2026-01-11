@@ -54,6 +54,15 @@ public abstract class GameEventEntity {
     @Column(name = "player2", length = 255)
     private String player2;
     
+    /**
+     * Coordinates stored as JSON string.
+     * Format: {"player1": {"x": 100, "y": 200, "z": 50}, "player2": {"x": 150, "y": 250, "z": 60}}
+     * Only populated for events that have coordinates (KILL, ATTACK).
+     * Null for other event types.
+     */
+    @Column(name = "coordinates", columnDefinition = "NVARCHAR(MAX)")
+    private String coordinates;
+    
     // Managed relationship to GameEntity - FK set before batch persist
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "gameId")
@@ -138,5 +147,13 @@ public abstract class GameEventEntity {
     
     public void setRoundStart(RoundStartEventEntity roundStart) {
         this.roundStart = roundStart;
+    }
+    
+    public String getCoordinates() {
+        return coordinates;
+    }
+    
+    public void setCoordinates(String coordinates) {
+        this.coordinates = coordinates;
     }
 }

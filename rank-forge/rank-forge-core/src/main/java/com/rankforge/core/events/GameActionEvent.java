@@ -42,6 +42,14 @@ public abstract class GameActionEvent extends GameEvent {
     private Player player1;
     private Player player2;
     private String weapon;
+    
+    // Player coordinates (x, y, z)
+    private Integer player1X;
+    private Integer player1Y;
+    private Integer player1Z;
+    private Integer player2X;
+    private Integer player2Y;
+    private Integer player2Z;
 
     // Default constructor for Jackson deserialization
     public GameActionEvent() {}
@@ -51,6 +59,20 @@ public abstract class GameActionEvent extends GameEvent {
         this.player1 = player1;
         this.player2 = player2;
         this.weapon = weapon;
+    }
+    
+    public GameActionEvent(Instant timestamp, GameEventType type, Map<String, String> additionalData, Player player1, Player player2, String weapon,
+                          Integer player1X, Integer player1Y, Integer player1Z, Integer player2X, Integer player2Y, Integer player2Z) {
+        super(timestamp, type, additionalData);
+        this.player1 = player1;
+        this.player2 = player2;
+        this.weapon = weapon;
+        this.player1X = player1X;
+        this.player1Y = player1Y;
+        this.player1Z = player1Z;
+        this.player2X = player2X;
+        this.player2Y = player2Y;
+        this.player2Z = player2Z;
     }
 
     public Player getPlayer1() {
@@ -75,5 +97,53 @@ public abstract class GameActionEvent extends GameEvent {
 
     public void setWeapon(String weapon) {
         this.weapon = weapon;
+    }
+
+    public Integer getPlayer1X() {
+        return player1X;
+    }
+
+    public void setPlayer1X(Integer player1X) {
+        this.player1X = player1X;
+    }
+
+    public Integer getPlayer1Y() {
+        return player1Y;
+    }
+
+    public void setPlayer1Y(Integer player1Y) {
+        this.player1Y = player1Y;
+    }
+
+    public Integer getPlayer1Z() {
+        return player1Z;
+    }
+
+    public void setPlayer1Z(Integer player1Z) {
+        this.player1Z = player1Z;
+    }
+
+    public Integer getPlayer2X() {
+        return player2X;
+    }
+
+    public void setPlayer2X(Integer player2X) {
+        this.player2X = player2X;
+    }
+
+    public Integer getPlayer2Y() {
+        return player2Y;
+    }
+
+    public void setPlayer2Y(Integer player2Y) {
+        this.player2Y = player2Y;
+    }
+
+    public Integer getPlayer2Z() {
+        return player2Z;
+    }
+
+    public void setPlayer2Z(Integer player2Z) {
+        this.player2Z = player2Z;
     }
 }

@@ -141,10 +141,6 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
             
             // Always insert new records (never update) to track progression
             repository.saveAll(entitiesToSave);
-            logger.info("Batch stored {} player stats for game ID {} at {} (historical records)", 
-                    entitiesToSave.size(), 
-                    game != null ? game.getId() : "unknown",
-                    gameTimestamp);
             
         } catch (Exception e) {
             logger.error("Failed to batch store PlayerStats", e);
