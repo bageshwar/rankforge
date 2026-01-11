@@ -101,8 +101,13 @@ public class LogProcessingService {
      * Processes log lines using the GameRankingSystem
      */
     private void processLogLines(GameRankingSystem rankingSystem, List<String> lines, String source) {
-        logger.debug("Processing {} log lines from {}", lines.size(), source);
-        rankingSystem.processLines(lines);
-        logger.info("Completed processing {} log lines from {}", lines.size(), source);
+        logger.info("Processing {} log lines from {}", lines.size(), source);
+        try {
+            rankingSystem.processLines(lines);
+            logger.info("Completed processing {} log lines from {}", lines.size(), source);
+        } catch (Exception e) {
+            logger.error("Exception during processLines for {} lines from {}", lines.size(), source, e);
+            throw e;
+        }
     }
 }

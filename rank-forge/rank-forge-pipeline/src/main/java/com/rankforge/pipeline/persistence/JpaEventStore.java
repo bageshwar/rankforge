@@ -367,6 +367,7 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // 1. First, persist or merge GameEntity to get its ID
         GameEntity game = context.getCurrentGame();
+        
         if (game != null) {
             long gameStartTime = System.currentTimeMillis();
             // Use merge instead of persist to handle both new and detached entities
@@ -377,29 +378,30 @@ public class JpaEventStore implements EventStore, GameEventListener {
             } else {
                 game = entityManager.merge(game);
             }
+            
             entityManager.flush(); // Flush to get the generated ID
+            
             long gameTime = System.currentTimeMillis() - gameStartTime;
             logger.info("Persisted GameEntity with ID {} for game on map {} (took {}ms)", 
                     game.getId(), game.getMap(), gameTime);
             
             // Update all references to point to the managed entity
             // Important: must use the returned entity from merge
-            long updateRefsStart = System.currentTimeMillis();
             updateGameReferences(game);
-            long updateRefsTime = System.currentTimeMillis() - updateRefsStart;
-            logger.debug("Updated game references (took {}ms)", updateRefsTime);
         }
         
         // 2. Persist all game events using EntityManager (same persistence context)
         // First pass: persist RoundStartEventEntity instances to get their IDs
         // This is needed because other events may reference them
-        List<GameEventEntity> entitiesToSave = context.getPendingEntities();
+        // Create defensive copy to prevent ConcurrentModificationException
+        List<GameEventEntity> entitiesToSave = new ArrayList<>(context.getPendingEntities());
         Map<RoundStartEventEntity, RoundStartEventEntity> roundStartMap = new HashMap<>();
         
         logger.debug("Persisting {} total events for game", entitiesToSave.size());
         
         long roundStartPersistStart = System.currentTimeMillis();
         int roundStartCount = 0;
+        
         for (GameEventEntity entity : entitiesToSave) {
             if (entity instanceof RoundStartEventEntity roundStart) {
                 // Ensure game reference is managed
@@ -407,7 +409,14 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     game = entityManager.merge(game);
                 }
                 roundStart.setGame(game);
-                entityManager.persist(roundStart);
+                
+                // Check if entity already has an ID (detached entity) - use merge instead of persist
+                if (roundStart.getId() == null) {
+                    entityManager.persist(roundStart);
+                } else {
+                    // Entity already has ID, merge it to re-attach to persistence context
+                    roundStart = entityManager.merge(roundStart);
+                }
                 roundStartMap.put(roundStart, roundStart); // Track for reference updates
                 roundStartCount++;
             }
@@ -417,25 +426,37 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Flush to get RoundStartEventEntity IDs assigned
         if (!roundStartMap.isEmpty()) {
-            long roundStartFlushStart = System.currentTimeMillis();
             entityManager.flush();
-            long roundStartFlushTime = System.currentTimeMillis() - roundStartFlushStart;
-            logger.debug("Flushed {} RoundStartEventEntity instances (took {}ms)", roundStartCount, roundStartFlushTime);
+        }
+        
+        // Build cache of managed roundStart entities by ID (after flush, they're all managed)
+        // This avoids expensive contains() checks in the loop
+        Map<Long, RoundStartEventEntity> managedRoundStartCache = new HashMap<>();
+        for (RoundStartEventEntity roundStart : roundStartMap.keySet()) {
+            if (roundStart.getId() != null) {
+                managedRoundStartCache.put(roundStart.getId(), roundStart);
+            }
+        }
+        
+        // Ensure game is managed (check once, not 744 times)
+        if (game != null && !entityManager.contains(game)) {
+            game = entityManager.merge(game);
         }
         
         // Second pass: persist all other events
+        // With SEQUENCE generation, Hibernate can batch inserts for better performance
         long otherEventsPersistStart = System.currentTimeMillis();
         int otherEventCount = 0;
         int eventsWithRoundRef = 0;
         int eventsWithoutRoundRef = 0;
         Map<Long, Integer> eventsPerRound = new HashMap<>();
         
+        final int BATCH_SIZE = 50; // Match hibernate.jdbc.batch_size
+        int batchCount = 0;
+        
         for (GameEventEntity entity : entitiesToSave) {
             if (!(entity instanceof RoundStartEventEntity)) {
-                // Ensure game reference is managed
-                if (game != null && !entityManager.contains(game)) {
-                    game = entityManager.merge(game);
-                }
+                // Game should already be managed (checked once above)
                 entity.setGame(game);
                 
                 // Ensure roundStart reference is set and managed (if applicable)
@@ -451,12 +472,19 @@ public class JpaEventStore implements EventStore, GameEventListener {
                         eventsWithRoundRef++;
                         eventsPerRound.merge(roundStart.getId(), 1, Integer::sum);
                         
-                        if (!entityManager.contains(roundStart)) {
-                            // Re-attach if detached
-                            logger.debug("PERSIST_ROUND: Re-attaching detached roundStart ID {} for event {}", 
-                                    roundStart.getId(), entity.getGameEventType());
-                            RoundStartEventEntity managedRoundStart = entityManager.merge(roundStart);
+                        // Use cached managed entity instead of checking contains()
+                        RoundStartEventEntity managedRoundStart = managedRoundStartCache.get(roundStart.getId());
+                        if (managedRoundStart != null) {
+                            // Use the cached managed entity
                             entity.setRoundStart(managedRoundStart);
+                        } else {
+                            // Not in cache (shouldn't happen), merge it
+                            logger.debug("PERSIST_ROUND: RoundStart ID {} not in cache, merging for event {}", 
+                                    roundStart.getId(), entity.getGameEventType());
+                            managedRoundStart = entityManager.merge(roundStart);
+                            entity.setRoundStart(managedRoundStart);
+                            // Add to cache for future use
+                            managedRoundStartCache.put(roundStart.getId(), managedRoundStart);
                         }
                     }
                 } else {
@@ -472,31 +500,59 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     }
                 }
                 
-                entityManager.persist(entity);
+                // Check if entity already has an ID (detached entity) - use merge instead of persist
+                if (entity.getId() == null) {
+                    entityManager.persist(entity);
+                } else {
+                    // Entity already has ID, merge it to re-attach to persistence context
+                    entityManager.merge(entity);
+                }
                 otherEventCount++;
+                batchCount++;
+                
+                // Flush periodically to reduce memory pressure and enable batch processing
+                if (batchCount >= BATCH_SIZE) {
+                    entityManager.flush();
+                    batchCount = 0;
+                }
             }
         }
+        
+        // Flush any remaining entities
+        if (batchCount > 0) {
+            entityManager.flush();
+        }
+        
         long otherEventsPersistTime = System.currentTimeMillis() - otherEventsPersistStart;
-        logger.debug("Persisted {} other events (took {}ms)", otherEventCount, otherEventsPersistTime);
+        logger.info("Persisted {} other events (took {}ms)", otherEventCount, otherEventsPersistTime);
         
         if (!entitiesToSave.isEmpty()) {
-            logger.info("Persisted {} game events ({} round starts, {} other events)", 
+            logger.debug("Persisted {} game events ({} round starts, {} other events)", 
                     entitiesToSave.size(), roundStartCount, otherEventCount);
-            logger.info("PERSIST_ROUND: Events with roundStart: {}, without: {}", 
+            logger.debug("Events with roundStart: {}, without: {}", 
                     eventsWithRoundRef, eventsWithoutRoundRef);
-            logger.info("PERSIST_ROUND: Events per round: {}", eventsPerRound);
         }
         
         // 3. Persist all accolades using EntityManager (same persistence context)
         long accoladesStart = System.currentTimeMillis();
-        List<AccoladeEntity> accoladesToSave = context.getPendingAccolades();
+        // Create defensive copy to prevent ConcurrentModificationException
+        List<AccoladeEntity> accoladesToSave = new ArrayList<>(context.getPendingAccolades());
+        
+        
         for (AccoladeEntity accolade : accoladesToSave) {
             // Check if the game reference is managed; if not, re-attach it
             GameEntity accoladeGame = accolade.getGame();
             if (accoladeGame != null && accoladeGame.getId() != null && !entityManager.contains(accoladeGame)) {
                 accolade.setGame(entityManager.merge(accoladeGame));
             }
-            entityManager.persist(accolade);
+            
+            // Check if entity already has an ID (detached entity) - use merge instead of persist
+            if (accolade.getId() == null) {
+                entityManager.persist(accolade);
+            } else {
+                // Entity already has ID, merge it to re-attach to persistence context
+                entityManager.merge(accolade);
+            }
         }
         long accoladesTime = System.currentTimeMillis() - accoladesStart;
         if (!accoladesToSave.isEmpty()) {
@@ -507,12 +563,12 @@ public class JpaEventStore implements EventStore, GameEventListener {
         long finalFlushStart = System.currentTimeMillis();
         entityManager.flush();
         long finalFlushTime = System.currentTimeMillis() - finalFlushStart;
-        logger.info("Final flush complete (took {}ms) - This is likely the bottleneck for large batches", finalFlushTime);
+        logger.debug("Final flush complete (took {}ms)", finalFlushTime);
+        
+        context.clear();
         
         long totalTime = System.currentTimeMillis() - startTime;
         logger.info("Total persistGameData() time: {}ms", totalTime);
-        
-        context.clear();
     }
     
     /**
@@ -524,10 +580,14 @@ public class JpaEventStore implements EventStore, GameEventListener {
         // Also update the context's current game reference to the managed entity
         context.setCurrentGame(savedGame);
         
-        for (GameEventEntity entity : context.getPendingEntities()) {
+        // Create defensive copies to prevent ConcurrentModificationException
+        List<GameEventEntity> entities = new ArrayList<>(context.getPendingEntities());
+        List<AccoladeEntity> accolades = new ArrayList<>(context.getPendingAccolades());
+        
+        for (GameEventEntity entity : entities) {
             entity.setGame(savedGame);
         }
-        for (AccoladeEntity accolade : context.getPendingAccolades()) {
+        for (AccoladeEntity accolade : accolades) {
             accolade.setGame(savedGame);
         }
     }

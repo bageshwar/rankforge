@@ -97,7 +97,7 @@ public class GameRankingSystem {
      * @param lines the log lines to process
      */
     public void processLines(List<String> lines) {
-        logger.debug("Starting batch processing of {} log lines", lines.size());
+        logger.info("Starting batch processing of {} log lines", lines.size());
 
         for (int i = 0; i < lines.size(); i++) {
             Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(lines.get(i), lines, i);

@@ -31,7 +31,8 @@ import java.time.Instant;
 public class PlayerStatsEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "player_stats_seq")
+    @SequenceGenerator(name = "player_stats_seq", sequenceName = "player_stats_seq", allocationSize = 50)
     private Long id;
     
     @Column(name = "playerId", nullable = false, length = 255)
