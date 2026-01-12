@@ -121,7 +121,8 @@ test.describe('Game Details Page', () => {
     await expect(page.getByRole('columnheader', { name: 'K', exact: true })).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('columnheader', { name: 'D', exact: true })).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('columnheader', { name: 'A', exact: true })).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole('columnheader', { name: 'K/D', exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('columnheader', { name: 'DMG', exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('columnheader', { name: 'HS%', exact: true })).toBeVisible({ timeout: 30000 });
 
     const playerStatsCount = await gameDetailsPage.getPlayerStatsCount();
     expect(playerStatsCount).toBeGreaterThan(0);
@@ -134,7 +135,8 @@ test.describe('Game Details Page', () => {
       expect(playerStat.kills).toBeTruthy();
       expect(playerStat.deaths).toBeTruthy();
       expect(playerStat.assists).toBeTruthy();
-      expect(playerStat.kd).toBeTruthy();
+      expect(playerStat.damage).toBeTruthy();
+      expect(playerStat.headshotPct).toBeTruthy();
       console.log('[TEST] ✓ Player statistics data is valid');
     }
 

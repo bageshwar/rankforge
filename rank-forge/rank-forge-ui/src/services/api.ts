@@ -48,6 +48,9 @@ export interface PlayerStatDTO {
   deaths: number;
   assists: number;
   rating: number;
+  damage: number;
+  headshotKills: number;
+  headshotPercentage: number;
 }
 
 export interface AccoladeDTO {

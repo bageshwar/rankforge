@@ -178,7 +178,8 @@ export const GameDetailsPage = () => {
                   <th>K</th>
                   <th>D</th>
                   <th>A</th>
-                  <th>K/D</th>
+                  <th>DMG</th>
+                  <th>HS%</th>
                 </tr>
               </thead>
               <tbody>
@@ -211,10 +212,9 @@ export const GameDetailsPage = () => {
                       <td className="kills-cell">{player.kills}</td>
                       <td className="deaths-cell">{player.deaths}</td>
                       <td className="assists-cell">{player.assists}</td>
-                      <td className="rating-cell">
-                        {player.deaths > 0 
-                          ? (player.kills / player.deaths).toFixed(2) 
-                          : player.kills.toFixed(2)}
+                      <td className="damage-cell">{player.damage || 0}</td>
+                      <td className="headshot-cell">
+                        {Math.round(player.headshotPercentage || 0)}%
                       </td>
                     </tr>
                   );

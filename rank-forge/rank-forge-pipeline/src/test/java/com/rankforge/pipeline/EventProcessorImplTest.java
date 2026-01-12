@@ -195,7 +195,7 @@ class EventProcessorImplTest {
             Player attacker = new Player("Attacker", "[U:1:123456]");
             Player victim = new Player("Victim", "[U:1:789012]");
             AttackEvent attackEvent = new AttackEvent(
-                Instant.now(), Map.of(), attacker, victim, "ak47", "25", "5", "chest"
+                Instant.now(), Map.of(), attacker, victim, "ak47", "25", "5", "chest", "75"
             );
 
             PlayerStats attackerStats = createPlayerStats(attacker.getSteamId(), 10, 5, 2, 3);
@@ -412,7 +412,7 @@ class EventProcessorImplTest {
             
             KillEvent kill = new KillEvent(Instant.now(), Map.of(), player1, player2, "ak47", true);
             AssistEvent assist = new AssistEvent(Instant.now(), Map.of(), player2, player1, "m4a1", AssistEvent.AssistType.Regular);
-            AttackEvent attack = new AttackEvent(Instant.now(), Map.of(), player1, player2, "m4a1", "30", "0", "chest");
+            AttackEvent attack = new AttackEvent(Instant.now(), Map.of(), player1, player2, "m4a1", "30", "0", "chest", "70");
 
             PlayerStats stats1 = createPlayerStats(player1.getSteamId(), 10, 5, 2, 3);
             PlayerStats stats2 = createPlayerStats(player2.getSteamId(), 8, 7, 3, 1);
