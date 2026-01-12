@@ -48,17 +48,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
- * Test class to identify and log all unique unprocessed event lines from a production log file.
+ * E2E debugging tool to identify and log all unique unprocessed event lines from a production log file.
  * This helps identify which events we are not currently processing.
  * 
- * Usage: Supply a sample production log file path and run this test to see all unique
- * log lines that don't match any of our known event patterns.
+ * Usage: Supply a sample production log file path and run with:
+ * mvn test -Pe2e -Dtest=UnprocessedEventsLoggerE2ETest -Dlog.file.path=<path-to-log>
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Unprocessed Events Logger")
-class UnprocessedEventsLoggerTest {
+@DisplayName("Unprocessed Events Logger - E2E Debugging Tool")
+class UnprocessedEventsLoggerE2ETest {
     
-    private static final Logger logger = LoggerFactory.getLogger(UnprocessedEventsLoggerTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(UnprocessedEventsLoggerE2ETest.class);
     
     @Mock
     private EventStore eventStore;
