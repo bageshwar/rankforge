@@ -76,7 +76,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PipelineApiIntegrationTest {
 
-    private static final String TEST_S3_PATH = "s3://cs2serverdata/cs2_log_2026-01-07.json";
+    private static final String TEST_S3_PATH = "s3://cs2serverdata/cs2_log_2026-01-11.json";
     private static final String STAGING_DB_IDENTIFIER = "staging";
     
     // Expected counts from the test log file

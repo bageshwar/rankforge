@@ -36,6 +36,12 @@ export const GameDetailsPage = () => {
   const [gameDetails, setGameDetails] = useState<GameDetailsDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Sorting state - default to kills descending
+  type SortColumn = 'kills' | 'deaths' | 'assists' | 'damage' | 'hs' | null;
+  type SortDirection = 'asc' | 'desc';
+  const [sortColumn, setSortColumn] = useState<SortColumn>('kills');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
     if (gameId) {
@@ -83,6 +89,72 @@ export const GameDetailsPage = () => {
     if (position === 2) return '🥈';
     if (position === 3) return '🥉';
     return null;
+  };
+
+  const handleSort = (column: SortColumn) => {
+    if (column === null) return;
+    
+    if (sortColumn === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // New column, default to descending
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortedPlayerStats = () => {
+    if (!gameDetails?.playerStats) return [];
+    
+    // First, calculate kill rankings (for gold/silver/bronze badges)
+    const playersWithKillRank = [...gameDetails.playerStats]
+      .sort((a, b) => b.kills - a.kills)
+      .map((player, idx) => ({
+        ...player,
+        killRank: idx + 1 // 1 = most kills, 2 = second most, etc.
+      }));
+    
+    // Then sort by selected column
+    if (!sortColumn) return playersWithKillRank;
+
+    const sorted = playersWithKillRank.sort((a, b) => {
+      let aValue: number;
+      let bValue: number;
+
+      switch (sortColumn) {
+        case 'kills':
+          aValue = a.kills;
+          bValue = b.kills;
+          break;
+        case 'deaths':
+          aValue = a.deaths;
+          bValue = b.deaths;
+          break;
+        case 'assists':
+          aValue = a.assists;
+          bValue = b.assists;
+          break;
+        case 'damage':
+          aValue = a.damage || 0;
+          bValue = b.damage || 0;
+          break;
+        case 'hs':
+          aValue = a.headshotPercentage || 0;
+          bValue = b.headshotPercentage || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    return sorted;
   };
 
   if (loading) {
@@ -175,25 +247,64 @@ export const GameDetailsPage = () => {
               <thead>
                 <tr>
                   <th>Player</th>
-                  <th>K</th>
-                  <th>D</th>
-                  <th>A</th>
-                  <th>K/D</th>
+                  <th 
+                    className="sortable"
+                    onClick={() => handleSort('kills')}
+                    title="Click to sort by kills"
+                    data-sort-active={sortColumn === 'kills' ? 'true' : 'false'}
+                    data-sort-direction={sortColumn === 'kills' ? sortDirection : undefined}
+                  >
+                    K
+                  </th>
+                  <th 
+                    className="sortable"
+                    onClick={() => handleSort('deaths')}
+                    title="Click to sort by deaths"
+                    data-sort-active={sortColumn === 'deaths' ? 'true' : 'false'}
+                    data-sort-direction={sortColumn === 'deaths' ? sortDirection : undefined}
+                  >
+                    D
+                  </th>
+                  <th 
+                    className="sortable"
+                    onClick={() => handleSort('assists')}
+                    title="Click to sort by assists"
+                    data-sort-active={sortColumn === 'assists' ? 'true' : 'false'}
+                    data-sort-direction={sortColumn === 'assists' ? sortDirection : undefined}
+                  >
+                    A
+                  </th>
+                  <th 
+                    className="sortable"
+                    onClick={() => handleSort('damage')}
+                    title="Click to sort by damage"
+                    data-sort-active={sortColumn === 'damage' ? 'true' : 'false'}
+                    data-sort-direction={sortColumn === 'damage' ? sortDirection : undefined}
+                  >
+                    DMG
+                  </th>
+                  <th 
+                    className="sortable"
+                    onClick={() => handleSort('hs')}
+                    title="Click to sort by headshot %"
+                    data-sort-active={sortColumn === 'hs' ? 'true' : 'false'}
+                    data-sort-direction={sortColumn === 'hs' ? sortDirection : undefined}
+                  >
+                    HS%
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {[...gameDetails.playerStats]
-                  .sort((a, b) => b.kills - a.kills)
-                  .map((player, idx) => {
-                  const position = idx + 1;
-                  const rankClass = position === 1 ? 'rank-gold' : position === 2 ? 'rank-silver' : position === 3 ? 'rank-bronze' : '';
+                {getSortedPlayerStats().map((player, idx) => {
+                  const killRank = player.killRank || 999; // Use killRank for badges (persistent based on kills)
+                  const rankClass = killRank === 1 ? 'rank-gold' : killRank === 2 ? 'rank-silver' : killRank === 3 ? 'rank-bronze' : '';
                   const steamId = extractSteamId(player.playerId);
                   return (
                     <tr key={idx} className={rankClass}>
                       <td className="player-name-cell">
-                        {position <= 3 && (
-                          <span className={`rank-icon ${rankClass}`} data-testid={`testid-rank-icon-${position}`}>
-                            {getRankIcon(position)}
+                        {killRank <= 3 && (
+                          <span className={`rank-icon ${rankClass}`} data-testid={`testid-rank-icon-${killRank}`}>
+                            {getRankIcon(killRank)}
                           </span>
                         )}
                         {steamId ? (
@@ -211,10 +322,9 @@ export const GameDetailsPage = () => {
                       <td className="kills-cell">{player.kills}</td>
                       <td className="deaths-cell">{player.deaths}</td>
                       <td className="assists-cell">{player.assists}</td>
-                      <td className="rating-cell">
-                        {player.deaths > 0 
-                          ? (player.kills / player.deaths).toFixed(2) 
-                          : player.kills.toFixed(2)}
+                      <td className="damage-cell">{player.damage || 0}</td>
+                      <td className="headshot-cell">
+                        {Math.round(player.headshotPercentage || 0)}%
                       </td>
                     </tr>
                   );

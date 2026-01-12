@@ -335,6 +335,60 @@
   }
 }
 
+/* Sortable columns */
+.stats-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  position: relative;
+  padding-right: 1.5rem;
+}
+
+.stats-table th.sortable:hover {
+  background-color: rgba(74, 144, 226, 0.2);
+  color: var(--color-primary);
+}
+
+.stats-table th.sortable:active {
+  background-color: rgba(74, 144, 226, 0.3);
+}
+
+.stats-table th.sortable::after {
+  content: '↕';
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  opacity: 0.4;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+.stats-table th.sortable:hover::after {
+  opacity: 0.7;
+  color: var(--color-primary);
+}
+
+/* Active sort indicator */
+.stats-table th.sortable[data-sort-active="true"] {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.stats-table th.sortable[data-sort-active="true"]::after {
+  opacity: 1;
+  color: var(--color-primary);
+  content: '↓';
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.stats-table th.sortable[data-sort-active="true"][data-sort-direction="asc"]::after {
+  content: '↑';
+}
+
 /* Round Timeline */
 .rounds-section {
   overflow: hidden;

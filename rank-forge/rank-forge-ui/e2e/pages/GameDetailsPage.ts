@@ -136,14 +136,16 @@ export class GameDetailsPage extends BasePage {
     const kills = await row.locator('.kills-cell').textContent();
     const deaths = await row.locator('.deaths-cell').textContent();
     const assists = await row.locator('.assists-cell').textContent();
-    const kd = await row.locator('.rating-cell').textContent();
+    const damage = await row.locator('.damage-cell').textContent();
+    const headshotPct = await row.locator('.headshot-cell').textContent();
     
     return {
       playerName: playerName?.trim() || '',
       kills: kills?.trim() || '',
       deaths: deaths?.trim() || '',
       assists: assists?.trim() || '',
-      kd: kd?.trim() || '',
+      damage: damage?.trim() || '',
+      headshotPct: headshotPct?.trim() || '',
     };
   }
 
