@@ -424,6 +424,65 @@
   z-index: 1;
 }
 
+/* Glassmorphism Card Backgrounds */
+.card-bg-glass {
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(74, 144, 226, 0.15);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-bg-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.008) 8px,
+      rgba(255, 255, 255, 0.008) 9px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card-bg-glass:hover {
+  background: rgba(35, 35, 35, 0.88);
+  border-color: rgba(74, 144, 226, 0.25);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(74, 144, 226, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+/* Header glassmorphism variant */
+.header-bg-glass {
+  background: linear-gradient(
+    135deg, 
+    rgba(26, 26, 26, 0.92) 0%, 
+    rgba(45, 45, 45, 0.88) 50%, 
+    rgba(26, 26, 26, 0.92) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(74, 144, 226, 0.2);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(74, 144, 226, 0.1),
+    inset 0 2px 0 rgba(255, 255, 255, 0.08);
+}
+
 /* Glow effects */
 .glow-orange {
   box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);

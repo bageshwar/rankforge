@@ -4,7 +4,7 @@ import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
-import type { RoundDetailsDTO, RoundEventDTO } from '../services/api';
+import type { RoundDetailsDTO, RoundEventDTO, GameDTO } from '../services/api';
 import './RoundDetailsPage.css';
 
 // Event type icons and labels
@@ -103,6 +103,7 @@ const formatTimeOffset = (ms: number): string => {
 export const RoundDetailsPage = () => {
   const { gameId, roundNumber } = useParams<{ gameId: string; roundNumber: string }>();
   const [roundDetails, setRoundDetails] = useState<RoundDetailsDTO | null>(null);
+  const [game, setGame] = useState<GameDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,14 +119,20 @@ export const RoundDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await gamesApi.getRoundDetails(gameId, parseInt(roundNumber, 10));
+      
+      // Fetch both round details and game data (for map name)
+      const [roundData, gameData] = await Promise.all([
+        gamesApi.getRoundDetails(gameId, parseInt(roundNumber, 10)),
+        gamesApi.getById(gameId),
+      ]);
 
-      if (!data) {
+      if (!roundData) {
         setError('Round not found');
         return;
       }
 
-      setRoundDetails(data);
+      setRoundDetails(roundData);
+      setGame(gameData);
     } catch (err) {
       setError('Failed to load round details. Please try again later.');
       console.error('Error loading round details:', err);
@@ -167,7 +174,7 @@ export const RoundDetailsPage = () => {
   const significantEvents = getSignificantEvents(roundDetails.events);
 
   return (
-    <PageContainer backgroundClass="bg-round-details">
+    <PageContainer mapName={game?.map}>
       <Link to={`/games/${gameId}`} className="back-btn">
         ← Back to Game
       </Link>

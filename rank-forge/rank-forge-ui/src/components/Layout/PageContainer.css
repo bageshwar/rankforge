@@ -12,3 +12,182 @@
   margin: 0 auto;
   padding: 0 1.5rem;
 }
+
+/* Map Background Styles */
+
+/* Combat Style - Sharp focus with dark overlay */
+.bg-map-combat {
+  position: relative;
+  background-color: #0d0d0d;
+  background-image: var(--map-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-map-combat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(13, 13, 13, 0.75) 0%,
+    rgba(26, 26, 26, 0.65) 50%,
+    rgba(13, 13, 13, 0.75) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bg-map-combat::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 40px,
+      rgba(0, 0, 0, 0.1) 40px,
+      rgba(0, 0, 0, 0.1) 41px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(0, 0, 0, 0.1) 40px,
+      rgba(0, 0, 0, 0.1) 41px
+    );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Intel Style - Blurred recon view */
+.bg-map-intel {
+  position: relative;
+  background-color: #0d0d0d;
+  background-image: var(--map-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-map-intel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: var(--map-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  filter: blur(8px);
+  transform: scale(1.1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-map-intel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(13, 13, 13, 0.6) 0%,
+    rgba(26, 26, 26, 0.5) 50%,
+    rgba(13, 13, 13, 0.6) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Ghost Style - Stealth mode with heavy fade */
+.bg-map-ghost {
+  position: relative;
+  background-color: #0d0d0d;
+  background-image: var(--map-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.bg-map-ghost::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(13, 13, 13, 0.88) 0%,
+    rgba(26, 26, 26, 0.82) 50%,
+    rgba(13, 13, 13, 0.88) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bg-map-ghost::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 60px,
+      rgba(0, 0, 0, 0.15) 60px,
+      rgba(0, 0, 0, 0.15) 61px
+    );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Smooth fade-in animation for images */
+.bg-map-combat.image-loaded,
+.bg-map-intel.image-loaded,
+.bg-map-ghost.image-loaded {
+  animation: fadeInBackground 0.6s ease-in-out;
+}
+
+@keyframes fadeInBackground {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Ensure content stays on top */
+.bg-map-combat .page-content,
+.bg-map-intel .page-content,
+.bg-map-ghost .page-content {
+  position: relative;
+  z-index: 10;
+}

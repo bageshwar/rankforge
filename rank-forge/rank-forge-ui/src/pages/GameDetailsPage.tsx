@@ -179,7 +179,7 @@ export const GameDetailsPage = () => {
   }
 
   return (
-    <PageContainer backgroundClass="bg-game-details">
+    <PageContainer mapName={game.map}>
       <Link to="/games" className="back-btn">
         ← Back to Games
       </Link>
