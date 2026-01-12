@@ -96,47 +96,67 @@
   z-index: 1;
 }
 
-/* Rankings Page Background */
+/* Enhanced Rankings Page Background with Tactical Elements */
 .bg-rankings {
   position: relative;
-  background: linear-gradient(180deg, #0d0d0d 0%, #1a1a1a 50%, #0d0d0d 100%);
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 30%, #0d0d0d 100%);
   min-height: 100vh;
+  overflow: hidden;
 }
 
+/* Tactical grid overlay */
 .bg-rankings::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, 
-    transparent 0%,
-    var(--color-accent-orange) 20%,
-    var(--color-accent-orange) 80%,
-    transparent 100%
-  );
-  opacity: 0.3;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 50px,
+      rgba(168, 85, 247, 0.03) 50px,
+      rgba(168, 85, 247, 0.03) 51px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 50px,
+      rgba(168, 85, 247, 0.03) 50px,
+      rgba(168, 85, 247, 0.03) 51px
+    );
   pointer-events: none;
   z-index: 1;
 }
 
+/* Animated radial glow pulses */
 .bg-rankings::after {
   content: '';
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, 
-    transparent 0%,
-    var(--color-accent-blue) 20%,
-    var(--color-accent-blue) 80%,
-    transparent 100%
-  );
-  opacity: 0.3;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(168, 85, 247, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(74, 144, 226, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(255, 193, 7, 0.04) 0%, transparent 50%);
+  animation: pulse-glow 8s ease-in-out infinite;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
 }
 
 /* Games Page Background */
@@ -422,6 +442,65 @@
     );
   pointer-events: none;
   z-index: 1;
+}
+
+/* Glassmorphism Card Backgrounds */
+.card-bg-glass {
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(74, 144, 226, 0.15);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-bg-glass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.008) 8px,
+      rgba(255, 255, 255, 0.008) 9px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card-bg-glass:hover {
+  background: rgba(35, 35, 35, 0.88);
+  border-color: rgba(74, 144, 226, 0.25);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(74, 144, 226, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
+
+/* Header glassmorphism variant */
+.header-bg-glass {
+  background: linear-gradient(
+    135deg, 
+    rgba(26, 26, 26, 0.92) 0%, 
+    rgba(45, 45, 45, 0.88) 50%, 
+    rgba(26, 26, 26, 0.92) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(74, 144, 226, 0.2);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(74, 144, 226, 0.1),
+    inset 0 2px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* Glow effects */
