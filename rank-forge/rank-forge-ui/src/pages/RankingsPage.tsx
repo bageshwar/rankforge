@@ -4,6 +4,7 @@ import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { rankingsApi } from '../services/api';
 import type { PlayerRankingDTO, LeaderboardResponseDTO } from '../services/api';
+import { getRandomMap } from '../utils/mapImages';
 import './RankingsPage.css';
 
 import { extractSteamId } from '../utils/steamId';
@@ -51,6 +52,9 @@ export const RankingsPage = () => {
   type SortDirection = 'asc' | 'desc';
   const [sortColumn, setSortColumn] = useState<SortColumn>('rank');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  
+  // Random map for background - set once on component mount
+  const [backgroundMap] = useState<string>(() => getRandomMap());
 
   // Update URL when state changes
   useEffect(() => {
@@ -286,7 +290,7 @@ export const RankingsPage = () => {
 
   if (loading) {
     return (
-      <PageContainer backgroundClass="bg-rankings">
+      <PageContainer mapName={backgroundMap}>
         <LoadingSpinner size="lg" message="Loading rankings..." />
       </PageContainer>
     );
@@ -294,14 +298,14 @@ export const RankingsPage = () => {
 
   if (error) {
     return (
-      <PageContainer backgroundClass="bg-rankings">
+      <PageContainer mapName={backgroundMap}>
         <div className="error-message">{error}</div>
       </PageContainer>
     );
   }
 
   return (
-    <PageContainer backgroundClass="bg-rankings">
+    <PageContainer mapName={backgroundMap}>
       <div className="rankings-header">
         <h1 className="rankings-title">🏆 RankForge Player Rankings</h1>
         <p className="rankings-subtitle">

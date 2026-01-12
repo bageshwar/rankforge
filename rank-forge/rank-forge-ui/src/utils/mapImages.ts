@@ -85,6 +85,29 @@ export const checkMapImageExists = async (mapName: string): Promise<boolean> => 
 };
 
 /**
+ * List of available CS2 maps for random selection
+ */
+export const AVAILABLE_MAPS = [
+  'de_dust2',
+  'de_mirage',
+  'de_inferno',
+  'de_nuke',
+  'de_overpass',
+  'de_vertigo',
+  'de_ancient',
+  'de_anubis',
+  'de_train',
+] as const;
+
+/**
+ * Gets a random map from the available maps list
+ */
+export const getRandomMap = (): string => {
+  const randomIndex = Math.floor(Math.random() * AVAILABLE_MAPS.length);
+  return AVAILABLE_MAPS[randomIndex];
+};
+
+/**
  * Map background style types
  */
 export type BackgroundStyle = 'combat' | 'intel' | 'ghost';
