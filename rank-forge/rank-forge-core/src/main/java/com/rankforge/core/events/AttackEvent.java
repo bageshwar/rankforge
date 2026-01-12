@@ -33,15 +33,17 @@ public class AttackEvent extends GameActionEvent {
     private int damage;
     private int armorDamage;
     private String hitGroup;
+    private int healthRemaining;
 
     // Default constructor for Jackson deserialization
     public AttackEvent() {}
 
-    public AttackEvent(Instant timestamp, Map<String, String> additionalData, Player player1, Player player2, String weapon, String damage, String armorDamage, String hitGroup) {
+    public AttackEvent(Instant timestamp, Map<String, String> additionalData, Player player1, Player player2, String weapon, String damage, String armorDamage, String hitGroup, String healthRemaining) {
         super(timestamp, GameEventType.ATTACK, additionalData, player1, player2, weapon);
         this.damage = Integer.parseInt(damage);
         this.armorDamage = Integer.parseInt(armorDamage);
         this.hitGroup = hitGroup;
+        this.healthRemaining = Integer.parseInt(healthRemaining);
     }
 
     public int getDamage() {
@@ -66,5 +68,13 @@ public class AttackEvent extends GameActionEvent {
 
     public void setHitGroup(String hitGroup) {
         this.hitGroup = hitGroup;
+    }
+
+    public int getHealthRemaining() {
+        return healthRemaining;
+    }
+
+    public void setHealthRemaining(int healthRemaining) {
+        this.healthRemaining = healthRemaining;
     }
 }

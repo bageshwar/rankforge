@@ -421,11 +421,20 @@ public class GameService {
                 String killerSteamId = entity.getPlayer1();
                 String victimSteamId = entity.getPlayer2();
                 
+                // Check if it's a headshot kill
+                boolean isHeadshot = false;
+                if (entity instanceof com.rankforge.pipeline.persistence.entity.KillEventEntity killEvent) {
+                    isHeadshot = Boolean.TRUE.equals(killEvent.getIsHeadshot());
+                }
+                
                 if (killerSteamId != null) {
                     // Try exact match first
                     if (statsMap.containsKey(killerSteamId)) {
                         PlayerStatsDTO stats = statsMap.get(killerSteamId);
                         stats.setKills(stats.getKills() + 1);
+                        if (isHeadshot) {
+                            stats.setHeadshotKills(stats.getHeadshotKills() + 1);
+                        }
                     } else {
                         // Fallback to partial match
                         for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
@@ -433,6 +442,9 @@ public class GameService {
                             String normalizedName = stats.getPlayerName().toLowerCase();
                             if (stats != null && killerSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
                                 stats.setKills(stats.getKills() + 1);
+                                if (isHeadshot) {
+                                    stats.setHeadshotKills(stats.getHeadshotKills() + 1);
+                                }
                                 break;
                             }
                         }
@@ -501,12 +513,107 @@ public class GameService {
             LOGGER.error("Failed to get assist events for game {}", gameId, e);
         }
         
-        // Calculate rating (K/D ratio)
+        // Query AttackEvent to calculate damage dealt using gameId
+        // NOTE: We calculate actual HP damage by tracking victim HP and using healthRemaining from logs
+        try {
+            List<GameEventEntity> attackEntities = gameEventRepository.findByGameIdAndGameEventType(
+                    gameId, GameEventType.ATTACK);
+            
+            LOGGER.info("Found {} attack events for game {}", attackEntities.size(), gameId);
+            
+            // CRITICAL: Sort events by timestamp to ensure HP tracking works correctly
+            attackEntities.sort(Comparator.comparing(GameEventEntity::getTimestamp));
+            
+            // Track each victim's HP throughout the game (resets to 100 each round)
+            // Key: victimSteamId_roundStartId, Value: current HP
+            Map<String, Integer> victimHPTracker = new HashMap<>();
+            
+            // Debug: Track damage per player
+            Map<String, Integer> damageDebug = new HashMap<>();
+            int totalHitsProcessed = 0;
+            int hitsWithoutHealthData = 0;
+            
+            for (GameEventEntity entity : attackEntities) {
+                if (entity instanceof com.rankforge.pipeline.persistence.entity.AttackEventEntity attackEvent) {
+                    String attackerSteamId = entity.getPlayer1();
+                    String victimSteamId = entity.getPlayer2();
+                    Integer healthRemaining = attackEvent.getHealthRemaining();
+                    
+                    // Get round ID for proper HP tracking (HP resets each round)
+                    Long roundStartId = (entity.getRoundStart() != null) ? entity.getRoundStart().getId() : 0L;
+                    
+                    // Calculate actual damage using HP tracking
+                    Integer actualDamage = null;
+                    
+                    if (victimSteamId != null && healthRemaining != null) {
+                        // Get victim's HP before this hit (100 at start of each round)
+                        String victimKey = victimSteamId + "_" + roundStartId;
+                        Integer previousHP = victimHPTracker.getOrDefault(victimKey, 100);
+                        
+                        // Calculate actual damage dealt = previous HP - remaining HP
+                        actualDamage = previousHP - healthRemaining;
+                        
+                        // Update victim's HP for this round
+                        victimHPTracker.put(victimKey, healthRemaining);
+                        
+                        // Sanity check: damage should be positive and reasonable
+                        if (actualDamage < 0 || actualDamage > 100) {
+                            // This shouldn't happen with proper round tracking, but fallback to safe calculation
+                            actualDamage = Math.max(0, Math.min(100, 100 - healthRemaining));
+                            LOGGER.warn("Anomaly in damage calculation for victim {} in round {}: calculated {}, using fallback", 
+                                victimSteamId, roundStartId, actualDamage);
+                        }
+                    } else {
+                        hitsWithoutHealthData++;
+                    }
+                    
+                    // Add damage to attacker's total
+                    if (attackerSteamId != null && actualDamage != null && actualDamage > 0) {
+                        totalHitsProcessed++;
+                        
+                        // Try exact match first
+                        if (statsMap.containsKey(attackerSteamId)) {
+                            PlayerStatsDTO stats = statsMap.get(attackerSteamId);
+                            stats.setDamage(stats.getDamage() + actualDamage);
+                            damageDebug.put(attackerSteamId, damageDebug.getOrDefault(attackerSteamId, 0) + actualDamage);
+                        } else {
+                            // Fallback to partial match
+                            for (Map.Entry<String, PlayerStatsDTO> mapEntry : statsMap.entrySet()) {
+                                PlayerStatsDTO stats = mapEntry.getValue();
+                                String normalizedName = stats.getPlayerName().toLowerCase();
+                                if (stats != null && attackerSteamId.contains(normalizedName.substring(0, Math.min(3, normalizedName.length())))) {
+                                    stats.setDamage(stats.getDamage() + actualDamage);
+                                    damageDebug.put(attackerSteamId, damageDebug.getOrDefault(attackerSteamId, 0) + actualDamage);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            LOGGER.info("Processed {} attack hits for game {} ({} hits without health data), damage per player: {}", 
+                totalHitsProcessed, gameId, hitsWithoutHealthData, damageDebug);
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException e) {
+            LOGGER.debug("GameEvent table does not exist yet, skipping attack events");
+        } catch (org.springframework.dao.DataAccessException e) {
+            LOGGER.warn("Database access error while retrieving attack events");
+        } catch (Exception e) {
+            LOGGER.error("Failed to get attack events for game {}", gameId, e);
+        }
+        
+        // Calculate rating (K/D ratio) and headshot percentage
         for (PlayerStatsDTO stats : statsMap.values()) {
             double rating = stats.getDeaths() > 0 
                 ? (double) stats.getKills() / stats.getDeaths() 
                 : (stats.getKills() > 0 ? stats.getKills() : 0.0);
             stats.setRating(rating);
+            
+            // Calculate headshot percentage
+            double headshotPercentage = stats.getKills() > 0
+                ? (double) stats.getHeadshotKills() / stats.getKills() * 100.0
+                : 0.0;
+            stats.setHeadshotPercentage(headshotPercentage);
         }
         
         // Return stats as a list (order preserved by LinkedHashMap)

@@ -44,6 +44,9 @@ public class AttackEventEntity extends GameEventEntity {
     @jakarta.persistence.Column(name = "weapon", length = 255)
     private String weapon;
     
+    @jakarta.persistence.Column(name = "healthRemaining")
+    private Integer healthRemaining;
+    
     public AttackEventEntity() {
         super();
     }
@@ -82,5 +85,13 @@ public class AttackEventEntity extends GameEventEntity {
     
     public void setWeapon(String weapon) {
         this.weapon = weapon;
+    }
+    
+    public Integer getHealthRemaining() {
+        return healthRemaining;
+    }
+    
+    public void setHealthRemaining(Integer healthRemaining) {
+        this.healthRemaining = healthRemaining;
     }
 }

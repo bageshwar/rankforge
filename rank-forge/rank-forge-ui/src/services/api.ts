@@ -48,6 +48,9 @@ export interface PlayerStatDTO {
   deaths: number;
   assists: number;
   rating: number;
+  damage: number;
+  headshotKills: number;
+  headshotPercentage: number;
 }
 
 export interface AccoladeDTO {
@@ -156,28 +159,8 @@ export interface LeaderboardResponseDTO {
 
 // Rankings API
 export const rankingsApi = {
-  /**
-   * Get all player rankings with summary statistics
-   * @deprecated Use getAllWithStats() for consistency. This method is kept for backward compatibility.
-   */
-  getAll: async (): Promise<LeaderboardResponseDTO> => {
-    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings');
-    return response.data;
-  },
-
   getAllWithStats: async (): Promise<LeaderboardResponseDTO> => {
     const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/stats');
-    return response.data;
-  },
-
-  /**
-   * Get top N player rankings with summary statistics
-   * @deprecated Use getTopWithStats() for consistency. This method is kept for backward compatibility.
-   */
-  getTop: async (limit: number = 10): Promise<LeaderboardResponseDTO> => {
-    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/top', {
-      params: { limit },
-    });
     return response.data;
   },
 

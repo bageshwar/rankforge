@@ -185,6 +185,7 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     attackEntity.setArmorDamage(attackEvent.getArmorDamage());
                     attackEntity.setHitGroup(attackEvent.getHitGroup());
                     attackEntity.setWeapon(attackEvent.getWeapon());
+                    attackEntity.setHealthRemaining(attackEvent.getHealthRemaining());
                     if (attackEvent.getPlayer1() != null) {
                         attackEntity.setPlayer1(attackEvent.getPlayer1().getSteamId());
                     }

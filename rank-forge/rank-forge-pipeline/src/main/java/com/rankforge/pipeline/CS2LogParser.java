@@ -646,7 +646,8 @@ public class CS2LogParser implements LogParser {
                 matcher.group("weapon"),
                 matcher.group("damage"),
                 matcher.group("damageArmor"),
-                matcher.group("hitgroup")
+                matcher.group("hitgroup"),
+                matcher.group("healthRemaining")
         );
         attackEvent.setPlayer1X(attackerX);
         attackEvent.setPlayer1Y(attackerY);
