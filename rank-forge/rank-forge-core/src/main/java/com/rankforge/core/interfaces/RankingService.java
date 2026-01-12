@@ -18,7 +18,6 @@
 
 package com.rankforge.core.interfaces;
 
-import com.rankforge.core.models.PlayerRank;
 import com.rankforge.core.models.PlayerStats;
 
 import java.util.List;
@@ -30,8 +29,6 @@ import java.util.List;
  */
 public interface RankingService {
     double getPlayerRanking(String playerId);
-
-    List<PlayerRank> getTopPlayers(int limit);
 
     void updateRankings(List<PlayerStats> players);
 }
