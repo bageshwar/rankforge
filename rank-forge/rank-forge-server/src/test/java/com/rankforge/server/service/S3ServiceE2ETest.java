@@ -32,10 +32,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Integration test for S3Service to verify S3 connectivity
+ * E2E test for S3Service to verify S3 connectivity
  * Requires actual AWS credentials configured in application-local.properties
  * 
- * To run: mvn test -Dtest=S3ServiceIntegrationTest -Dspring.profiles.active=local
+ * To run:
+ * - Unit tests only: mvn test
+ * - E2E tests only: mvn test -Pe2e
+ * - All tests: mvn verify
  * 
  * Note: This test excludes PersistenceConfig to avoid database connection requirements
  * for S3-only testing. Uses a minimal Spring context with only S3Service.
@@ -49,7 +52,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @ComponentScan(basePackages = "com.rankforge.server.service",
                excludeFilters = @ComponentScan.Filter(type = FilterType.REGEX, 
                                                       pattern = "com\\.rankforge\\.server\\.config\\..*"))
-class S3ServiceIntegrationTest {
+class S3ServiceE2ETest {
 
     @Autowired(required = false)
     private S3Service s3Service;
