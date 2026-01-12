@@ -36,7 +36,31 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Core system class that coordinates all components with batch processing
+ * Main system for processing game logs and computing rankings.
+ * 
+ * THREADING MODEL:
+ * ----------------
+ * This class is designed to be INSTANCE-PER-REQUEST. Each log processing request creates a new instance.
+ * 
+ * Architecture:
+ * - Created per HTTP request in LogProcessingService.processLogFileAsync()
+ * - Each instance owns its own CS2LogParser, EventProcessor, and other components
+ * - NOT thread-safe - should not be shared across threads
+ * - Implements AutoCloseable for proper resource cleanup (EntityManager, etc.)
+ * 
+ * Lifecycle:
+ *   1. Created: pipelineService.createGameRankingSystem()
+ *   2. Used: rankingSystem.processLines(lines)
+ *   3. Closed: rankingSystem.close() in finally block
+ * 
+ * This design allows:
+ * - Parallel processing of multiple log files (each gets its own instance)
+ * - Stateful parsing without synchronization concerns
+ * - Clean resource management per request
+ * 
+ * @see com.rankforge.server.service.LogProcessingService#processLogFileAsync
+ * @see com.rankforge.server.service.PipelineService#createGameRankingSystem
+ * 
  * Author bageshwar.pn
  * Date 26/10/24
  */

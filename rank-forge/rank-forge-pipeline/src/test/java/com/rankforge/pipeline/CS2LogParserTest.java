@@ -87,6 +87,10 @@ class CS2LogParserTest {
             escaped);
     }
 
+    private String wrapInJson(String logContent) {
+        return createJsonLogLine(logContent, "2026-01-07T15:13:12Z");
+    }
+
     @Nested
     @DisplayName("Kill Event Parsing Tests")
     class KillEventTests {
@@ -304,6 +308,152 @@ class CS2LogParserTest {
             assertNull(assistEvent.getPlayer2X(), "BOT assist events do not have coordinates");
             assertNull(assistEvent.getPlayer2Y(), "BOT assist events do not have coordinates");
             assertNull(assistEvent.getPlayer2Z(), "BOT assist events do not have coordinates");
+        }
+    }
+
+    @Nested
+    @DisplayName("Bomb Event Tests")
+    class BombEventTests {
+
+        @Test
+        @DisplayName("Should match and parse bomb plant pattern")
+        void shouldMatchBombPlantPattern() {
+            // Test various bomb plant log formats
+            String[] testLogs = {
+                "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A",
+                "L 01/07/2026 - 16:52:16: \"Khanjer<0><[U:1:1098204826]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite B",
+                "L 01/07/2026 - 16:44:54: \"Bot Mike<8><BOT><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A"
+            };
+            
+            java.util.regex.Pattern BOMB_PLANT_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<(?:CT|TERRORIST)>\" " +
+                        "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+            );
+            
+            // Test first log
+            java.util.regex.Matcher matcher = BOMB_PLANT_PATTERN.matcher(testLogs[0]);
+            assertTrue(matcher.matches(), "Should match plant at bombsite A");
+            assertEquals("Adkins#Keep Calm", matcher.group("playerName"));
+            assertEquals("[U:1:216478675]", matcher.group("steamId"));
+            assertEquals("A", matcher.group("bombsite"));
+            
+            // Test second log
+            matcher = BOMB_PLANT_PATTERN.matcher(testLogs[1]);
+            assertTrue(matcher.matches(), "Should match plant at bombsite B");
+            assertEquals("Khanjer", matcher.group("playerName"));
+            assertEquals("[U:1:1098204826]", matcher.group("steamId"));
+            assertEquals("B", matcher.group("bombsite"));
+            
+            // Test BOT log
+            matcher = BOMB_PLANT_PATTERN.matcher(testLogs[2]);
+            assertTrue(matcher.matches(), "Should match BOT plant");
+            assertEquals("Bot Mike", matcher.group("playerName"));
+            assertNull(matcher.group("steamId"), "BOT should not have steam ID");
+            assertEquals("A", matcher.group("bombsite"));
+        }
+
+        @Test
+        @DisplayName("Should match and parse defuse start patterns")
+        void shouldMatchDefuseStartPatterns() {
+            String[] testLogs = {
+                "L 01/07/2026 - 17:17:08: \"Adkins#Keep Calm<8><[U:1:216478675]><CT>\" triggered \"Begin_Bomb_Defuse_With_Kit\"",
+                "L 01/07/2026 - 16:46:07: \"UN1QUe<1><[U:1:142988271]><CT>\" triggered \"Begin_Bomb_Defuse_Without_Kit\""
+            };
+            
+            java.util.regex.Pattern BOMB_DEFUSE_START_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<CT>\" " +
+                        "triggered \"Begin_Bomb_Defuse_(?:With|Without)_Kit\"\\r?\\n?"
+            );
+            
+            // Test with kit
+            java.util.regex.Matcher matcher = BOMB_DEFUSE_START_PATTERN.matcher(testLogs[0]);
+            assertTrue(matcher.matches(), "Should match defuse with kit");
+            assertEquals("Adkins#Keep Calm", matcher.group("playerName"));
+            assertEquals("[U:1:216478675]", matcher.group("steamId"));
+            
+            // Test without kit
+            matcher = BOMB_DEFUSE_START_PATTERN.matcher(testLogs[1]);
+            assertTrue(matcher.matches(), "Should match defuse without kit");
+            assertEquals("UN1QUe", matcher.group("playerName"));
+            assertEquals("[U:1:142988271]", matcher.group("steamId"));
+        }
+
+        @Test
+        @DisplayName("Should match bomb defused team event pattern")
+        void shouldMatchBombDefusedPattern() {
+            String testLog = "L 01/07/2026 - 17:17:13: Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\" (CT \"12\") (T \"7\")";
+            
+            java.util.regex.Pattern BOMB_DEFUSED_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\".*\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_DEFUSED_PATTERN.matcher(testLog);
+            assertTrue(matcher.matches(), "Should match bomb defused team event");
+        }
+
+        @Test
+        @DisplayName("Should match bomb exploded team event pattern")
+        void shouldMatchBombExplodedPattern() {
+            String testLog = "L 01/07/2026 - 16:52:57: Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\" (CT \"1\") (T \"5\")";
+            
+            java.util.regex.Pattern BOMB_EXPLODED_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_EXPLODED_PATTERN.matcher(testLog);
+            assertTrue(matcher.matches(), "Should match bomb exploded team event");
+        }
+
+        @Test
+        @DisplayName("Should parse bomb plant event correctly in game context")
+        void shouldParseBombPlantInGameContext() {
+            // Given
+            String logContent = "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" " +
+                              "triggered \"Planted_The_Bomb\" at bombsite A";
+            initiateGameEventParsing(logContent);
+
+            // When - parse at index 1 where the event is
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 1);
+
+            // Then
+            assertTrue(result.isPresent(), "Bomb plant event should be parsed");
+            assertTrue(result.get().getGameEvent() instanceof BombEvent, "Should return BombEvent");
+            
+            BombEvent bombEvent = (BombEvent) result.get().getGameEvent();
+            assertEquals(GameEventType.BOMB_EVENT, bombEvent.type());
+            assertEquals(BombEvent.BombEventType.PLANT, bombEvent.getEventType());
+            assertEquals("[U:1:216478675]", bombEvent.getPlayer());
+            assertEquals("A", bombEvent.getAdditionalData().get("bombsite"));
+        }
+
+        @Test
+        @DisplayName("Should handle newlines in bomb event logs")
+        void shouldHandleNewlinesInBombLogs() {
+            // Production logs often have trailing newlines
+            String logWithNewline = "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A\n";
+            
+            java.util.regex.Pattern BOMB_PLANT_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<(?:CT|TERRORIST)>\" " +
+                        "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_PLANT_PATTERN.matcher(logWithNewline);
+            assertTrue(matcher.matches(), "Should match log with trailing newline");
+            assertEquals("A", matcher.group("bombsite"));
         }
     }
 

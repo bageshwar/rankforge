@@ -40,7 +40,30 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parser for CS2 server log format
+ * Parser for CS2 game server log files.
+ * 
+ * THREADING MODEL:
+ * ----------------
+ * This class is designed to be INSTANCE-PER-PARSING-SESSION. It is NOT thread-safe and should NOT be shared.
+ * 
+ * Architecture:
+ * - Each HTTP request to process a log file creates a NEW GameRankingSystem instance
+ * - Each GameRankingSystem creates a NEW CS2LogParser instance
+ * - Each parser processes lines SEQUENTIALLY within a single thread
+ * - State fields (matchStarted, currentBombPlanter, etc.) are scoped to ONE log file processing session
+ * 
+ * Flow:
+ *   HTTP Request 1 → @Async → New GameRankingSystem → New CS2LogParser (instance 1)
+ *   HTTP Request 2 → @Async → New GameRankingSystem → New CS2LogParser (instance 2)
+ * 
+ * Therefore:
+ * - Instance fields are safe to use for tracking state across events in a single log file
+ * - No synchronization is needed since each instance is used by only one thread
+ * - Parallel log processing is achieved by creating multiple parser instances, not sharing one
+ * 
+ * @see com.rankforge.server.service.LogProcessingService#processLogFileAsync
+ * @see com.rankforge.server.service.PipelineService#createGameRankingSystem
+ * 
  * Author bageshwar.pn
  * Date 26/10/24
  */
@@ -153,6 +176,40 @@ public class CS2LogParser implements LogParser {
             "SCORE: (?<score>\\d+(?:\\.\\d+)?)" +                // Score (integer or decimal)
             "\\s*"                                               // Optional trailing whitespace
     );
+    
+    // Bomb event patterns
+    // Format: L MM/DD/YYYY - HH:MM:SS: "PlayerName<ID><[U:1:123]><TEAM>" triggered "Planted_The_Bomb" at bombsite X
+    private static final Pattern BOMB_PLANT_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "\"(?<playerName>[^<]+)" +
+                    "<\\d+>" +
+                    "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                    "<(?:CT|TERRORIST)>\" " +
+                    "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: "PlayerName<ID><[U:1:123]><CT>" triggered "Begin_Bomb_Defuse_With_Kit"
+    // OR: "Begin_Bomb_Defuse_Without_Kit"
+    private static final Pattern BOMB_DEFUSE_START_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "\"(?<playerName>[^<]+)" +
+                    "<\\d+>" +
+                    "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                    "<CT>\" " +
+                    "triggered \"Begin_Bomb_Defuse_(?:With|Without)_Kit\"\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: Team "CT" triggered "SFUI_Notice_Bomb_Defused" (CT "12") (T "7")
+    private static final Pattern BOMB_DEFUSED_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\".*\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: Team "TERRORIST" triggered "SFUI_Notice_Target_Bombed" (CT "1") (T "5")
+    private static final Pattern BOMB_EXPLODED_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
+    );
 
     private final ObjectMapper objectMapper;
     private final EventStore eventStore;
@@ -160,6 +217,12 @@ public class CS2LogParser implements LogParser {
     private final List<Integer> roundStartLineIndices;
     private boolean matchStarted;
     private int matchProcessingIndex;
+    
+    // Bomb event state tracking (per round)
+    // These are cleared on each Round_Start and used to attribute team-level bomb events to players
+    private Player currentBombPlanter;      // Player who planted the bomb in current round
+    private String currentBombsite;         // Bombsite where bomb was planted (A or B)
+    private Player currentBombDefuser;      // Player attempting to defuse (most recent)
 
     public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore) {
         this.objectMapper = objectMapper;
@@ -256,6 +319,28 @@ public class CS2LogParser implements LogParser {
                 return Optional.of(parseAssistEvent(assistMatcher, timestamp, lines, currentIndex));
             }
 
+            // Check for bomb events
+            Matcher bombPlantMatcher = BOMB_PLANT_PATTERN.matcher(line);
+            if (bombPlantMatcher.matches()) {
+                return Optional.of(parseBombPlantEvent(bombPlantMatcher, timestamp, currentIndex));
+            }
+
+            Matcher bombDefuseStartMatcher = BOMB_DEFUSE_START_PATTERN.matcher(line);
+            if (bombDefuseStartMatcher.matches()) {
+                storeBombDefuser(bombDefuseStartMatcher);
+                return Optional.empty(); // Don't create event, just track for later
+            }
+
+            Matcher bombDefusedMatcher = BOMB_DEFUSED_PATTERN.matcher(line);
+            if (bombDefusedMatcher.matches()) {
+                return Optional.of(createBombDefusedEvent(timestamp, currentIndex));
+            }
+
+            Matcher bombExplodedMatcher = BOMB_EXPLODED_PATTERN.matcher(line);
+            if (bombExplodedMatcher.matches()) {
+                return Optional.of(createBombExplodedEvent(timestamp, currentIndex));
+            }
+
             if (line.contains("World triggered \"Round_End\"")) {
                 return Optional.of(parseRoundEndEvent(timestamp, lines, currentIndex));
             }
@@ -302,6 +387,11 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseRoundStartEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {
+        // Clear bomb state for new round
+        this.currentBombPlanter = null;
+        this.currentBombsite = null;
+        this.currentBombDefuser = null;
+        
         RoundStartEvent roundStartEvent = new RoundStartEvent(timestamp, Map.of());
         return new ParseLineResponse(roundStartEvent, currentIndex);
     }
@@ -566,5 +656,63 @@ public class CS2LogParser implements LogParser {
         attackEvent.setPlayer2Z(victimZ);
         
         return new ParseLineResponse(attackEvent, currentIndex);
+    }
+
+    private ParseLineResponse parseBombPlantEvent(Matcher matcher, Instant timestamp, int currentIndex) {
+        String playerName = matcher.group("playerName").trim();
+        String steamId = matcher.group("steamId");
+        String bombsite = matcher.group("bombsite");
+        
+        // Store for later attribution
+        this.currentBombPlanter = new Player(steamId != null ? steamId : playerName, playerName);
+        this.currentBombsite = bombsite;
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            Map.of("bombsite", bombsite),
+            steamId != null ? steamId : playerName,
+            BombEvent.BombEventType.PLANT,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
+    }
+
+    private void storeBombDefuser(Matcher matcher) {
+        String playerName = matcher.group("playerName").trim();
+        String steamId = matcher.group("steamId");
+        // Store most recent defuser (overwrites previous if multiple attempts)
+        this.currentBombDefuser = new Player(steamId != null ? steamId : playerName, playerName);
+    }
+
+    private ParseLineResponse createBombDefusedEvent(Instant timestamp, int currentIndex) {
+        if (this.currentBombDefuser == null) {
+            logger.warn("Bomb defused but no defuser tracked - returning empty event");
+            return new ParseLineResponse(new GameProcessedEvent(timestamp, Map.of()), currentIndex);
+        }
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            this.currentBombsite != null ? Map.of("bombsite", this.currentBombsite) : Map.of(),
+            this.currentBombDefuser.getSteamId(),
+            BombEvent.BombEventType.DEFUSE,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
+    }
+
+    private ParseLineResponse createBombExplodedEvent(Instant timestamp, int currentIndex) {
+        if (this.currentBombPlanter == null) {
+            logger.warn("Bomb exploded but no planter tracked - returning empty event");
+            return new ParseLineResponse(new GameProcessedEvent(timestamp, Map.of()), currentIndex);
+        }
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            this.currentBombsite != null ? Map.of("bombsite", this.currentBombsite) : Map.of(),
+            this.currentBombPlanter.getSteamId(),
+            BombEvent.BombEventType.EXPLODE,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
     }
 }
