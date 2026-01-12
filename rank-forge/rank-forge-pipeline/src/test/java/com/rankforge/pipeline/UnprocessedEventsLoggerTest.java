@@ -103,11 +103,10 @@ class UnprocessedEventsLoggerTest {
         
         // Track processed and unprocessed lines
         Set<String> processedEventTypes = new HashSet<>();
-        // Map from event pattern to count and example lines
-        Map<String, EventGroup> unprocessedEventGroups = new HashMap<>();
+        // Map from line index to log content for lines that haven't been processed yet
+        Map<Integer, String> unprocessedLines = new HashMap<>();
         
         int processedCount = 0;
-        int unprocessedCount = 0;
         int errorCount = 0;
         
         // Process each line - respect the parser's nextIndex to handle rewind logic
@@ -140,19 +139,19 @@ class UnprocessedEventsLoggerTest {
                     processedEventTypes.add(event.getGameEventType().name());
                     processedCount++;
                     
+                    // Remove from unprocessed if it was previously marked as unprocessed
+                    unprocessedLines.remove(i);
+                    
                     // Respect the parser's nextIndex (important for rewind logic)
                     int nextIndex = parseResponse.getNextIndex();
                     // If nextIndex is same as current (parser returned currentIndex), 
                     // we need to manually advance to avoid infinite loop
                     i = (nextIndex == i) ? i + 1 : nextIndex;
                 } else {
-                    // This line was not processed - check if it's a known skip pattern
+                    // This line was not processed - mark it as unprocessed for now
+                    // It might be processed later if parser rewinds
                     if (!shouldSkipLine(logContent)) {
-                        String eventPattern = normalizeEventPattern(logContent);
-                        EventGroup group = unprocessedEventGroups.computeIfAbsent(eventPattern, k -> new EventGroup());
-                        group.increment();
-                        group.addExample(logContent); // Store actual log line
-                        unprocessedCount++;
+                        unprocessedLines.put(i, logContent);
                     }
                     i++; // Move to next line
                 }
@@ -162,6 +161,17 @@ class UnprocessedEventsLoggerTest {
                 i++; // Move to next line even on error
             }
         }
+        
+        // Now group the truly unprocessed lines by pattern
+        Map<String, EventGroup> unprocessedEventGroups = new HashMap<>();
+        for (String logContent : unprocessedLines.values()) {
+            String eventPattern = normalizeEventPattern(logContent);
+            EventGroup group = unprocessedEventGroups.computeIfAbsent(eventPattern, k -> new EventGroup());
+            group.increment();
+            group.addExample(logContent);
+        }
+        
+        int unprocessedCount = unprocessedLines.size();
         
         // Log summary
         logger.info("=".repeat(80));
@@ -312,7 +322,7 @@ class UnprocessedEventsLoggerTest {
         pattern = pattern.replaceAll("\\w+ projectile spawned", "projectile spawned");
         
         // Generalize money change events: "money change 123-456 = $789" -> "money change <NUM>-<NUM> = $<NUM>"
-        pattern = pattern.replaceAll("money change \\d+-\\d+ = \\$\\d+", "money change <NUM>-<NUM> = $<NUM>");
+        pattern = pattern.replaceAll("money change \\d+-\\d+ = \\$\\d+", "money change <NUM>-<NUM> = \\$<NUM>");
         
         // Generalize purchase info in money change: "(purchase: weapon_hegrenade)" -> "(purchase: <ITEM>)"
         pattern = pattern.replaceAll("\\(purchase: [^\\)]+\\)", "(purchase: <ITEM>)");
@@ -429,6 +439,7 @@ class UnprocessedEventsLoggerTest {
             lowerContent.contains("left buyzone") ||
             lowerContent.contains("connected, address") ||
             lowerContent.contains("say_team") ||
+            lowerContent.contains("killed other") ||
             lowerContent.trim().isEmpty()) {
             return true;
         }
