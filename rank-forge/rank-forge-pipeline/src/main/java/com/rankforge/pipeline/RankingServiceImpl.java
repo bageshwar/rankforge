@@ -20,7 +20,6 @@ package com.rankforge.pipeline;
 
 import com.rankforge.core.interfaces.RankingAlgorithm;
 import com.rankforge.core.interfaces.RankingService;
-import com.rankforge.core.models.PlayerRank;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import org.slf4j.Logger;
@@ -48,12 +47,6 @@ public class RankingServiceImpl implements RankingService {
     public double getPlayerRanking(String playerId) {
         // TODO Implement me
         return 0;
-    }
-
-    @Override
-    public List<PlayerRank> getTopPlayers(int limit) {
-        // TODO Implement me
-        return List.of();
     }
 
     @Override

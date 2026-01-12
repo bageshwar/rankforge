@@ -19,7 +19,6 @@
 package com.rankforge.pipeline;
 
 import com.rankforge.core.interfaces.RankingAlgorithm;
-import com.rankforge.core.models.PlayerRank;
 import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -214,44 +213,6 @@ class RankingServiceImplTest {
 
             // Then
             assertEquals(0.0, ranking, 0.001);
-        }
-    }
-
-    @Nested
-    @DisplayName("Get Top Players Tests")
-    class GetTopPlayersTests {
-
-        @Test
-        @DisplayName("Should return empty list for get top players (not implemented)")
-        void shouldReturnEmptyListForGetTopPlayers() {
-            // When
-            List<PlayerRank> topPlayers = rankingService.getTopPlayers(10);
-
-            // Then
-            assertNotNull(topPlayers);
-            assertTrue(topPlayers.isEmpty());
-        }
-
-        @Test
-        @DisplayName("Should handle zero limit")
-        void shouldHandleZeroLimit() {
-            // When
-            List<PlayerRank> topPlayers = rankingService.getTopPlayers(0);
-
-            // Then
-            assertNotNull(topPlayers);
-            assertTrue(topPlayers.isEmpty());
-        }
-
-        @Test
-        @DisplayName("Should handle negative limit")
-        void shouldHandleNegativeLimit() {
-            // When
-            List<PlayerRank> topPlayers = rankingService.getTopPlayers(-5);
-
-            // Then
-            assertNotNull(topPlayers);
-            assertTrue(topPlayers.isEmpty());
         }
     }
 
