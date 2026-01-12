@@ -1,0 +1,5 @@
+# Extracted unprocessed event examples for testing
+# Pattern: L <DATE> - <TIME>: "<VALUE>" [<COORDS>] killed "<VALUE>" [<COORDS>] with "<VALUE>" (headshot attackerinair)
+# Count: 1
+
+{"log":"L 01/07/2026 - 16:44:34: \"_m3th0d<4><[U:1:1114723128]><TERRORIST>\" [1578 1932 -77] killed \"UN1QUe<1><[U:1:142988271]><CT>\" [1201 1664 -150] with \"glock\" (headshot attackerinair)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}

@@ -1,0 +1,10 @@
+# Extracted unprocessed event examples for testing
+# Pattern: L <DATE> - <TIME>: "<VALUE>" [<COORDS>] killed "<VALUE>" [<COORDS>] with "<VALUE>" (throughsmoke)
+# Count: 6
+
+{"log":"L 01/07/2026 - 17:02:20: \"UN1QUe<1><[U:1:142988271]><CT>\" [-851 356 -53] killed \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" [-612 170 -96] with \"m4a1\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:39:00: \"Adkins#Keep Calm<8><[U:1:216478675]><CT>\" [1399 -69 132] killed \"HwoaranG<6><[U:1:107493695]><TERRORIST>\" [1414 680 127] with \"m4a1\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:41:10: \"HwoaranG<6><[U:1:107493695]><TERRORIST>\" [729 1883 215] killed \"[[LEGEND KILLER]] _i_<2><[U:1:129501892]><CT>\" [665 2677 145] with \"deagle\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:44:43: \"HwoaranG<6><[U:1:107493695]><TERRORIST>\" [1296 315 130] killed \"the nucLeus<9><[U:1:1211958118]><CT>\" [1485 241 128] with \"ak47\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:46:00: \"Bad Boy --> Mr. Wick<10><[U:1:202658890]><TERRORIST>\" [1241 2671 132] killed \"Khanjer<0><[U:1:1098204826]><CT>\" [1160 2979 128] with \"galilar\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:52:49: \"Bad Boy --> Mr. Wick<10><[U:1:202658890]><CT>\" [130 1593 107] killed \"[[LEGEND KILLER]] _i_<2><[U:1:129501892]><TERRORIST>\" [60 762 80] with \"ak47\" (throughsmoke)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}

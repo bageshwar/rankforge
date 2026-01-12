@@ -1,0 +1,5 @@
+# Extracted unprocessed event examples for testing
+# Pattern: L <DATE> - <TIME>: "<VALUE>" flash-assisted killing "<VALUE>"
+# Count: 1
+
+{"log":"L 01/07/2026 - 17:01:02: \"Khanjer<0><[U:1:1098204826]><TERRORIST>\" flash-assisted killing \"HwoaranG<6><[U:1:107493695]><CT>\"","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}

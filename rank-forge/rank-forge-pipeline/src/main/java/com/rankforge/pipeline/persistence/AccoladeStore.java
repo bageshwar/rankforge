@@ -131,14 +131,14 @@ public class AccoladeStore {
                         accolade.getPlayerName(), resolvedSteamId);
             } else {
                 unresolvedCount++;
-                logger.warn("Could not resolve Steam ID for accolade player: '{}' (keeping original ID: {})", 
+                logger.debug("Could not resolve Steam ID for accolade player: '{}' (keeping original ID: {})", 
                         accolade.getPlayerName(), accolade.getPlayerId());
             }
             
             context.addAccolade(entity);
         }
         
-        logger.info("Queued {} accolades for deferred persistence (resolved: {}, unresolved: {})", 
+        logger.debug("Queued {} accolades for deferred persistence (resolved: {}, unresolved: {})", 
                 accolades.size(), resolvedCount, unresolvedCount);
     }
     

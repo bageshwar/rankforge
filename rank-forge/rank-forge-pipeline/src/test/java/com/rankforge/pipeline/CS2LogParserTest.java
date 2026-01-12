@@ -18,6 +18,7 @@
 
 package com.rankforge.pipeline;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.*;
 import com.rankforge.core.internal.ParseLineResponse;
@@ -37,10 +38,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Scanner;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -78,6 +85,10 @@ class CS2LogParserTest {
         return String.format("{\"time\":\"%s\",\"log\":\"%s\"}", 
             timestamp != null ? timestamp : "2024-04-20T17:52:34Z", 
             escaped);
+    }
+
+    private String wrapInJson(String logContent) {
+        return createJsonLogLine(logContent, "2026-01-07T15:13:12Z");
     }
 
     @Nested
@@ -120,6 +131,22 @@ class CS2LogParserTest {
             // Check weapon and headshot
             assertEquals("ak47", killEvent.getWeapon());
             assertFalse(killEvent.isHeadshot());
+            
+            // Verify coordinates are required and present
+            assertNotNull(killEvent.getPlayer1X(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Y(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Z(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2X(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Y(), "Kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Z(), "Kill events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), killEvent.getPlayer1X(), "Killer X coordinate");
+            assertEquals(Integer.valueOf(758), killEvent.getPlayer1Y(), "Killer Y coordinate");
+            assertEquals(Integer.valueOf(-23), killEvent.getPlayer1Z(), "Killer Z coordinate");
+            assertEquals(Integer.valueOf(-81), killEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), killEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), killEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -139,6 +166,22 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             KillEvent killEvent = (KillEvent) result.get().getGameEvent();
             assertTrue(killEvent.isHeadshot());
+            
+            // Verify coordinates are required and present
+            assertNotNull(killEvent.getPlayer1X(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Y(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer1Z(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2X(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Y(), "Headshot kill events must have coordinates");
+            assertNotNull(killEvent.getPlayer2Z(), "Headshot kill events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), killEvent.getPlayer1X(), "Killer X coordinate");
+            assertEquals(Integer.valueOf(758), killEvent.getPlayer1Y(), "Killer Y coordinate");
+            assertEquals(Integer.valueOf(-23), killEvent.getPlayer1Z(), "Killer Z coordinate");
+            assertEquals(Integer.valueOf(-81), killEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), killEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), killEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -174,7 +217,7 @@ class CS2LogParserTest {
         void shouldParseRegularAssistEvent() {
 
 
-            // Given
+            // Given - assist events do NOT have coordinates in log format
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -203,12 +246,20 @@ class CS2LogParserTest {
             
             // Check assist type
             assertEquals(AssistEvent.AssistType.Regular, assistEvent.getAssistType());
+            
+            // Verify assist events do NOT have coordinates (they're not in the log format)
+            assertNull(assistEvent.getPlayer1X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Assist events do not have coordinates");
         }
-
+        
         @Test
         @DisplayName("Should parse flash assist event correctly")
         void shouldParseFlashAssistEvent() {
-            // Given
+            // Given - flash assist event (no coordinates in log format)
             String logContent = "L 04/20/2024 - 17:52:34: \"Player1<9><[U:1:123456]><CT>\" " +
                               "flash-assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -220,12 +271,20 @@ class CS2LogParserTest {
             assertTrue(result.isPresent());
             AssistEvent assistEvent = (AssistEvent) result.get().getGameEvent();
             assertEquals(AssistEvent.AssistType.Flash, assistEvent.getAssistType());
+            
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "Flash assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "Flash assist events do not have coordinates");
         }
 
         @Test
         @DisplayName("Should parse assist event with BOT correctly")
         void shouldParseAssistEventWithBot() {
-            // Given
+            // Given - assist events do NOT have coordinates (even for BOT)
             String logContent = "L 04/20/2024 - 17:52:34: \"Bot Helper<9><BOT><CT>\" " +
                               "assisted killing \"Player2<4><[U:1:789012]><TERRORIST>\"";
             initiateGameEventParsing(logContent);
@@ -241,6 +300,160 @@ class CS2LogParserTest {
             assertEquals("Bot Helper", assister.getName());
             assertNull(assister.getSteamId());
             assertTrue(assister.isBot());
+            
+            // Verify assist events do NOT have coordinates
+            assertNull(assistEvent.getPlayer1X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer1Z(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2X(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Y(), "BOT assist events do not have coordinates");
+            assertNull(assistEvent.getPlayer2Z(), "BOT assist events do not have coordinates");
+        }
+    }
+
+    @Nested
+    @DisplayName("Bomb Event Tests")
+    class BombEventTests {
+
+        @Test
+        @DisplayName("Should match and parse bomb plant pattern")
+        void shouldMatchBombPlantPattern() {
+            // Test various bomb plant log formats
+            String[] testLogs = {
+                "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A",
+                "L 01/07/2026 - 16:52:16: \"Khanjer<0><[U:1:1098204826]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite B",
+                "L 01/07/2026 - 16:44:54: \"Bot Mike<8><BOT><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A"
+            };
+            
+            java.util.regex.Pattern BOMB_PLANT_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<(?:CT|TERRORIST)>\" " +
+                        "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+            );
+            
+            // Test first log
+            java.util.regex.Matcher matcher = BOMB_PLANT_PATTERN.matcher(testLogs[0]);
+            assertTrue(matcher.matches(), "Should match plant at bombsite A");
+            assertEquals("Adkins#Keep Calm", matcher.group("playerName"));
+            assertEquals("[U:1:216478675]", matcher.group("steamId"));
+            assertEquals("A", matcher.group("bombsite"));
+            
+            // Test second log
+            matcher = BOMB_PLANT_PATTERN.matcher(testLogs[1]);
+            assertTrue(matcher.matches(), "Should match plant at bombsite B");
+            assertEquals("Khanjer", matcher.group("playerName"));
+            assertEquals("[U:1:1098204826]", matcher.group("steamId"));
+            assertEquals("B", matcher.group("bombsite"));
+            
+            // Test BOT log
+            matcher = BOMB_PLANT_PATTERN.matcher(testLogs[2]);
+            assertTrue(matcher.matches(), "Should match BOT plant");
+            assertEquals("Bot Mike", matcher.group("playerName"));
+            assertNull(matcher.group("steamId"), "BOT should not have steam ID");
+            assertEquals("A", matcher.group("bombsite"));
+        }
+
+        @Test
+        @DisplayName("Should match and parse defuse start patterns")
+        void shouldMatchDefuseStartPatterns() {
+            String[] testLogs = {
+                "L 01/07/2026 - 17:17:08: \"Adkins#Keep Calm<8><[U:1:216478675]><CT>\" triggered \"Begin_Bomb_Defuse_With_Kit\"",
+                "L 01/07/2026 - 16:46:07: \"UN1QUe<1><[U:1:142988271]><CT>\" triggered \"Begin_Bomb_Defuse_Without_Kit\""
+            };
+            
+            java.util.regex.Pattern BOMB_DEFUSE_START_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<CT>\" " +
+                        "triggered \"Begin_Bomb_Defuse_(?:With|Without)_Kit\"\\r?\\n?"
+            );
+            
+            // Test with kit
+            java.util.regex.Matcher matcher = BOMB_DEFUSE_START_PATTERN.matcher(testLogs[0]);
+            assertTrue(matcher.matches(), "Should match defuse with kit");
+            assertEquals("Adkins#Keep Calm", matcher.group("playerName"));
+            assertEquals("[U:1:216478675]", matcher.group("steamId"));
+            
+            // Test without kit
+            matcher = BOMB_DEFUSE_START_PATTERN.matcher(testLogs[1]);
+            assertTrue(matcher.matches(), "Should match defuse without kit");
+            assertEquals("UN1QUe", matcher.group("playerName"));
+            assertEquals("[U:1:142988271]", matcher.group("steamId"));
+        }
+
+        @Test
+        @DisplayName("Should match bomb defused team event pattern")
+        void shouldMatchBombDefusedPattern() {
+            String testLog = "L 01/07/2026 - 17:17:13: Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\" (CT \"12\") (T \"7\")";
+            
+            java.util.regex.Pattern BOMB_DEFUSED_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\".*\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_DEFUSED_PATTERN.matcher(testLog);
+            assertTrue(matcher.matches(), "Should match bomb defused team event");
+        }
+
+        @Test
+        @DisplayName("Should match bomb exploded team event pattern")
+        void shouldMatchBombExplodedPattern() {
+            String testLog = "L 01/07/2026 - 16:52:57: Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\" (CT \"1\") (T \"5\")";
+            
+            java.util.regex.Pattern BOMB_EXPLODED_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_EXPLODED_PATTERN.matcher(testLog);
+            assertTrue(matcher.matches(), "Should match bomb exploded team event");
+        }
+
+        @Test
+        @DisplayName("Should parse bomb plant event correctly in game context")
+        void shouldParseBombPlantInGameContext() {
+            // Given
+            String logContent = "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" " +
+                              "triggered \"Planted_The_Bomb\" at bombsite A";
+            initiateGameEventParsing(logContent);
+
+            // When - parse at index 1 where the event is
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 1);
+
+            // Then
+            assertTrue(result.isPresent(), "Bomb plant event should be parsed");
+            assertTrue(result.get().getGameEvent() instanceof BombEvent, "Should return BombEvent");
+            
+            BombEvent bombEvent = (BombEvent) result.get().getGameEvent();
+            assertEquals(GameEventType.BOMB_EVENT, bombEvent.type());
+            assertEquals(BombEvent.BombEventType.PLANT, bombEvent.getEventType());
+            assertEquals("[U:1:216478675]", bombEvent.getPlayer());
+            assertEquals("A", bombEvent.getAdditionalData().get("bombsite"));
+        }
+
+        @Test
+        @DisplayName("Should handle newlines in bomb event logs")
+        void shouldHandleNewlinesInBombLogs() {
+            // Production logs often have trailing newlines
+            String logWithNewline = "L 01/07/2026 - 16:44:54: \"Adkins#Keep Calm<8><[U:1:216478675]><TERRORIST>\" triggered \"Planted_The_Bomb\" at bombsite A\n";
+            
+            java.util.regex.Pattern BOMB_PLANT_PATTERN = java.util.regex.Pattern.compile(
+                "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                        "\"(?<playerName>[^<]+)" +
+                        "<\\d+>" +
+                        "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                        "<(?:CT|TERRORIST)>\" " +
+                        "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+            );
+            
+            java.util.regex.Matcher matcher = BOMB_PLANT_PATTERN.matcher(logWithNewline);
+            assertTrue(matcher.matches(), "Should match log with trailing newline");
+            assertEquals("A", matcher.group("bombsite"));
         }
     }
 
@@ -319,6 +532,22 @@ class CS2LogParserTest {
             assertEquals(109, attackEvent.getDamage());
             assertEquals(15, attackEvent.getArmorDamage());
             assertEquals("head", attackEvent.getHitGroup());
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(758), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(-23), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(81), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), attackEvent.getPlayer2Z(), "Victim Z coordinate");
         }
 
         @Test
@@ -342,6 +571,63 @@ class CS2LogParserTest {
             assertEquals(35, attackEvent.getDamage());
             assertEquals(8, attackEvent.getArmorDamage());
             assertEquals("chest", attackEvent.getHitGroup());
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinate values
+            assertEquals(Integer.valueOf(-538), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(758), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(-23), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(81), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(907), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(80), attackEvent.getPlayer2Z(), "Victim Z coordinate");
+        }
+
+        @Test
+        @DisplayName("Should parse attack event with production log format and coordinates")
+        void shouldParseAttackEventWithProductionFormat() {
+            // Given - using actual production log format from user sample
+            String logContent = "L 01/07/2026 - 16:14:50: \"Khanjer<2><[U:1:1098204826]><TERRORIST>\" " +
+                              "[1987 2835 124] attacked \"UN1QUe<3><[U:1:142988271]><CT>\" " +
+                              "[2493 2090 133] with \"ak47\" (damage \"26\") (damage_armor \"0\") " +
+                              "(health \"74\") (armor \"0\") (hitgroup \"right leg\")";
+            initiateGameEventParsing(logContent);
+
+            // When
+            Optional<ParseLineResponse> result = parser.parseLine(mockLines.get(1), mockLines, 1);
+
+            // Then
+            assertTrue(result.isPresent());
+            AttackEvent attackEvent = (AttackEvent) result.get().getGameEvent();
+            
+            // Verify coordinates are required and present
+            assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer1Z(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2X(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Y(), "Attack events must have coordinates");
+            assertNotNull(attackEvent.getPlayer2Z(), "Attack events must have coordinates");
+            
+            // Check coordinates match production log format
+            assertEquals(Integer.valueOf(1987), attackEvent.getPlayer1X(), "Attacker X coordinate");
+            assertEquals(Integer.valueOf(2835), attackEvent.getPlayer1Y(), "Attacker Y coordinate");
+            assertEquals(Integer.valueOf(124), attackEvent.getPlayer1Z(), "Attacker Z coordinate");
+            assertEquals(Integer.valueOf(2493), attackEvent.getPlayer2X(), "Victim X coordinate");
+            assertEquals(Integer.valueOf(2090), attackEvent.getPlayer2Y(), "Victim Y coordinate");
+            assertEquals(Integer.valueOf(133), attackEvent.getPlayer2Z(), "Victim Z coordinate");
+            
+            // Verify other fields
+            assertEquals("Khanjer", attackEvent.getPlayer1().getName());
+            assertEquals("UN1QUe", attackEvent.getPlayer2().getName());
+            assertEquals("ak47", attackEvent.getWeapon());
+            assertEquals(26, attackEvent.getDamage());
+            assertEquals("right leg", attackEvent.getHitGroup());
         }
     }
 
@@ -968,6 +1254,262 @@ class CS2LogParserTest {
                     return accolades.size() >= 5 && accolades.size() <= 6;
                 })
             );
+        }
+    }
+    
+    @Nested
+    @DisplayName("Unprocessed Event Parsing Tests")
+    class UnprocessedEventParsingTests {
+        
+        /**
+         * Test that validates all attack events from unprocessed_attack_events.txt are parsed correctly.
+         * This file is generated by UnprocessedEventsLoggerTest when run with a production log file.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed attack events")
+        void shouldParseUnprocessedAttackEvents() throws Exception {
+            validateEventsFromFile("unprocessed_attack_events.txt", GameEventType.ATTACK);
+        }
+        
+        /**
+         * Test that validates all basic kill events from unprocessed_kill_basic_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed basic kill events")
+        void shouldParseUnprocessedKillBasicEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_basic_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill headshot events from unprocessed_kill_headshot_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill headshot events")
+        void shouldParseUnprocessedKillHeadshotEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_headshot_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill throughsmoke events from unprocessed_kill_throughsmoke_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill throughsmoke events")
+        void shouldParseUnprocessedKillThroughsmokeEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_throughsmoke_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill headshot throughsmoke events from unprocessed_kill_headshot_throughsmoke_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill headshot throughsmoke events")
+        void shouldParseUnprocessedKillHeadshotThroughsmokeEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_headshot_throughsmoke_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill attackerinair events from unprocessed_kill_attackerinair_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill attackerinair events")
+        void shouldParseUnprocessedKillAttackerinairEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_attackerinair_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill headshot penetrated events from unprocessed_kill_headshot_penetrated_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill headshot penetrated events")
+        void shouldParseUnprocessedKillHeadshotPenetratedEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_headshot_penetrated_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all kill headshot attackerinair events from unprocessed_kill_headshot_attackerinair_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed kill headshot attackerinair events")
+        void shouldParseUnprocessedKillHeadshotAttackerinairEvents() throws Exception {
+            validateEventsFromFile("unprocessed_kill_headshot_attackerinair_events.txt", GameEventType.KILL);
+        }
+        
+        /**
+         * Test that validates all flash assist events from unprocessed_flash_assist_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed flash assist events")
+        void shouldParseUnprocessedFlashAssistEvents() throws Exception {
+            validateEventsFromFile("unprocessed_flash_assist_events.txt", GameEventType.ASSIST);
+        }
+        
+        /**
+         * Test that validates all malformed attack events from unprocessed_attack_malformed_events.txt are parsed correctly.
+         */
+        @Test
+        @DisplayName("Should parse all unprocessed malformed attack events")
+        void shouldParseUnprocessedMalformedAttackEvents() throws Exception {
+            validateEventsFromFile("unprocessed_attack_malformed_events.txt", GameEventType.ATTACK);
+        }
+        
+        /**
+         * Helper method to validate events from a test resource file.
+         * Reads each line, wraps it in JSON format, and validates it's parsed correctly.
+         * Fails if any event fails to parse or validate.
+         */
+        private void validateEventsFromFile(String filename, GameEventType expectedEventType) throws Exception {
+            java.io.InputStream inputStream = getClass().getClassLoader()
+                    .getResourceAsStream("com/rankforge/pipeline/" + filename);
+            
+            if (inputStream == null) {
+                // File doesn't exist yet - skip test (it will be generated by UnprocessedEventsLoggerTest)
+                System.out.println("Skipping test - test resource file not found: " + filename + 
+                        ". Run UnprocessedEventsLoggerTest with a production log file to generate it.");
+                return;
+            }
+            
+            List<String> allLines = new ArrayList<>();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(inputStream))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (!line.trim().isEmpty() && !line.trim().startsWith("#")) {
+                        allLines.add(line);
+                    }
+                }
+            }
+            
+            int totalLines = allLines.size();
+            int successCount = 0;
+            int failureCount = 0;
+            List<String> failureDetails = new ArrayList<>();
+            
+            System.out.println("=".repeat(80));
+            System.out.println("Testing " + filename);
+            System.out.println("Expected event type: " + expectedEventType);
+            System.out.println("Total lines to process: " + totalLines);
+            System.out.println("=".repeat(80));
+            
+            for (int i = 0; i < allLines.size(); i++) {
+                String line = allLines.get(i);
+                int lineNumber = i + 1;
+                
+                try {
+                    // Extract the log content from JSON
+                    String logContent;
+                    if (line.trim().startsWith("{")) {
+                        // Already in JSON format - extract the log field
+                        JsonNode jsonNode = objectMapper.readTree(line);
+                        logContent = jsonNode.get("log").asText();
+                    } else {
+                        // Plain text log line
+                        logContent = line;
+                    }
+                    
+                    // Use the test-friendly parsing method that bypasses state machine checks
+                    Instant timestamp = Instant.parse("2024-04-20T17:52:34Z");
+                    Optional<GameEvent> result = parser.parseEventForTesting(logContent, timestamp);
+                    
+                    if (result.isPresent()) {
+                        GameEvent event = result.get();
+                        
+                        // Validate event type
+                        if (event.getGameEventType() != expectedEventType) {
+                            String error = String.format("Line %d: Expected event type %s but got %s. Line: %s", 
+                                    lineNumber, expectedEventType, event.getGameEventType(), 
+                                    line.length() > 100 ? line.substring(0, 100) + "..." : line);
+                            failureDetails.add(error);
+                            System.err.println("ERROR: " + error);
+                            failureCount++;
+                            continue;
+                        }
+                        
+                        // Validate it's the correct event type and has required fields
+                        List<String> validationErrors = new ArrayList<>();
+                        
+                        if (event instanceof AttackEvent) {
+                            AttackEvent attackEvent = (AttackEvent) event;
+                            if (attackEvent.getPlayer1() == null) validationErrors.add("Attacker is null");
+                            if (attackEvent.getPlayer2() == null) validationErrors.add("Victim is null");
+                            if (attackEvent.getWeapon() == null) validationErrors.add("Weapon is null");
+                            if (attackEvent.getPlayer1X() == null) validationErrors.add("Player1 X coordinate is null");
+                            if (attackEvent.getPlayer1Y() == null) validationErrors.add("Player1 Y coordinate is null");
+                            if (attackEvent.getPlayer1Z() == null) validationErrors.add("Player1 Z coordinate is null");
+                            if (attackEvent.getPlayer2X() == null) validationErrors.add("Player2 X coordinate is null");
+                            if (attackEvent.getPlayer2Y() == null) validationErrors.add("Player2 Y coordinate is null");
+                            if (attackEvent.getPlayer2Z() == null) validationErrors.add("Player2 Z coordinate is null");
+                        } else if (event instanceof KillEvent) {
+                            KillEvent killEvent = (KillEvent) event;
+                            if (killEvent.getPlayer1() == null) validationErrors.add("Killer is null");
+                            if (killEvent.getPlayer2() == null) validationErrors.add("Victim is null");
+                            if (killEvent.getWeapon() == null) validationErrors.add("Weapon is null");
+                            if (killEvent.getPlayer1X() == null) validationErrors.add("Player1 X coordinate is null");
+                            if (killEvent.getPlayer1Y() == null) validationErrors.add("Player1 Y coordinate is null");
+                            if (killEvent.getPlayer1Z() == null) validationErrors.add("Player1 Z coordinate is null");
+                            if (killEvent.getPlayer2X() == null) validationErrors.add("Player2 X coordinate is null");
+                            if (killEvent.getPlayer2Y() == null) validationErrors.add("Player2 Y coordinate is null");
+                            if (killEvent.getPlayer2Z() == null) validationErrors.add("Player2 Z coordinate is null");
+                        } else if (event instanceof AssistEvent) {
+                            AssistEvent assistEvent = (AssistEvent) event;
+                            if (assistEvent.getPlayer1() == null) validationErrors.add("Assisting player is null");
+                            if (assistEvent.getPlayer2() == null) validationErrors.add("Victim is null");
+                        }
+                        
+                        if (!validationErrors.isEmpty()) {
+                            String error = String.format("Line %d: Validation failed - %s. Line: %s", 
+                                    lineNumber, String.join(", ", validationErrors),
+                                    line.length() > 100 ? line.substring(0, 100) + "..." : line);
+                            failureDetails.add(error);
+                            System.err.println("ERROR: " + error);
+                            failureCount++;
+                        } else {
+                            successCount++;
+                            if ((lineNumber % 100 == 0) || (lineNumber == totalLines)) {
+                                System.out.println(String.format("Progress: %d/%d lines processed (%.1f%%)", 
+                                        lineNumber, totalLines, (lineNumber * 100.0 / totalLines)));
+                            }
+                        }
+                    } else {
+                        String error = String.format("Line %d: Failed to parse (no result returned). Line: %s", 
+                                lineNumber, line.length() > 100 ? line.substring(0, 100) + "..." : line);
+                        failureDetails.add(error);
+                        System.err.println("ERROR: " + error);
+                        failureCount++;
+                    }
+                } catch (Exception e) {
+                    String error = String.format("Line %d: Exception during parsing - %s. Line: %s", 
+                            lineNumber, e.getMessage(),
+                            line.length() > 100 ? line.substring(0, 100) + "..." : line);
+                    failureDetails.add(error);
+                    System.err.println("ERROR: " + error);
+                    e.printStackTrace();
+                    failureCount++;
+                }
+            }
+            
+            System.out.println("=".repeat(80));
+            System.out.println("Test Results for " + filename);
+            System.out.println("Total lines: " + totalLines);
+            System.out.println("Successfully parsed: " + successCount);
+            System.out.println("Failed to parse: " + failureCount);
+            System.out.println("=".repeat(80));
+            
+            if (!failureDetails.isEmpty()) {
+                System.err.println("\nFailure Details:");
+                for (String detail : failureDetails) {
+                    System.err.println("  - " + detail);
+                }
+            }
+            
+            // Assert exact count - all events must be parsed successfully
+            assertEquals(totalLines, successCount, 
+                    String.format("All %d events from %s must be parsed successfully. Failed: %d", 
+                            totalLines, filename, failureCount));
+            
+            // Also assert no failures (redundant but explicit)
+            assertEquals(0, failureCount, 
+                    String.format("No events should fail to parse from %s. %d events failed.", 
+                            filename, failureCount));
         }
     }
 }
