@@ -396,8 +396,21 @@
 
 .rounds-description {
   color: var(--color-text-tertiary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   font-size: 0.9rem;
+}
+
+.rounds-description .color-legend {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.rounds-hint {
+  color: var(--color-text-quaternary);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .rounds-timeline {
