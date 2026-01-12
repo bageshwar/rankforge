@@ -219,8 +219,9 @@ export const GameDetailsPage = () => {
         <div className="section-card card-bg rounds-section">
           <h2 className="section-title">⏱️ Round Timeline</h2>
           <p className="rounds-description">
-            Round-by-round results (Green = CT Win, Orange = T Win) • Click a round for details
+            Round-by-round results: <span className="color-legend">Blue = CT Win</span> | <span className="color-legend">Orange = T Win</span>
           </p>
+          <p className="rounds-hint">Click a round to view detailed events</p>
           <div className="rounds-timeline">
             {gameDetails.rounds.map((round, idx) => (
               <Link
