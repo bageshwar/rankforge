@@ -1,0 +1,197 @@
+/* Weapon Icon Component Styles */
+
+.weapon-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weapon-icon-sprite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+  background-color: transparent;
+  overflow: hidden;
+}
+
+.weapon-icon-sprite.has-sprite {
+  background-color: transparent;
+}
+
+.weapon-icon-sprite.no-sprite {
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weapon-icon-sprite.small.no-sprite {
+  font-size: 0.9rem;
+}
+
+.weapon-icon-sprite.medium.no-sprite {
+  font-size: 1.2rem;
+}
+
+.weapon-icon-sprite.large.no-sprite {
+  font-size: 1.5rem;
+}
+
+/* Size variants */
+.weapon-icon-sprite.small {
+  width: 70px;
+  height: 70px;
+  border-width: 1px;
+  border-radius: 6px;
+}
+
+.weapon-icon-sprite.medium {
+  width: 80px;
+  height: 80px;
+}
+
+.weapon-icon-sprite.large {
+  width: 99px;
+  height: 99px;
+}
+
+/* Hover effects */
+.weapon-icon-sprite:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+}
+
+.weapon-icon-sprite.no-sprite:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Weapon name display */
+.weapon-name-display {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.weapon-display.small .weapon-name-display {
+  font-size: 0.75rem;
+}
+
+.weapon-display.large .weapon-name-display {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Unknown weapon placeholder */
+.weapon-icon-unknown {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-tertiary);
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.weapon-icon-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.weapon-icon-placeholder.small {
+  width: 24px;
+  height: 24px;
+  font-size: 0.7rem;
+}
+
+.weapon-icon-placeholder.medium {
+  width: 32px;
+  height: 32px;
+  font-size: 0.85rem;
+}
+
+.weapon-icon-placeholder.large {
+  width: 40px;
+  height: 40px;
+  font-size: 1rem;
+}
+
+/* Accessibility and Hover Tooltip */
+.weapon-icon-sprite[aria-label] {
+  cursor: help;
+  position: relative;
+}
+
+/* Enhanced tooltip on hover */
+.weapon-icon-sprite[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-weight: 500;
+  z-index: 1000;
+  pointer-events: none;
+  margin-bottom: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip arrow */
+.weapon-icon-sprite[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* Animation on mount */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.weapon-icon-sprite {
+  animation: fadeInScale 0.2s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .weapon-display {
+    gap: 0.35rem;
+  }
+  
+  .weapon-name-display {
+    font-size: 0.75rem;
+  }
+  
+  .weapon-icon-sprite.medium {
+    width: 40px;
+    height: 40px;
+  }
+}
