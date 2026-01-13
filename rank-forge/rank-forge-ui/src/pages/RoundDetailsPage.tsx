@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
-import { WeaponIcon } from '../components/UI/WeaponIcon';
-import { HeadshotIcon } from '../components/UI/HeadshotIcon';
-import { C4Icon } from '../components/UI/C4Icon';
+import { SpriteIcon } from '../components/UI/SpriteIcon';
 import { Tooltip } from '../components/UI/Tooltip';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
@@ -331,8 +329,8 @@ export const RoundDetailsPage = () => {
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
                       </Link>
-                      {event.weapon && <WeaponIcon weapon={event.weapon} size="small" />}
-                      {event.isHeadshot && <HeadshotIcon size={18} className="headshot-icon" />}
+                      {event.weapon && <SpriteIcon icon={event.weapon} size="small" />}
+                      {event.isHeadshot && <SpriteIcon icon="headshot" size={36} className="headshot-icon" />}
                       <Link 
                         to={`/players/${extractSteamId(event.player2Id)}`}
                         className="player-link victim"
@@ -346,8 +344,9 @@ export const RoundDetailsPage = () => {
                   {/* BOMB Events */}
                   {event.eventType === 'BOMB_EVENT' && (
                     <div className="bomb-event-line">
-                      <C4Icon 
-                        size={20} 
+                      <SpriteIcon 
+                        icon="weapon_c4"
+                        size={40} 
                         status={
                           event.bombEventType?.toLowerCase() === 'defused' ? 'defused' :
                           event.bombEventType?.toLowerCase() === 'exploded' ? 'exploded' :
@@ -379,7 +378,7 @@ export const RoundDetailsPage = () => {
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
                       </Link>
-                      {event.weapon && <WeaponIcon weapon={event.weapon} size="small" />}
+                      {event.weapon && <SpriteIcon icon={event.weapon} size="small" />}
                       <span className="damage-arrow">→</span>
                       <Link 
                         to={`/players/${extractSteamId(event.player2Id)}`}

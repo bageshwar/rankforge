@@ -1,8 +1,13 @@
 /**
  * Special event icons for CS2 events
- * These are vector-based icons for headshots, C4, and knife kills
+ * All icons use the unified SpriteIcon system
+ * 
+ * Usage:
+ * import { SpriteIcon } from './SpriteIcon';
+ * <SpriteIcon icon="headshot" size={36} />
+ * <SpriteIcon icon="weapon_c4" size={40} status="planted" />
+ * <SpriteIcon icon="weapon_knife" size={32} />
  */
 
-export { HeadshotIcon } from './HeadshotIcon';
-export { C4Icon } from './C4Icon';
-export { KnifeIcon } from './KnifeIcon';
+export { SpriteIcon } from './SpriteIcon';
+export type { SpriteIconProps } from './SpriteIcon';

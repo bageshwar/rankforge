@@ -1,45 +1,45 @@
-import { useState, useEffect, useRef } from 'react';
-import { WEAPON_MAP } from '../utils/weaponIcons';
-import { WEAPON_SPRITE_POSITIONS, SPRITE_WIDTH, SPRITE_HEIGHT } from '../utils/weaponSpritePositions';
+import { useState, useEffect } from 'react';
+import { 
+  SPECIAL_ICON_POSITIONS, 
+  SPECIAL_ICONS_SPRITE_WIDTH, 
+  SPECIAL_ICONS_SPRITE_HEIGHT,
+  type SpecialIconSpriteConfig 
+} from '../utils/specialIconsSprite';
 import './WeaponSpriteTest.css';
 
-interface WeaponOffset {
-  offsetX: number;
-  offsetY: number;
-  scale: number;
-  width?: number;
-  height?: number;
-}
+const SPECIAL_ICONS = {
+  'headshot': { displayName: 'Headshot Icon', category: 'special' },
+  'knife': { displayName: 'Knife Icon', category: 'special' },
+  'c4': { displayName: 'C4 Icon', category: 'special' },
+};
 
-export const WeaponSpriteTest = () => {
-  const [iconSize, setIconSize] = useState(70);
-  const [spriteScale, setSpriteScale] = useState(1.0);
-  const [selectedWeapon, setSelectedWeapon] = useState<string | null>(null);
+export const SpecialIconsTest = () => {
+  const [selectedIcon, setSelectedIcon] = useState<string | null>(null);
   const [jsonInput, setJsonInput] = useState('');
   const [showImport, setShowImport] = useState(false);
   
-  // Store per-weapon offsets
-  const [weaponOffsets, setWeaponOffsets] = useState<Record<string, WeaponOffset>>({});
+  // Store per-icon offsets
+  const [iconOffsets, setIconOffsets] = useState<Record<string, SpecialIconSpriteConfig>>({});
 
   // Drag and resize state
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
+  const [activeIcon, setActiveIcon] = useState<string | null>(null);
 
   // LocalStorage key
-  const STORAGE_KEY = 'weapon-sprite-config';
+  const STORAGE_KEY = 'special-icons-sprite-config';
 
-  // Initialize weapon offsets from localStorage or defaults
+  // Initialize icon offsets from localStorage or defaults
   useEffect(() => {
-    // Try to load from localStorage first
     const savedConfig = localStorage.getItem(STORAGE_KEY);
     
     if (savedConfig) {
       try {
         const parsed = JSON.parse(savedConfig);
-        setWeaponOffsets(parsed);
-        console.log('✅ Loaded weapon config from localStorage');
+        setIconOffsets(parsed);
+        console.log('✅ Loaded special icons config from localStorage');
         return;
       } catch (error) {
         console.error('Failed to parse saved config:', error);
@@ -47,28 +47,26 @@ export const WeaponSpriteTest = () => {
     }
     
     // Fallback to default config
-    const initialOffsets: Record<string, WeaponOffset> = {};
-    Object.entries(WEAPON_MAP).forEach(([_key, info]) => {
-      if (WEAPON_SPRITE_POSITIONS[info.iconFile]) {
-        initialOffsets[info.iconFile] = { offsetX: 14, offsetY: 5, scale: 1.0, width: 70, height: 70 };
-      }
+    const initialOffsets: Record<string, SpecialIconSpriteConfig> = {};
+    Object.keys(SPECIAL_ICONS).forEach(key => {
+      initialOffsets[key] = { offsetX: 0, offsetY: 0, scale: 1.0, width: 70, height: 70 };
     });
-    setWeaponOffsets(initialOffsets);
+    setIconOffsets(initialOffsets);
   }, []);
 
-  // Save to localStorage whenever weaponOffsets changes
+  // Save to localStorage whenever iconOffsets changes
   useEffect(() => {
-    if (Object.keys(weaponOffsets).length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(weaponOffsets));
-      console.log('💾 Saved weapon config to localStorage');
+    if (Object.keys(iconOffsets).length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(iconOffsets));
+      console.log('💾 Saved special icons config to localStorage');
     }
-  }, [weaponOffsets]);
+  }, [iconOffsets]);
 
   // Import JSON configuration
   const importJson = () => {
     try {
       const parsed = JSON.parse(jsonInput);
-      setWeaponOffsets(parsed);
+      setIconOffsets(parsed);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
       setJsonInput('');
       setShowImport(false);
@@ -80,41 +78,36 @@ export const WeaponSpriteTest = () => {
 
   // Clear localStorage and reset to defaults
   const resetToDefaults = () => {
-    if (confirm('⚠️ This will reset ALL weapons to default positions and clear browser storage. Continue?')) {
+    if (confirm('⚠️ This will reset ALL icons to default positions and clear browser storage. Continue?')) {
       localStorage.removeItem(STORAGE_KEY);
-      const initialOffsets: Record<string, WeaponOffset> = {};
-      Object.entries(WEAPON_MAP).forEach(([_key, info]) => {
-        if (WEAPON_SPRITE_POSITIONS[info.iconFile]) {
-          initialOffsets[info.iconFile] = { offsetX: 14, offsetY: 5, scale: 1.0, width: 70, height: 70 };
-        }
+      const initialOffsets: Record<string, SpecialIconSpriteConfig> = {};
+      Object.keys(SPECIAL_ICONS).forEach(key => {
+        initialOffsets[key] = { offsetX: 0, offsetY: 0, scale: 1.0, width: 70, height: 70 };
       });
-      setWeaponOffsets(initialOffsets);
-      setSelectedWeapon(null);
+      setIconOffsets(initialOffsets);
+      setSelectedIcon(null);
       alert('✅ Reset to defaults complete!');
     }
   };
 
-  // Store iconFile during drag/resize operations
-  const [activeIconFile, setActiveIconFile] = useState<string | null>(null);
-
   // Drag handlers
-  const handleDragStart = (e: React.MouseEvent, iconFile: string, weaponKey: string) => {
+  const handleDragStart = (e: React.MouseEvent, iconKey: string) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
-    setActiveIconFile(iconFile);
-    setSelectedWeapon(weaponKey);
+    setActiveIcon(iconKey);
+    setSelectedIcon(iconKey);
   };
 
   const handleDragMove = (e: React.MouseEvent) => {
-    if (!isDragging || !activeIconFile) return;
+    if (!isDragging || !activeIcon) return;
 
     const deltaX = e.clientX - dragStart.x;
     const deltaY = e.clientY - dragStart.y;
     
-    const currentOffset = getWeaponOffset(activeIconFile);
-    updateWeaponOffset(activeIconFile, {
+    const currentOffset = getIconOffset(activeIcon);
+    updateIconOffset(activeIcon, {
       offsetX: currentOffset.offsetX + deltaX,
       offsetY: currentOffset.offsetY + deltaY
     });
@@ -124,28 +117,28 @@ export const WeaponSpriteTest = () => {
 
   const handleDragEnd = () => {
     setIsDragging(false);
-    setActiveIconFile(null);
+    setActiveIcon(null);
   };
 
   // Resize handlers
-  const handleResizeStart = (e: React.MouseEvent, iconFile: string, weaponKey: string) => {
+  const handleResizeStart = (e: React.MouseEvent, iconKey: string) => {
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
     
-    const currentOffset = getWeaponOffset(iconFile);
+    const currentOffset = getIconOffset(iconKey);
     setResizeStart({
       width: currentOffset.width || 70,
       height: currentOffset.height || 70,
       mouseX: e.clientX,
       mouseY: e.clientY
     });
-    setActiveIconFile(iconFile);
-    setSelectedWeapon(weaponKey);
+    setActiveIcon(iconKey);
+    setSelectedIcon(iconKey);
   };
 
   const handleResizeMove = (e: React.MouseEvent) => {
-    if (!isResizing || !activeIconFile) return;
+    if (!isResizing || !activeIcon) return;
 
     const deltaX = e.clientX - resizeStart.mouseX;
     const deltaY = e.clientY - resizeStart.mouseY;
@@ -153,7 +146,7 @@ export const WeaponSpriteTest = () => {
     const newWidth = Math.max(40, Math.min(200, resizeStart.width + deltaX));
     const newHeight = Math.max(40, Math.min(200, resizeStart.height + deltaY));
     
-    updateWeaponOffset(activeIconFile, {
+    updateIconOffset(activeIcon, {
       width: newWidth,
       height: newHeight
     });
@@ -161,7 +154,7 @@ export const WeaponSpriteTest = () => {
 
   const handleResizeEnd = () => {
     setIsResizing(false);
-    setActiveIconFile(null);
+    setActiveIcon(null);
   };
 
   // Global mouse handlers
@@ -187,66 +180,52 @@ export const WeaponSpriteTest = () => {
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, dragStart, resizeStart, activeIconFile]);
+  }, [isDragging, isResizing, dragStart, resizeStart, activeIcon]);
 
-  // Get all unique weapons that have sprite positions
-  const weaponsWithSprites = Object.entries(WEAPON_MAP)
-    .map(([key, info]) => ({
-      key,
-      info,
-      spritePos: WEAPON_SPRITE_POSITIONS[info.iconFile]
-    }))
-    .filter(w => w.spritePos);
-
-  const getWeaponOffset = (iconFile: string): WeaponOffset => {
-    return weaponOffsets[iconFile] || { offsetX: 14, offsetY: 5, scale: 1.0, width: 70, height: 70 };
+  const getIconOffset = (iconKey: string): SpecialIconSpriteConfig => {
+    return iconOffsets[iconKey] || { offsetX: 0, offsetY: 0, scale: 1.0, width: 70, height: 70 };
   };
 
-  const updateWeaponOffset = (iconFile: string, updates: Partial<WeaponOffset>) => {
-    setWeaponOffsets(prev => ({
+  const updateIconOffset = (iconKey: string, updates: Partial<SpecialIconSpriteConfig>) => {
+    setIconOffsets(prev => ({
       ...prev,
-      [iconFile]: {
-        ...getWeaponOffset(iconFile),
+      [iconKey]: {
+        ...getIconOffset(iconKey),
         ...updates
       }
     }));
   };
 
-  const getSpriteStyle = (iconFile: string) => {
-    const pos = WEAPON_SPRITE_POSITIONS[iconFile];
+  const getSpriteStyle = (iconKey: string) => {
+    const pos = SPECIAL_ICON_POSITIONS[iconKey];
     if (!pos) return {};
 
-    const offset = getWeaponOffset(iconFile);
+    const offset = getIconOffset(iconKey);
     const adjustedX = pos.x + offset.offsetX;
     const adjustedY = pos.y + offset.offsetY;
-    // Combine global sprite scale with per-weapon scale
-    const combinedScale = spriteScale * offset.scale;
-    const scaledWidth = SPRITE_WIDTH * combinedScale;
-    const scaledHeight = SPRITE_HEIGHT * combinedScale;
+    const scaledWidth = SPECIAL_ICONS_SPRITE_WIDTH * offset.scale;
+    const scaledHeight = SPECIAL_ICONS_SPRITE_HEIGHT * offset.scale;
 
     return {
-      backgroundImage: 'url(/weapons-sprite-amber.png)',
+      backgroundImage: 'url(/more-icons.png)',
       backgroundPosition: `-${adjustedX * offset.scale}px -${adjustedY * offset.scale}px`,
       backgroundSize: `${scaledWidth}px ${scaledHeight}px`,
       backgroundRepeat: 'no-repeat',
-      width: `${offset.width || iconSize}px`,
-      height: `${offset.height || iconSize}px`,
+      width: `${offset.width || 70}px`,
+      height: `${offset.height || 70}px`,
     };
   };
 
-  const selectedWeaponInfo = selectedWeapon 
-    ? weaponsWithSprites.find(w => w.key === selectedWeapon)
-    : null;
-  
-  const currentOffset = selectedWeaponInfo 
-    ? getWeaponOffset(selectedWeaponInfo.info.iconFile)
-    : { offsetX: 14, offsetY: 5, scale: 1.0, width: 70, height: 70 };
+  const selectedIconInfo = selectedIcon ? SPECIAL_ICONS[selectedIcon as keyof typeof SPECIAL_ICONS] : null;
+  const currentOffset = selectedIcon 
+    ? getIconOffset(selectedIcon)
+    : { offsetX: 0, offsetY: 0, scale: 1.0, width: 70, height: 70 };
 
   return (
     <div className="weapon-sprite-test">
       <div className="test-header">
-        <h1>🎯 Weapon Sprite Alignment Tool</h1>
-        <p>Click a weapon to select • Drag icon to reposition • Drag corner to resize</p>
+        <h1>🎯 Special Icons Sprite Alignment Tool</h1>
+        <p>Click an icon to select • Drag icon to reposition • Drag corner to resize</p>
         <div className="storage-status">
           💾 Auto-saving to browser storage
         </div>
@@ -260,13 +239,13 @@ export const WeaponSpriteTest = () => {
       <div className="test-layout">
         {/* Controls Panel - Left Side */}
         <div className="controls-panel">
-          {selectedWeaponInfo ? (
+          {selectedIconInfo ? (
             <>
               <div className="selected-weapon-header">
-                <h2>Adjusting: {selectedWeaponInfo.info.displayName}</h2>
+                <h2>Adjusting: {selectedIconInfo.displayName}</h2>
                 <button 
                   className="deselect-btn"
-                  onClick={() => setSelectedWeapon(null)}
+                  onClick={() => setSelectedIcon(null)}
                 >
                   ✕ Deselect
                 </button>
@@ -280,19 +259,19 @@ export const WeaponSpriteTest = () => {
                     min="-50"
                     max="50"
                     value={currentOffset.offsetX}
-                    onChange={(e) => updateWeaponOffset(
-                      selectedWeaponInfo.info.iconFile,
+                    onChange={(e) => updateIconOffset(
+                      selectedIcon!,
                       { offsetX: Number(e.target.value) }
                     )}
                   />
                 </label>
                 <div className="button-row">
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { offsetX: currentOffset.offsetX - 1 }
                   )}>← Left</button>
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { offsetX: currentOffset.offsetX + 1 }
                   )}>Right →</button>
                 </div>
@@ -306,19 +285,19 @@ export const WeaponSpriteTest = () => {
                     min="-50"
                     max="50"
                     value={currentOffset.offsetY}
-                    onChange={(e) => updateWeaponOffset(
-                      selectedWeaponInfo.info.iconFile,
+                    onChange={(e) => updateIconOffset(
+                      selectedIcon!,
                       { offsetY: Number(e.target.value) }
                     )}
                   />
                 </label>
                 <div className="button-row">
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { offsetY: currentOffset.offsetY - 1 }
                   )}>↑ Up</button>
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { offsetY: currentOffset.offsetY + 1 }
                   )}>Down ↓</button>
                 </div>
@@ -326,27 +305,27 @@ export const WeaponSpriteTest = () => {
 
               <div className="control-group">
                 <label>
-                  <strong>Weapon Zoom:</strong> {currentOffset.scale.toFixed(2)}x
+                  <strong>Icon Zoom:</strong> {currentOffset.scale.toFixed(3)}x
                   <input
                     type="range"
-                    min="0.5"
-                    max="2.0"
-                    step="0.05"
+                    min="0.1"
+                    max="3.0"
+                    step="0.01"
                     value={currentOffset.scale}
-                    onChange={(e) => updateWeaponOffset(
-                      selectedWeaponInfo.info.iconFile,
+                    onChange={(e) => updateIconOffset(
+                      selectedIcon!,
                       { scale: Number(e.target.value) }
                     )}
                   />
                 </label>
                 <div className="button-row">
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
-                    { scale: Math.max(0.5, currentOffset.scale - 0.05) }
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
+                    { scale: Math.max(0.1, currentOffset.scale - 0.05) }
                   )}>🔍- Zoom Out</button>
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
-                    { scale: Math.min(2.0, currentOffset.scale + 0.05) }
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
+                    { scale: Math.min(3.0, currentOffset.scale + 0.05) }
                   )}>🔍+ Zoom In</button>
                 </div>
               </div>
@@ -359,19 +338,19 @@ export const WeaponSpriteTest = () => {
                     min="40"
                     max="200"
                     value={currentOffset.width || 70}
-                    onChange={(e) => updateWeaponOffset(
-                      selectedWeaponInfo.info.iconFile,
+                    onChange={(e) => updateIconOffset(
+                      selectedIcon!,
                       { width: Number(e.target.value) }
                     )}
                   />
                 </label>
                 <div className="button-row">
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { width: (currentOffset.width || 70) - 5 }
                   )}>◀ Narrower</button>
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { width: (currentOffset.width || 70) + 5 }
                   )}>Wider ▶</button>
                 </div>
@@ -385,19 +364,19 @@ export const WeaponSpriteTest = () => {
                     min="40"
                     max="200"
                     value={currentOffset.height || 70}
-                    onChange={(e) => updateWeaponOffset(
-                      selectedWeaponInfo.info.iconFile,
+                    onChange={(e) => updateIconOffset(
+                      selectedIcon!,
                       { height: Number(e.target.value) }
                     )}
                   />
                 </label>
                 <div className="button-row">
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { height: (currentOffset.height || 70) - 5 }
                   )}>▼ Shorter</button>
-                  <button onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
+                  <button onClick={() => updateIconOffset(
+                    selectedIcon!,
                     { height: (currentOffset.height || 70) + 5 }
                   )}>Taller ▲</button>
                 </div>
@@ -406,46 +385,20 @@ export const WeaponSpriteTest = () => {
               <div className="control-group">
                 <button 
                   className="reset-btn"
-                  onClick={() => updateWeaponOffset(
-                    selectedWeaponInfo.info.iconFile,
-                    { offsetX: 14, offsetY: 5, scale: 1.0, width: 70, height: 70 }
+                  onClick={() => updateIconOffset(
+                    selectedIcon!,
+                    { offsetX: 0, offsetY: 0, scale: 1.0, width: 70, height: 70 }
                   )}
                 >
-                  🔄 Reset This Weapon
+                  🔄 Reset This Icon
                 </button>
               </div>
             </>
           ) : (
             <div className="no-selection">
-              <p>👆 Click a weapon icon to adjust its position</p>
+              <p>👆 Click an icon to adjust its position</p>
             </div>
           )}
-
-          <div className="control-group global-controls">
-            <h3>Global Settings</h3>
-            <label>
-              <strong>Icon Size:</strong> {iconSize}px
-              <input
-                type="range"
-                min="50"
-                max="150"
-                value={iconSize}
-                onChange={(e) => setIconSize(Number(e.target.value))}
-              />
-            </label>
-
-            <label>
-              <strong>Sprite Scale:</strong> {spriteScale.toFixed(2)}x
-              <input
-                type="range"
-                min="0.8"
-                max="1.5"
-                step="0.05"
-                value={spriteScale}
-                onChange={(e) => setSpriteScale(Number(e.target.value))}
-              />
-            </label>
-          </div>
 
           <div className="import-section">
             <h3>📥 Import Configuration</h3>
@@ -479,11 +432,11 @@ export const WeaponSpriteTest = () => {
             <h3>📋 Export All Positions</h3>
             <p className="export-hint">Auto-saved to browser • Copy this JSON to share</p>
             <pre>
-{JSON.stringify(weaponOffsets, null, 2)}
+{JSON.stringify(iconOffsets, null, 2)}
             </pre>
             <button onClick={() => {
-              navigator.clipboard.writeText(JSON.stringify(weaponOffsets, null, 2));
-              alert('All weapon positions copied to clipboard!');
+              navigator.clipboard.writeText(JSON.stringify(iconOffsets, null, 2));
+              alert('All icon positions copied to clipboard!');
             }}>
               📋 Copy JSON
             </button>
@@ -500,21 +453,21 @@ export const WeaponSpriteTest = () => {
           </div>
         </div>
 
-        {/* Weapons Grid - Right Side */}
+        {/* Icons Grid - Right Side */}
         <div className="weapons-grid">
-          <h2>All Weapons ({weaponsWithSprites.length})</h2>
+          <h2>Special Icons ({Object.keys(SPECIAL_ICONS).length})</h2>
           <div className="grid-container">
-            {weaponsWithSprites.map(({ key, info }) => {
-              const offset = getWeaponOffset(info.iconFile);
-              const isAdjusted = offset.offsetX !== 14 || offset.offsetY !== 5 || offset.scale !== 1.0 || 
+            {Object.entries(SPECIAL_ICONS).map(([key, info]) => {
+              const offset = getIconOffset(key);
+              const isAdjusted = offset.offsetX !== 0 || offset.offsetY !== 0 || offset.scale !== 1.0 || 
                                  (offset.width && offset.width !== 70) || (offset.height && offset.height !== 70);
-              const isSelected = selectedWeapon === key;
+              const isSelected = selectedIcon === key;
               
               return (
                 <div 
                   key={key} 
                   className={`weapon-item ${isSelected ? 'selected' : ''} ${isAdjusted ? 'adjusted' : ''}`}
-                  onClick={() => setSelectedWeapon(key)}
+                  onClick={() => setSelectedIcon(key)}
                 >
                   <div 
                     className="weapon-icon-box-wrapper"
@@ -522,8 +475,8 @@ export const WeaponSpriteTest = () => {
                   >
                     <div 
                       className={`weapon-icon-box ${isDragging && isSelected ? 'dragging' : ''}`}
-                      style={getSpriteStyle(info.iconFile)}
-                      onMouseDown={(e) => handleDragStart(e, info.iconFile, key)}
+                      style={getSpriteStyle(key)}
+                      onMouseDown={(e) => handleDragStart(e, key)}
                     >
                       {isSelected && (
                         <>
@@ -532,7 +485,7 @@ export const WeaponSpriteTest = () => {
                           </div>
                           <div 
                             className="resize-handle"
-                            onMouseDown={(e) => handleResizeStart(e, info.iconFile, key)}
+                            onMouseDown={(e) => handleResizeStart(e, key)}
                             title="Drag to resize"
                           >
                             ↘️
@@ -552,8 +505,11 @@ export const WeaponSpriteTest = () => {
           </div>
 
           <div className="reference-sprite">
-            <h3>🖼️ Full Sprite Reference</h3>
-            <img src="/weapons-sprite-amber.png" alt="Full weapon sprite" style={{ maxWidth: '100%', border: '2px solid #333' }} />
+            <h3>🖼️ Full Sprite Reference (534x1024)</h3>
+            <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Vertical layout: Headshot (top) • Knife (middle) • C4 (bottom)
+            </p>
+            <img src="/more-icons.png" alt="Full special icons sprite" style={{ maxWidth: '100%', border: '2px solid #333' }} />
           </div>
         </div>
       </div>

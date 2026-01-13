@@ -195,3 +195,29 @@
     height: 40px;
   }
 }
+
+/* Special icons (headshot, knife, C4) */
+.headshot-icon-sprite,
+.knife-icon-sprite,
+.c4-icon-sprite {
+  display: inline-block;
+  vertical-align: middle;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* C4 status color filters */
+.c4-icon-sprite.c4-planted {
+  /* Red tint for planted */
+  filter: brightness(1.0);
+}
+
+.c4-icon-sprite.c4-defused {
+  /* Green tint for defused */
+  filter: hue-rotate(120deg) brightness(1.1);
+}
+
+.c4-icon-sprite.c4-exploded {
+  /* Orange/yellow tint for exploded */
+  filter: hue-rotate(30deg) brightness(1.2) saturate(1.5);
+}

@@ -75,8 +75,8 @@ export const WEAPON_MAP: Record<string, WeaponInfo> = {
   // Equipment
   'weapon_taser': { name: 'taser', displayName: 'Zeus x27', category: 'equipment', iconFile: 'Zeusx27' },
   'weapon_c4': { name: 'c4', displayName: 'C4 Explosive', category: 'equipment', iconFile: 'C4' },
-  'weapon_knife': { name: 'knife', displayName: 'Knife', category: 'knife', iconFile: 'DefKit' },
-  'weapon_knife_t': { name: 'knife_t', displayName: 'Knife', category: 'knife', iconFile: 'DefKit' },
+  'weapon_knife': { name: 'knife', displayName: 'Knife', category: 'knife', iconFile: 'Knife' },
+  'weapon_knife_t': { name: 'knife_t', displayName: 'Knife', category: 'knife', iconFile: 'Knife' },
 };
 
 /**
