@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { SpriteIcon } from '../components/UI/SpriteIcon';
+import { HitLocationIndicator } from '../components/UI/HitLocationIndicator';
 import { Tooltip } from '../components/UI/Tooltip';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
@@ -88,22 +89,7 @@ const getEventColorClass = (eventType: string, details?: RoundEventDTO): string 
   }
 };
 
-const getHitGroupEmoji = (hitGroup: string | undefined): string => {
-  if (!hitGroup) return '👤';
-  
-  const normalized = hitGroup.toLowerCase();
-  
-  if (normalized.includes('head')) return '🎯';
-  if (normalized.includes('chest') || normalized.includes('torso')) return '🫀';
-  if (normalized.includes('stomach') || normalized.includes('belly')) return '🫃';
-  if (normalized.includes('left arm')) return '💪';
-  if (normalized.includes('right arm')) return '💪';
-  if (normalized.includes('left leg')) return '🦵';
-  if (normalized.includes('right leg')) return '🦵';
-  if (normalized.includes('neck')) return '🩸';
-  
-  return '👤'; // Generic body
-};
+// Hit location rendering now handled by HitLocationIndicator component
 
 const formatTimeOffset = (ms: number): string => {
   const seconds = Math.floor(ms / 1000);
@@ -156,31 +142,40 @@ export const RoundDetailsPage = () => {
     );
   };
 
-  // Group assists with their corresponding kills
+  // Group assists and attacks with their corresponding kills
   const groupEventsWithAssists = (events: RoundEventDTO[]) => {
-    const result: Array<{ event: RoundEventDTO; assist?: RoundEventDTO }> = [];
+    const result: Array<{ event: RoundEventDTO; assist?: RoundEventDTO; attack?: RoundEventDTO }> = [];
     const assistMap = new Map<string, RoundEventDTO>();
+    const attackMap = new Map<string, RoundEventDTO>();
     const killTimestamps = new Set<string>();
     
-    // First pass: collect all assists and kill timestamps
+    // First pass: collect all assists, attacks, and kill timestamps
     events.forEach(event => {
       if (event.eventType === 'ASSIST') {
         // Key by victim ID and approximate time to match with kills
         const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
         assistMap.set(key, event);
+      } else if (event.eventType === 'ATTACK') {
+        // Store attack events to merge with kills
+        const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
+        attackMap.set(key, event);
       } else if (event.eventType === 'KILL') {
         killTimestamps.add(`${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`);
       }
     });
     
-    // Second pass: filter out attacks that result in immediate kills, group kills with assists
+    // Second pass: group kills with assists and attacks, filter out merged attacks
     events.forEach(event => {
       if (event.eventType === 'KILL') {
         const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
         const assist = assistMap.get(key);
-        result.push({ event, assist });
+        const attack = attackMap.get(key);
+        result.push({ event, assist, attack });
         if (assist) {
           assistMap.delete(key); // Remove matched assist
+        }
+        if (attack) {
+          attackMap.delete(key); // Remove matched attack
         }
       } else if (event.eventType === 'ATTACK') {
         // Check if this attack is followed by an immediate kill (within 100ms)
@@ -286,7 +281,7 @@ export const RoundDetailsPage = () => {
 
         {groupedEvents.length > 0 ? (
           <div className="events-timeline">
-            {groupedEvents.map(({ event, assist }, idx) => (
+            {groupedEvents.map(({ event, assist, attack }, idx) => (
               <div 
                 key={event.id || idx} 
                 className={`event-card ${getEventColorClass(event.eventType, event)}`}
@@ -338,6 +333,11 @@ export const RoundDetailsPage = () => {
                       >
                         {event.player2Name || event.player2Id || 'Unknown'}
                       </Link>
+                      {/* Show hit location from the merged attack event if available */}
+                      {attack && attack.damage && (
+                        <span className="damage-value">-{attack.damage} HP</span>
+                      )}
+                      <HitLocationIndicator hitGroup={attack?.hitGroup || event.hitGroup} size={32} />
                     </div>
                   )}
                   
@@ -389,7 +389,7 @@ export const RoundDetailsPage = () => {
                       {event.damage && (
                         <span className="damage-value">-{event.damage} HP</span>
                       )}
-                      <span className="hit-location-emoji">{getHitGroupEmoji(event.hitGroup)}</span>
+                      <HitLocationIndicator hitGroup={event.hitGroup} size={32} />
                     </div>
                   )}
                 </div>
