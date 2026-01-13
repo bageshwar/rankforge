@@ -8,7 +8,7 @@ import { PlayerStatsTable, type PlayerStat } from '../components/Tables/PlayerSt
 import { Tooltip } from '../components/UI/Tooltip';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
-import type { RoundDetailsDTO, RoundEventDTO, GameDetailsDTO } from '../services/api';
+import type { RoundDetailsDTO, RoundEventDTO, GameDTO } from '../services/api';
 import './RoundDetailsPage.css';
 
 // Event type icons and labels
@@ -102,7 +102,7 @@ const formatTimeOffset = (ms: number): string => {
 export const RoundDetailsPage = () => {
   const { gameId, roundNumber } = useParams<{ gameId: string; roundNumber: string }>();
   const [roundDetails, setRoundDetails] = useState<RoundDetailsDTO | null>(null);
-  const [gameDetails, setGameDetails] = useState<GameDetailsDTO | null>(null);
+  const [game, setGame] = useState<GameDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,9 +118,11 @@ export const RoundDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // Fetch both round details and game data (for map name)
       const [roundData, gameData] = await Promise.all([
         gamesApi.getRoundDetails(gameId, parseInt(roundNumber, 10)),
-        gamesApi.getDetails(gameId),
+        gamesApi.getById(gameId),
       ]);
 
       if (!roundData) {
@@ -129,7 +131,7 @@ export const RoundDetailsPage = () => {
       }
 
       setRoundDetails(roundData);
-      setGameDetails(gameData);
+      setGame(gameData);
     } catch (err) {
       setError('Failed to load round details. Please try again later.');
       console.error('Error loading round details:', err);
@@ -138,18 +140,14 @@ export const RoundDetailsPage = () => {
     }
   };
 
-  // Build player ID to team mapping from game details
+  // Build player ID to team mapping from round events
+  // Note: GameDTO doesn't have player stats, so team mapping is not available
+  // Team colors will not be applied to player links
   const getPlayerTeamMap = (): Map<string, 'CT' | 'T'> => {
-    const teamMap = new Map<string, 'CT' | 'T'>();
-    if (gameDetails?.playerStats) {
-      gameDetails.playerStats.forEach(player => {
-        if (player.playerId && player.team) {
-          teamMap.set(player.playerId, player.team as 'CT' | 'T');
-        }
-      });
-    }
-    return teamMap;
+    return new Map<string, 'CT' | 'T'>();
   };
+
+  const playerTeamMap = getPlayerTeamMap();
 
   // Filter events to show only significant ones (kills, assists, bombs, attacks)
   const getSignificantEvents = (events: RoundEventDTO[]): RoundEventDTO[] => {
@@ -325,7 +323,7 @@ export const RoundDetailsPage = () => {
   const roundPlayerStats = roundDetails ? calculateRoundPlayerStats() : [];
 
   return (
-    <PageContainer backgroundClass="bg-round-details">
+    <PageContainer mapName={game?.map}>
       <Link to={`/games/${gameId}`} className="back-btn">
         ← Back to Game
       </Link>
@@ -513,8 +511,7 @@ export const RoundDetailsPage = () => {
                   )}
                 </div>
               </div>
-            ));
-            })()}
+            ))}
           </div>
         ) : (
           <div className="no-events">

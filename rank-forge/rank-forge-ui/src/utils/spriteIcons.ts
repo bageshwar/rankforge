@@ -35,7 +35,7 @@ export const ICON_MAP: Record<string, SpriteIconInfo> = {
     ...acc,
     [key]: {
       ...info,
-      spriteSheet: (info.iconFile === 'Knife' || info.name === 'c4') ? 'special' as const : 'weapons' as const
+      spriteSheet: (info.iconFile === 'Knife' || info.iconFile === 'C4') ? 'special' as const : 'weapons' as const
     }
   }), {}),
   // Add special event icons
