@@ -184,6 +184,7 @@
 }
 
 /* Player Statistics Table */
+/* Base styles are in PlayerStatsTable.css - only GameDetailsPage-specific styles here */
 .player-stats-section {
   overflow: hidden;
   box-shadow: 
@@ -199,111 +200,8 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-.stats-table-container {
-  overflow-x: auto;
-}
-
-.stats-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.stats-table thead {
-  background: rgba(74, 144, 226, 0.15);
-}
-
-.stats-table th {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-weight: 600;
-  color: var(--color-accent-blue);
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 1px;
-}
-
-.stats-table th:not(:first-child) {
-  text-align: center;
-  width: 60px;
-}
-
-.stats-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: var(--color-text-secondary);
-}
-
-.stats-table tbody tr:hover {
-  background: rgba(74, 144, 226, 0.08);
-}
-
-.stats-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.player-name-cell {
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.player-profile-link {
-  color: var(--color-text-primary);
-  text-decoration: none;
-  padding: 0.25rem 0.5rem;
-  margin: -0.25rem -0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: inline-block;
-}
-
-.player-profile-link:hover {
-  color: var(--color-accent-blue);
-  background: rgba(74, 144, 226, 0.15);
-}
-
-.kills-cell {
-  text-align: center;
-  font-weight: 600;
-  color: #4caf50;
-}
-
-.deaths-cell {
-  text-align: center;
-  font-weight: 600;
-  color: #f44336;
-}
-
-.assists-cell {
-  text-align: center;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.rating-cell {
-  text-align: center;
-  font-weight: 600;
-  color: var(--color-accent-blue);
-}
-
-/* Rank styling for top 3 players */
-.player-name-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.rank-icon {
-  font-size: 1.5rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Gold - Rank 1 */
+/* Enhanced animations for game details page */
 .stats-table tbody tr.rank-gold {
-  background: linear-gradient(90deg, rgba(255, 215, 0, 0.25), rgba(255, 183, 0, 0.2), rgba(255, 215, 0, 0.25)) !important;
-  outline: 3px solid #ffd700;
-  outline-offset: -1px;
   animation: glow-gold 2s ease-in-out infinite;
 }
 
@@ -314,10 +212,6 @@
   50% { 
     box-shadow: 0 0 30px rgba(255, 215, 0, 0.7), inset 0 0 50px rgba(255, 215, 0, 0.2);
   }
-}
-
-.stats-table tbody tr.rank-gold:hover {
-  background: linear-gradient(90deg, rgba(255, 215, 0, 0.4), rgba(255, 183, 0, 0.35), rgba(255, 215, 0, 0.4)) !important;
 }
 
 .stats-table tbody tr.rank-gold td {
@@ -341,11 +235,7 @@
   }
 }
 
-/* Silver - Rank 2 */
 .stats-table tbody tr.rank-silver {
-  background: linear-gradient(90deg, rgba(192, 192, 192, 0.2), rgba(220, 220, 220, 0.15), rgba(192, 192, 192, 0.2)) !important;
-  outline: 3px solid #c0c0c0;
-  outline-offset: -1px;
   animation: glow-silver 2.5s ease-in-out infinite;
 }
 
@@ -356,10 +246,6 @@
   50% { 
     box-shadow: 0 0 25px rgba(220, 220, 220, 0.6), inset 0 0 40px rgba(192, 192, 192, 0.15);
   }
-}
-
-.stats-table tbody tr.rank-silver:hover {
-  background: linear-gradient(90deg, rgba(192, 192, 192, 0.35), rgba(220, 220, 220, 0.3), rgba(192, 192, 192, 0.35)) !important;
 }
 
 .stats-table tbody tr.rank-silver td {
@@ -383,11 +269,7 @@
   }
 }
 
-/* Bronze - Rank 3 */
 .stats-table tbody tr.rank-bronze {
-  background: linear-gradient(90deg, rgba(205, 127, 50, 0.2), rgba(184, 115, 51, 0.15), rgba(205, 127, 50, 0.2)) !important;
-  outline: 3px solid #cd7f32;
-  outline-offset: -1px;
   animation: glow-bronze 3s ease-in-out infinite;
 }
 
@@ -398,10 +280,6 @@
   50% { 
     box-shadow: 0 0 20px rgba(232, 168, 80, 0.5), inset 0 0 35px rgba(205, 127, 50, 0.12);
   }
-}
-
-.stats-table tbody tr.rank-bronze:hover {
-  background: linear-gradient(90deg, rgba(205, 127, 50, 0.35), rgba(184, 115, 51, 0.3), rgba(205, 127, 50, 0.35)) !important;
 }
 
 .stats-table tbody tr.rank-bronze td {
@@ -423,6 +301,12 @@
     transform: scale(1.15);
     filter: drop-shadow(0 0 18px rgba(232, 168, 80, 1)) drop-shadow(0 0 30px rgba(205, 127, 50, 0.6));
   }
+}
+
+.rating-cell {
+  text-align: center;
+  font-weight: 600;
+  color: var(--color-accent-blue);
 }
 
 /* Sortable columns */

@@ -583,6 +583,15 @@
   color: rgb(255, 193, 7);
 }
 
+/* Team-based colors */
+.player-link.team-ct {
+  color: var(--color-team-ct) !important;
+}
+
+.player-link.team-t {
+  color: var(--color-team-t) !important;
+}
+
 .kill-arrow {
   font-size: 1.25rem;
   color: var(--color-text-tertiary);
