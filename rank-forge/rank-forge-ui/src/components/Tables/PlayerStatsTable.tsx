@@ -146,7 +146,7 @@ export const PlayerStatsTable: React.FC<PlayerStatsTableProps> = ({
           </tr>
         </thead>
         <tbody>
-          {sortedPlayers.map((player, idx) => {
+          {sortedPlayers.map((player) => {
             const steamId = extractSteamId(player.playerId);
             // Use killRank if available (for game details), otherwise use array position
             // Note: After sorting, we need to recalculate rank based on kills, not position

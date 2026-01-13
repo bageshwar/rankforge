@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
@@ -106,13 +106,7 @@ export const RoundDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (gameId && roundNumber) {
-      loadRoundDetails();
-    }
-  }, [gameId, roundNumber]);
-
-  const loadRoundDetails = async () => {
+  const loadRoundDetails = useCallback(async () => {
     if (!gameId || !roundNumber) return;
 
     try {
@@ -138,7 +132,100 @@ export const RoundDetailsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gameId, roundNumber]);
+
+  useEffect(() => {
+    if (gameId && roundNumber) {
+      loadRoundDetails();
+    }
+  }, [gameId, roundNumber, loadRoundDetails]);
+
+  // Calculate player statistics for this round (memoized for performance)
+  // Must be called before any early returns to follow Rules of Hooks
+  const roundPlayerStats = useMemo(() => {
+    if (!roundDetails) return [];
+    
+    const playerStatsMap = new Map<string, PlayerStat>();
+
+    roundDetails.events.forEach(event => {
+      // Process kills
+      if (event.eventType === 'KILL') {
+        // Attacker gets a kill
+        if (event.player1Id) {
+          const attacker = playerStatsMap.get(event.player1Id) || {
+            playerName: event.player1Name || event.player1Id,
+            playerId: event.player1Id,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            damage: 0,
+            headshotKills: 0,
+          };
+          attacker.kills++;
+          if (event.isHeadshot) {
+            attacker.headshotKills = (attacker.headshotKills || 0) + 1;
+          }
+          playerStatsMap.set(event.player1Id, attacker);
+        }
+
+        // Victim gets a death
+        if (event.player2Id) {
+          const victim = playerStatsMap.get(event.player2Id) || {
+            playerName: event.player2Name || event.player2Id,
+            playerId: event.player2Id,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            damage: 0,
+            headshotKills: 0,
+          };
+          victim.deaths++;
+          playerStatsMap.set(event.player2Id, victim);
+        }
+      }
+
+      // Process assists
+      if (event.eventType === 'ASSIST' && event.player1Id) {
+        const assister = playerStatsMap.get(event.player1Id) || {
+          playerName: event.player1Name || event.player1Id,
+          playerId: event.player1Id,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          damage: 0,
+          headshotKills: 0,
+        };
+        assister.assists++;
+        playerStatsMap.set(event.player1Id, assister);
+      }
+
+      // Process damage
+      if (event.eventType === 'ATTACK' && event.player1Id && event.damage) {
+        const attacker = playerStatsMap.get(event.player1Id) || {
+          playerName: event.player1Name || event.player1Id,
+          playerId: event.player1Id,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          damage: 0,
+          headshotKills: 0,
+        };
+        attacker.damage = (attacker.damage || 0) + event.damage;
+        playerStatsMap.set(event.player1Id, attacker);
+      }
+    });
+
+    return Array.from(playerStatsMap.values())
+      .map(player => ({
+        ...player,
+        headshotPercentage: player.kills > 0 ? ((player.headshotKills || 0) / player.kills) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        // Sort by kills descending, then damage descending
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        return (b.damage || 0) - (a.damage || 0);
+      });
+  }, [roundDetails]);
 
   // Build player ID to team mapping from round events
   // Note: GameDTO doesn't have player stats, so team mapping is not available
@@ -233,94 +320,8 @@ export const RoundDetailsPage = () => {
     );
   }
 
-  const significantEvents = getSignificantEvents(roundDetails.events);
-  const groupedEvents = groupEventsWithAssists(significantEvents);
-
-  // Calculate player statistics for this round
-  const calculateRoundPlayerStats = (): PlayerStat[] => {
-    const playerStatsMap = new Map<string, PlayerStat>();
-
-    roundDetails.events.forEach(event => {
-      // Process kills
-      if (event.eventType === 'KILL') {
-        // Attacker gets a kill
-        if (event.player1Id) {
-          const attacker = playerStatsMap.get(event.player1Id) || {
-            playerName: event.player1Name || event.player1Id,
-            playerId: event.player1Id,
-            kills: 0,
-            deaths: 0,
-            assists: 0,
-            damage: 0,
-            headshotKills: 0,
-          };
-          attacker.kills++;
-          if (event.isHeadshot) {
-            attacker.headshotKills = (attacker.headshotKills || 0) + 1;
-          }
-          playerStatsMap.set(event.player1Id, attacker);
-        }
-
-        // Victim gets a death
-        if (event.player2Id) {
-          const victim = playerStatsMap.get(event.player2Id) || {
-            playerName: event.player2Name || event.player2Id,
-            playerId: event.player2Id,
-            kills: 0,
-            deaths: 0,
-            assists: 0,
-            damage: 0,
-            headshotKills: 0,
-          };
-          victim.deaths++;
-          playerStatsMap.set(event.player2Id, victim);
-        }
-      }
-
-      // Process assists
-      if (event.eventType === 'ASSIST' && event.player1Id) {
-        const assister = playerStatsMap.get(event.player1Id) || {
-          playerName: event.player1Name || event.player1Id,
-          playerId: event.player1Id,
-          kills: 0,
-          deaths: 0,
-          assists: 0,
-          damage: 0,
-          headshotKills: 0,
-        };
-        assister.assists++;
-        playerStatsMap.set(event.player1Id, assister);
-      }
-
-      // Process damage
-      if (event.eventType === 'ATTACK' && event.player1Id && event.damage) {
-        const attacker = playerStatsMap.get(event.player1Id) || {
-          playerName: event.player1Name || event.player1Id,
-          playerId: event.player1Id,
-          kills: 0,
-          deaths: 0,
-          assists: 0,
-          damage: 0,
-          headshotKills: 0,
-        };
-        attacker.damage = (attacker.damage || 0) + event.damage;
-        playerStatsMap.set(event.player1Id, attacker);
-      }
-    });
-
-    return Array.from(playerStatsMap.values())
-      .map(player => ({
-        ...player,
-        headshotPercentage: player.kills > 0 ? ((player.headshotKills || 0) / player.kills) * 100 : 0,
-      }))
-      .sort((a, b) => {
-        // Sort by kills descending, then damage descending
-        if (b.kills !== a.kills) return b.kills - a.kills;
-        return (b.damage || 0) - (a.damage || 0);
-      });
-  };
-
-  const roundPlayerStats = roundDetails ? calculateRoundPlayerStats() : [];
+  const significantEvents = roundDetails ? getSignificantEvents(roundDetails.events) : [];
+  const groupedEvents = roundDetails ? groupEventsWithAssists(significantEvents) : [];
 
   return (
     <PageContainer mapName={game?.map}>
