@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { WEAPON_MAP } from '../utils/weaponIcons';
 import { WEAPON_SPRITE_POSITIONS, SPRITE_WIDTH, SPRITE_HEIGHT } from '../utils/weaponSpritePositions';
 import './WeaponSpriteTest.css';

@@ -4,10 +4,11 @@ import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { SpriteIcon } from '../components/UI/SpriteIcon';
 import { HitLocationIndicator } from '../components/UI/HitLocationIndicator';
+import { PlayerStatsTable, type PlayerStat } from '../components/Tables/PlayerStatsTable';
 import { Tooltip } from '../components/UI/Tooltip';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
-import type { RoundDetailsDTO, RoundEventDTO } from '../services/api';
+import type { RoundDetailsDTO, RoundEventDTO, GameDetailsDTO } from '../services/api';
 import './RoundDetailsPage.css';
 
 // Event type icons and labels
@@ -101,6 +102,7 @@ const formatTimeOffset = (ms: number): string => {
 export const RoundDetailsPage = () => {
   const { gameId, roundNumber } = useParams<{ gameId: string; roundNumber: string }>();
   const [roundDetails, setRoundDetails] = useState<RoundDetailsDTO | null>(null);
+  const [gameDetails, setGameDetails] = useState<GameDetailsDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -116,20 +118,37 @@ export const RoundDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await gamesApi.getRoundDetails(gameId, parseInt(roundNumber, 10));
+      const [roundData, gameData] = await Promise.all([
+        gamesApi.getRoundDetails(gameId, parseInt(roundNumber, 10)),
+        gamesApi.getDetails(gameId),
+      ]);
 
-      if (!data) {
+      if (!roundData) {
         setError('Round not found');
         return;
       }
 
-      setRoundDetails(data);
+      setRoundDetails(roundData);
+      setGameDetails(gameData);
     } catch (err) {
       setError('Failed to load round details. Please try again later.');
       console.error('Error loading round details:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Build player ID to team mapping from game details
+  const getPlayerTeamMap = (): Map<string, 'CT' | 'T'> => {
+    const teamMap = new Map<string, 'CT' | 'T'>();
+    if (gameDetails?.playerStats) {
+      gameDetails.playerStats.forEach(player => {
+        if (player.playerId && player.team) {
+          teamMap.set(player.playerId, player.team as 'CT' | 'T');
+        }
+      });
+    }
+    return teamMap;
   };
 
   // Filter events to show only significant ones (kills, assists, bombs, attacks)
@@ -219,6 +238,92 @@ export const RoundDetailsPage = () => {
   const significantEvents = getSignificantEvents(roundDetails.events);
   const groupedEvents = groupEventsWithAssists(significantEvents);
 
+  // Calculate player statistics for this round
+  const calculateRoundPlayerStats = (): PlayerStat[] => {
+    const playerStatsMap = new Map<string, PlayerStat>();
+
+    roundDetails.events.forEach(event => {
+      // Process kills
+      if (event.eventType === 'KILL') {
+        // Attacker gets a kill
+        if (event.player1Id) {
+          const attacker = playerStatsMap.get(event.player1Id) || {
+            playerName: event.player1Name || event.player1Id,
+            playerId: event.player1Id,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            damage: 0,
+            headshotKills: 0,
+          };
+          attacker.kills++;
+          if (event.isHeadshot) {
+            attacker.headshotKills = (attacker.headshotKills || 0) + 1;
+          }
+          playerStatsMap.set(event.player1Id, attacker);
+        }
+
+        // Victim gets a death
+        if (event.player2Id) {
+          const victim = playerStatsMap.get(event.player2Id) || {
+            playerName: event.player2Name || event.player2Id,
+            playerId: event.player2Id,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            damage: 0,
+            headshotKills: 0,
+          };
+          victim.deaths++;
+          playerStatsMap.set(event.player2Id, victim);
+        }
+      }
+
+      // Process assists
+      if (event.eventType === 'ASSIST' && event.player1Id) {
+        const assister = playerStatsMap.get(event.player1Id) || {
+          playerName: event.player1Name || event.player1Id,
+          playerId: event.player1Id,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          damage: 0,
+          headshotKills: 0,
+        };
+        assister.assists++;
+        playerStatsMap.set(event.player1Id, assister);
+      }
+
+      // Process damage
+      if (event.eventType === 'ATTACK' && event.player1Id && event.damage) {
+        const attacker = playerStatsMap.get(event.player1Id) || {
+          playerName: event.player1Name || event.player1Id,
+          playerId: event.player1Id,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          damage: 0,
+          headshotKills: 0,
+        };
+        attacker.damage = (attacker.damage || 0) + event.damage;
+        playerStatsMap.set(event.player1Id, attacker);
+      }
+    });
+
+    return Array.from(playerStatsMap.values())
+      .map(player => ({
+        ...player,
+        headshotPercentage: player.kills > 0 ? ((player.headshotKills || 0) / player.kills) * 100 : 0,
+      }))
+      .sort((a, b) => {
+        // Sort by kills descending, then damage descending
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        return (b.damage || 0) - (a.damage || 0);
+      });
+  };
+
+  const roundPlayerStats = roundDetails ? calculateRoundPlayerStats() : [];
+
   return (
     <PageContainer backgroundClass="bg-round-details">
       <Link to={`/games/${gameId}`} className="back-btn">
@@ -272,6 +377,21 @@ export const RoundDetailsPage = () => {
         )}
       </div>
 
+      {/* Round Scorecard */}
+      {roundPlayerStats.length > 0 && (
+        <div className="section-card card-bg player-stats-section">
+          <h2 className="section-title">📊 Round Scorecard</h2>
+          <p className="events-description">
+            Player statistics for this round
+          </p>
+          <PlayerStatsTable 
+            players={roundPlayerStats} 
+            showRankings={true}
+            defaultSortColumn="kills"
+          />
+        </div>
+      )}
+
       {/* Event Timeline */}
       <div className="section-card card-bg events-section">
         <h2 className="section-title">⏱️ Event Timeline</h2>
@@ -309,7 +429,7 @@ export const RoundDetailsPage = () => {
                         <>
                           <Link 
                             to={`/players/${extractSteamId(assist.player1Id)}`}
-                            className="player-link assister"
+                            className={`player-link assister ${playerTeamMap.get(assist.player1Id || '') === 'CT' ? 'team-ct' : playerTeamMap.get(assist.player1Id || '') === 'T' ? 'team-t' : ''}`}
                             data-testid={`testid-round-event-player-link-${event.id || idx}-assister`}
                           >
                             {assist.player1Name || assist.player1Id || 'Unknown'}
@@ -319,7 +439,7 @@ export const RoundDetailsPage = () => {
                       )}
                       <Link 
                         to={`/players/${extractSteamId(event.player1Id)}`}
-                        className="player-link attacker"
+                        className={`player-link attacker ${playerTeamMap.get(event.player1Id || '') === 'CT' ? 'team-ct' : playerTeamMap.get(event.player1Id || '') === 'T' ? 'team-t' : ''}`}
                         data-testid={`testid-round-event-player-link-${event.id || idx}-attacker`}
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
@@ -328,7 +448,7 @@ export const RoundDetailsPage = () => {
                       {event.isHeadshot && <SpriteIcon icon="headshot" size={36} className="headshot-icon" />}
                       <Link 
                         to={`/players/${extractSteamId(event.player2Id)}`}
-                        className="player-link victim"
+                        className={`player-link victim ${playerTeamMap.get(event.player2Id || '') === 'CT' ? 'team-ct' : playerTeamMap.get(event.player2Id || '') === 'T' ? 'team-t' : ''}`}
                         data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
                       >
                         {event.player2Name || event.player2Id || 'Unknown'}
@@ -360,7 +480,7 @@ export const RoundDetailsPage = () => {
                           <span className="by-text">by</span>
                           <Link 
                             to={`/players/${extractSteamId(event.player1Id)}`}
-                            className="player-link bomber"
+                            className={`player-link bomber ${playerTeamMap.get(event.player1Id) === 'CT' ? 'team-ct' : playerTeamMap.get(event.player1Id) === 'T' ? 'team-t' : ''}`}
                           >
                             {event.player1Name || event.player1Id || 'Unknown'}
                           </Link>
@@ -374,15 +494,14 @@ export const RoundDetailsPage = () => {
                     <div className="attack-event-line">
                       <Link 
                         to={`/players/${extractSteamId(event.player1Id)}`}
-                        className="player-link attacker"
+                        className={`player-link attacker ${playerTeamMap.get(event.player1Id || '') === 'CT' ? 'team-ct' : playerTeamMap.get(event.player1Id || '') === 'T' ? 'team-t' : ''}`}
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
                       </Link>
                       {event.weapon && <SpriteIcon icon={event.weapon} size="small" />}
-                      <span className="damage-arrow">→</span>
                       <Link 
                         to={`/players/${extractSteamId(event.player2Id)}`}
-                        className="player-link victim"
+                        className={`player-link victim ${playerTeamMap.get(event.player2Id || '') === 'CT' ? 'team-ct' : playerTeamMap.get(event.player2Id || '') === 'T' ? 'team-t' : ''}`}
                       >
                         {event.player2Name || event.player2Id || 'Unknown'}
                       </Link>
@@ -394,7 +513,8 @@ export const RoundDetailsPage = () => {
                   )}
                 </div>
               </div>
-            ))}
+            ));
+            })()}
           </div>
         ) : (
           <div className="no-events">
