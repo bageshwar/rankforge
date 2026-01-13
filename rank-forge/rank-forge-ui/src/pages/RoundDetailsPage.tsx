@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
+import { SpriteIcon } from '../components/UI/SpriteIcon';
+import { HitLocationIndicator } from '../components/UI/HitLocationIndicator';
+import { Tooltip } from '../components/UI/Tooltip';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
 import type { RoundDetailsDTO, RoundEventDTO, GameDTO } from '../services/api';
@@ -86,12 +89,7 @@ const getEventColorClass = (eventType: string, details?: RoundEventDTO): string 
   }
 };
 
-const formatWeaponName = (weapon: string | undefined): string => {
-  if (!weapon) return '';
-  // Clean up weapon names (e.g., "weapon_ak47" -> "AK-47")
-  const cleanName = weapon.replace('weapon_', '').replace('_', '-').toUpperCase();
-  return cleanName;
-};
+// Hit location rendering now handled by HitLocationIndicator component
 
 const formatTimeOffset = (ms: number): string => {
   const seconds = Math.floor(ms / 1000);
@@ -141,13 +139,67 @@ export const RoundDetailsPage = () => {
     }
   };
 
-  // Filter events to show only significant ones (kills, assists, bombs)
+  // Filter events to show only significant ones (kills, assists, bombs, attacks)
   const getSignificantEvents = (events: RoundEventDTO[]): RoundEventDTO[] => {
     return events.filter(e => 
       e.eventType === 'KILL' || 
       e.eventType === 'ASSIST' || 
-      e.eventType === 'BOMB_EVENT'
+      e.eventType === 'BOMB_EVENT' ||
+      e.eventType === 'ATTACK'
     );
+  };
+
+  // Group assists and attacks with their corresponding kills
+  const groupEventsWithAssists = (events: RoundEventDTO[]) => {
+    const result: Array<{ event: RoundEventDTO; assist?: RoundEventDTO; attack?: RoundEventDTO }> = [];
+    const assistMap = new Map<string, RoundEventDTO>();
+    const attackMap = new Map<string, RoundEventDTO>();
+    const killTimestamps = new Set<string>();
+    
+    // First pass: collect all assists, attacks, and kill timestamps
+    events.forEach(event => {
+      if (event.eventType === 'ASSIST') {
+        // Key by victim ID and approximate time to match with kills
+        const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
+        assistMap.set(key, event);
+      } else if (event.eventType === 'ATTACK') {
+        // Store attack events to merge with kills
+        const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
+        attackMap.set(key, event);
+      } else if (event.eventType === 'KILL') {
+        killTimestamps.add(`${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`);
+      }
+    });
+    
+    // Second pass: group kills with assists and attacks, filter out merged attacks
+    events.forEach(event => {
+      if (event.eventType === 'KILL') {
+        const key = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
+        const assist = assistMap.get(key);
+        const attack = attackMap.get(key);
+        result.push({ event, assist, attack });
+        if (assist) {
+          assistMap.delete(key); // Remove matched assist
+        }
+        if (attack) {
+          attackMap.delete(key); // Remove matched attack
+        }
+      } else if (event.eventType === 'ATTACK') {
+        // Check if this attack is followed by an immediate kill (within 100ms)
+        const attackKey = `${event.player2Id}_${Math.floor(event.timeOffsetMs / 100)}`;
+        const hasImmediateKill = killTimestamps.has(attackKey);
+        
+        // Only add attack if it doesn't result in immediate death
+        if (!hasImmediateKill) {
+          result.push({ event });
+        }
+      } else if (event.eventType !== 'ASSIST') {
+        // Add other events (BOMB_EVENT, etc.)
+        result.push({ event });
+      }
+    });
+    
+    return result;
   };
 
   if (loading) {
@@ -172,6 +224,7 @@ export const RoundDetailsPage = () => {
   }
 
   const significantEvents = getSignificantEvents(roundDetails.events);
+  const groupedEvents = groupEventsWithAssists(significantEvents);
 
   return (
     <PageContainer mapName={game?.map}>
@@ -233,9 +286,9 @@ export const RoundDetailsPage = () => {
           All significant events that happened in this round, sorted chronologically
         </p>
 
-        {significantEvents.length > 0 ? (
+        {groupedEvents.length > 0 ? (
           <div className="events-timeline">
-            {significantEvents.map((event, idx) => (
+            {groupedEvents.map(({ event, assist, attack }, idx) => (
               <div 
                 key={event.id || idx} 
                 className={`event-card ${getEventColorClass(event.eventType, event)}`}
@@ -247,84 +300,103 @@ export const RoundDetailsPage = () => {
                 <div className="event-connector">
                   <div className="connector-line"></div>
                   <div className="connector-dot">
-                    <span className="event-icon">{getEventIcon(event.eventType, event)}</span>
+                    <Tooltip content={getEventLabel(event.eventType, event)} position="right" delay={200}>
+                      <span className="event-icon">
+                        {getEventIcon(event.eventType, event)}
+                      </span>
+                    </Tooltip>
                   </div>
                 </div>
                 
                 <div className="event-content">
-                  <div className="event-header">
-                    <span className="event-type-badge">
-                      {getEventLabel(event.eventType, event)}
-                    </span>
-                    {event.weapon && (
-                      <span className="weapon-badge">
-                        🔫 {formatWeaponName(event.weapon)}
-                      </span>
-                    )}
-                    {event.isHeadshot && (
-                      <span className="headshot-badge">
-                        🎯 Headshot
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="event-players">
-                    {event.eventType === 'KILL' && (
-                      <>
-                        <Link 
-                          to={`/players/${extractSteamId(event.player1Id)}`}
-                          className="player-link attacker"
-                          data-testid={`testid-round-event-player-link-${event.id || idx}-attacker`}
-                        >
-                          {event.player1Name || event.player1Id || 'Unknown'}
-                        </Link>
-                        <span className="kill-arrow">→</span>
-                        <Link 
-                          to={`/players/${extractSteamId(event.player2Id)}`}
-                          className="player-link victim"
-                          data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
-                        >
-                          {event.player2Name || event.player2Id || 'Unknown'}
-                        </Link>
-                      </>
-                    )}
-                    
-                    {event.eventType === 'ASSIST' && (
-                      <>
-                        <Link 
-                          to={`/players/${extractSteamId(event.player1Id)}`}
-                          className="player-link assister"
-                          data-testid={`testid-round-event-player-link-${event.id || idx}-assister`}
-                        >
-                          {event.player1Name || event.player1Id || 'Unknown'}
-                        </Link>
-                        <span className="assist-text">assisted killing</span>
-                        <Link 
-                          to={`/players/${extractSteamId(event.player2Id)}`}
-                          className="player-link victim"
-                          data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
-                        >
-                          {event.player2Name || event.player2Id || 'Unknown'}
-                        </Link>
-                      </>
-                    )}
-                    
-                    {event.eventType === 'BOMB_EVENT' && event.player1Id && (
+                  {/* KILL Events - Format: Attacker <weapon> <headshot?> Victim OR Assister + Attacker <weapon> <headshot?> Victim */}
+                  {event.eventType === 'KILL' && (
+                    <div className="kill-event-line">
+                      {assist && (
+                        <>
+                          <Link 
+                            to={`/players/${extractSteamId(assist.player1Id)}`}
+                            className="player-link assister"
+                            data-testid={`testid-round-event-player-link-${event.id || idx}-assister`}
+                          >
+                            {assist.player1Name || assist.player1Id || 'Unknown'}
+                          </Link>
+                          <span className="assist-plus">+</span>
+                        </>
+                      )}
                       <Link 
                         to={`/players/${extractSteamId(event.player1Id)}`}
-                        className="player-link bomber"
+                        className="player-link attacker"
+                        data-testid={`testid-round-event-player-link-${event.id || idx}-attacker`}
                       >
                         {event.player1Name || event.player1Id || 'Unknown'}
                       </Link>
-                    )}
-                  </div>
-                  
-                  {event.eventType === 'ATTACK' && event.damage && (
-                    <div className="damage-info">
-                      <span className="damage-value">-{event.damage} HP</span>
-                      {event.hitGroup && (
-                        <span className="hit-location">({event.hitGroup})</span>
+                      {event.weapon && <SpriteIcon icon={event.weapon} size="small" />}
+                      {event.isHeadshot && <SpriteIcon icon="headshot" size={36} className="headshot-icon" />}
+                      <Link 
+                        to={`/players/${extractSteamId(event.player2Id)}`}
+                        className="player-link victim"
+                        data-testid={`testid-round-event-player-link-${event.id || idx}-victim`}
+                      >
+                        {event.player2Name || event.player2Id || 'Unknown'}
+                      </Link>
+                      {/* Show hit location from the merged attack event if available */}
+                      {attack && attack.damage && (
+                        <span className="damage-value">-{attack.damage} HP</span>
                       )}
+                      <HitLocationIndicator hitGroup={attack?.hitGroup || event.hitGroup} size={32} />
+                    </div>
+                  )}
+                  
+                  {/* BOMB Events */}
+                  {event.eventType === 'BOMB_EVENT' && (
+                    <div className="bomb-event-line">
+                      <SpriteIcon 
+                        icon="weapon_c4"
+                        size={40} 
+                        status={
+                          event.bombEventType?.toLowerCase() === 'defused' ? 'defused' :
+                          event.bombEventType?.toLowerCase() === 'exploded' ? 'exploded' :
+                          'planted'
+                        } 
+                        className="c4-icon"
+                      />
+                      <span className="bomb-event-text">{getEventLabel(event.eventType, event)}</span>
+                      {event.player1Id && (
+                        <>
+                          <span className="by-text">by</span>
+                          <Link 
+                            to={`/players/${extractSteamId(event.player1Id)}`}
+                            className="player-link bomber"
+                          >
+                            {event.player1Name || event.player1Id || 'Unknown'}
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* ATTACK Events */}
+                  {event.eventType === 'ATTACK' && (
+                    <div className="attack-event-line">
+                      <Link 
+                        to={`/players/${extractSteamId(event.player1Id)}`}
+                        className="player-link attacker"
+                      >
+                        {event.player1Name || event.player1Id || 'Unknown'}
+                      </Link>
+                      {event.weapon && <SpriteIcon icon={event.weapon} size="small" />}
+                      <span className="damage-arrow">→</span>
+                      <Link 
+                        to={`/players/${extractSteamId(event.player2Id)}`}
+                        className="player-link victim"
+                      >
+                        {event.player2Name || event.player2Id || 'Unknown'}
+                      </Link>
+                      {event.damage && (
+                        <span className="damage-value">-{event.damage} HP</span>
+                      )}
+                      <HitLocationIndicator hitGroup={event.hitGroup} size={32} />
                     </div>
                   )}
                 </div>
@@ -338,39 +410,6 @@ export const RoundDetailsPage = () => {
           </div>
         )}
       </div>
-
-      {/* Kill Feed Summary */}
-      {roundDetails.totalKills > 0 && (
-        <div className="section-card card-bg kill-feed-section">
-          <h2 className="section-title">💀 Kill Feed</h2>
-          <div className="kill-feed">
-            {significantEvents
-              .filter(e => e.eventType === 'KILL')
-              .map((kill, idx) => (
-                <div key={kill.id || idx} className={`kill-feed-item ${kill.isHeadshot ? 'headshot' : ''}`}>
-                  <Link 
-                    to={`/players/${extractSteamId(kill.player1Id)}`}
-                    className="killer-name"
-                    data-testid={`testid-kill-feed-player-link-${kill.id || idx}-killer`}
-                  >
-                    {kill.player1Name || kill.player1Id || 'Unknown'}
-                  </Link>
-                  <div className="kill-weapon-icon">
-                    {kill.isHeadshot && <span className="hs-indicator">HS</span>}
-                    <span className="weapon-name">{formatWeaponName(kill.weapon)}</span>
-                  </div>
-                  <Link 
-                    to={`/players/${extractSteamId(kill.player2Id)}`}
-                    className="victim-name"
-                    data-testid={`testid-kill-feed-player-link-${kill.id || idx}-victim`}
-                  >
-                    {kill.player2Name || kill.player2Id || 'Unknown'}
-                  </Link>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
     </PageContainer>
   );
 };

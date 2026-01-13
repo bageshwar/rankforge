@@ -492,6 +492,60 @@
 }
 
 /* Event Players */
+/* Event line formats */
+.kill-event-line,
+.bomb-event-line,
+.attack-event-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.95rem;
+}
+
+.assist-plus {
+  color: #4CAF50;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin: 0 0.15rem;
+}
+
+.headshot-icon {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 0, 0.6));
+}
+
+.c4-icon {
+  filter: drop-shadow(0 0 4px rgba(255, 68, 68, 0.4));
+}
+
+.bomb-event-text {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.by-text {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.damage-arrow {
+  color: var(--color-text-tertiary);
+  font-size: 1.2rem;
+}
+
+.damage-value {
+  color: #ff6b6b;
+  font-weight: 600;
+  background: rgba(255, 107, 107, 0.2);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.hit-location-emoji {
+  font-size: 1.2rem;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
 .event-players {
   display: flex;
   align-items: center;
@@ -641,14 +695,14 @@
   color: rgb(140, 200, 140);
 }
 
-.kill-weapon-icon {
+.kill-weapon-display {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
-  min-width: 100px;
+  min-width: 80px;
   justify-content: center;
 }
 
@@ -758,7 +812,7 @@
     min-width: auto;
   }
   
-  .kill-weapon-icon {
+  .kill-weapon-display {
     min-width: auto;
     flex: 0 0 auto;
   }
