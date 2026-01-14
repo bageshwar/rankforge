@@ -44,7 +44,7 @@ public class AccoladeEntity {
     @Column(name = "playerId", length = 255)
     private String playerId;
     
-    @Column(name = "value", nullable = false)
+    @Column(name = "accoladeValue", nullable = false)
     private Double value;
     
     @Column(name = "position", nullable = false)

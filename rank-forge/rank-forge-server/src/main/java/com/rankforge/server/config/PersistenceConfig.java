@@ -61,6 +61,9 @@ public class PersistenceConfig {
     @Value("${spring.jpa.hibernate.ddl-auto:validate}")
     private String ddlAuto;
 
+    @Value("${spring.jpa.database-platform:org.hibernate.dialect.SQLServerDialect}")
+    private String hibernateDialect;
+
     // DataSource is auto-configured by Spring Boot from spring.datasource.* properties
     // No explicit bean needed unless custom configuration is required
 
@@ -79,7 +82,9 @@ public class PersistenceConfig {
         properties.setProperty("hibernate.hbm2ddl.auto", ddlAuto);
         LOGGER.info("Hibernate DDL auto mode: {}", ddlAuto);
         
-        properties.setProperty("hibernate.dialect", "org.hibernate.dialect.SQLServerDialect");
+        // Use dialect from configuration (allows switching between SQL Server and H2)
+        properties.setProperty("hibernate.dialect", hibernateDialect);
+        LOGGER.info("Hibernate dialect: {}", hibernateDialect);
         properties.setProperty("hibernate.format_sql", "true");
         properties.setProperty("hibernate.jdbc.batch_size", "50");
         properties.setProperty("hibernate.order_inserts", "true");
