@@ -103,14 +103,63 @@ export class RoundDetailsPage extends BasePage {
 
   async getEventData(index: number) {
     const card = await this.getEventCard(index);
-    const time = await card.locator('.time-badge').textContent();
-    const eventType = await card.locator('.event-type-badge').textContent();
-    const icon = await card.locator('.event-icon').textContent();
+    // Wait for event card to be visible
+    await card.waitFor({ state: 'visible', timeout: 30000 });
+    
+    // Try multiple selectors for time
+    let time = '';
+    const timeSelectors = [
+      '.event-time .time-badge',
+      '.event-time',
+      '.time-badge',
+      '[class*="time"]'
+    ];
+    for (const selector of timeSelectors) {
+      const timeElement = card.locator(selector).first();
+      if (await timeElement.count() > 0) {
+        time = (await timeElement.textContent())?.trim() || '';
+        if (time) break;
+      }
+    }
+    
+    // Try multiple selectors for event type
+    let eventType = '';
+    const eventTypeSelectors = [
+      '.event-content .event-header .event-type-badge',
+      '.event-type-badge',
+      '.event-header',
+      '.event-type',
+      '[class*="event-type"]',
+      '.event-content'
+    ];
+    for (const selector of eventTypeSelectors) {
+      const eventTypeElement = card.locator(selector).first();
+      if (await eventTypeElement.count() > 0) {
+        eventType = (await eventTypeElement.textContent())?.trim() || '';
+        if (eventType) break;
+      }
+    }
+    
+    // Try multiple selectors for icon
+    let icon = '';
+    const iconSelectors = [
+      '.event-connector .event-icon',
+      '.event-icon',
+      '.event-connector',
+      '[class*="icon"]'
+    ];
+    for (const selector of iconSelectors) {
+      const iconElement = card.locator(selector).first();
+      if (await iconElement.count() > 0) {
+        icon = (await iconElement.textContent())?.trim() || '';
+        if (icon) break;
+      }
+    }
     
     return {
-      time: time?.trim() || '',
-      eventType: eventType?.trim() || '',
-      icon: icon?.trim() || '',
+      time: time || '',
+      eventType: eventType || '',
+      icon: icon || '',
     };
   }
 

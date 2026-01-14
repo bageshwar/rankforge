@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { GamesPage } from './pages/GamesPage';
+import { EXPECTED_GAMES } from './fixtures/test-data';
 
 test.describe('Games Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -14,11 +15,11 @@ test.describe('Games Page', () => {
     const gamesPage = new GamesPage(page);
     // We're already on the games page from beforeEach
 
-    // Assert 2 games are visible
-    console.log('[TEST] Asserting 2 games are visible');
+    // Assert exact 2 games are visible
+    console.log('[TEST] Asserting exactly 2 games are visible');
     const gamesCount = await gamesPage.getGamesCount();
-    expect(gamesCount).toBeGreaterThanOrEqual(2);
-    console.log(`[TEST] ✓ Found ${gamesCount} games (expected at least 2)`);
+    expect(gamesCount).toBe(EXPECTED_GAMES.length);
+    console.log(`[TEST] ✓ Found exactly ${gamesCount} games (expected ${EXPECTED_GAMES.length})`);
 
     // Verify table structure
     console.log('[TEST] Asserting table structure');
@@ -29,14 +30,42 @@ test.describe('Games Page', () => {
     await expect(page.getByRole('columnheader', { name: 'Actions', exact: true })).toBeVisible();
     console.log('[TEST] ✓ Table headers are correct');
 
-    // Verify game data in rows
-    console.log('[TEST] Asserting game data in table rows');
-    const gameData = await gamesPage.getGameData(0);
-    expect(gameData.date).toBeTruthy();
-    expect(gameData.map).toBeTruthy();
-    expect(gameData.score).toBeTruthy();
-    expect(gameData.duration).toBeTruthy();
-    console.log(`[TEST] ✓ Game data is valid: ${gameData.map}, ${gameData.score}`);
+    // Fine-grained assertions for each game based on API data
+    console.log('[TEST] Asserting fine-grained game data for all games');
+    for (let i = 0; i < Math.min(EXPECTED_GAMES.length, gamesCount); i++) {
+      const expectedGame = EXPECTED_GAMES[i];
+      const actualGameData = await gamesPage.getGameData(i);
+      
+      // Validate map name
+      expect(actualGameData.map).toBe(expectedGame.map);
+      
+      // Validate score
+      expect(actualGameData.score).toBe(expectedGame.score);
+      
+      // Validate duration (formatted as "X min")
+      expect(actualGameData.duration).toContain('min');
+      const durationMatch = actualGameData.duration.match(/(\d+)/);
+      if (durationMatch) {
+        const durationMinutes = parseInt(durationMatch[1]);
+        expect(durationMinutes).toBe(parseInt(expectedGame.duration));
+      }
+      
+      // Validate date is present (format may vary)
+      expect(actualGameData.date).toBeTruthy();
+      
+      console.log(`[TEST] ✓ Game ${i + 1}: ${actualGameData.map} - ${actualGameData.score} (${actualGameData.duration})`);
+    }
+
+    // Verify games are sorted by date (most recent first)
+    console.log('[TEST] Asserting games are sorted by date (most recent first)');
+    if (gamesCount >= 2) {
+      const game1Data = await gamesPage.getGameData(0);
+      const game2Data = await gamesPage.getGameData(1);
+      // Game 2 (de_ancient) should be first as it's more recent
+      expect(game1Data.map).toBe('de_ancient');
+      expect(game2Data.map).toBe('de_anubis');
+      console.log('[TEST] ✓ Games are sorted correctly by date');
+    }
 
     console.log('[TEST] ✓ All games page assertions passed');
   });
