@@ -1,15 +1,26 @@
 # Local Development Configuration Template
 # 
 # NOTE: This is a template file. The actual application-local.properties file
-# already exists with example values. Edit that file directly with your credentials.
+# already exists with H2 database configuration. Edit that file directly.
 #
 # SETUP INSTRUCTIONS:
-# 1. Edit src/main/resources/application-local.properties and fill in your actual credentials
-#
-# 3. Run with local profile:
+# 1. Copy this file to application-local.properties and configure as needed
+# 2. Run with local profile:
 #    mvn spring-boot:run -Dspring-boot.run.profiles=local
 #    OR
 #    java -jar target/rank-forge-server-1.0-SNAPSHOT.jar --spring.profiles.active=local
+#
+# DATABASE OPTIONS:
+# 
+# Option 1: H2 Database (Recommended for local development - no setup required)
+#    - Uses file-based database at ./data/rankforge-local.mv.db
+#    - Supports sequences (compatible with SQL Server sequence-based primary keys)
+#    - Zero configuration needed
+#    - H2 Console available at http://localhost:8080/h2-console
+#
+# Option 2: Azure SQL Database (for testing against production-like environment)
+#    - Requires Azure SQL credentials
+#    - Use the configuration below
 #
 # ALTERNATIVE: Set environment variables instead (no file needed):
 #    export AZURE_SQL_URL="..."
@@ -22,6 +33,33 @@
 #
 # Note: application-local.properties is gitignored and will not be committed
 
+# ============================================================================
+# OPTION 1: H2 Database Configuration (Recommended for local development)
+# ============================================================================
+# H2 Database Configuration (file-based, persistent)
+# Database file will be created at ./data/rankforge-local.mv.db
+# AUTO_SERVER=TRUE allows multiple connections to the same database file
+#spring.datasource.url=jdbc:h2:file:./data/rankforge-local;AUTO_SERVER=TRUE
+#spring.datasource.username=sa
+#spring.datasource.password=
+#spring.datasource.driver-class-name=org.h2.Driver
+#
+# JPA/Hibernate Configuration for H2
+#spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+#spring.jpa.hibernate.ddl-auto=update
+#spring.jpa.show-sql=true
+#spring.jpa.properties.hibernate.format_sql=true
+#spring.jpa.properties.hibernate.jdbc.batch_size=50
+#spring.jpa.properties.hibernate.order_inserts=true
+#spring.jpa.properties.hibernate.order_updates=true
+#
+# H2 Console (optional, for debugging)
+#spring.h2.console.enabled=true
+#spring.h2.console.path=/h2-console
+
+# ============================================================================
+# OPTION 2: Azure SQL Database Configuration
+# ============================================================================
 # Azure SQL Database Configuration (Spring Data JPA)
 # Fill in your actual database credentials
 spring.datasource.url=jdbc:sqlserver://rankforge-db.database.windows.net:1433;database=rankforge-db-staging;encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=300;socketTimeout=300000;queryTimeout=300;
@@ -29,7 +67,7 @@ spring.datasource.username=your_username_here
 spring.datasource.password=your_password_here
 spring.datasource.driver-class-name=com.microsoft.sqlserver.jdbc.SQLServerDriver
 
-# JPA/Hibernate Configuration for Local Development
+# JPA/Hibernate Configuration for SQL Server
 spring.jpa.database-platform=org.hibernate.dialect.SQLServerDialect
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true

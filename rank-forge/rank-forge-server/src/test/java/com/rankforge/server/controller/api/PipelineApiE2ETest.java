@@ -154,21 +154,36 @@ class PipelineApiE2ETest {
     }
     
     /**
-     * Validates that the test is running against a staging database.
-     * FAILS the test if connected to a non-staging database to prevent data loss.
+     * Validates that the test is running against a safe database (staging or H2).
+     * Allows H2 for local development, staging for integration testing.
+     * FAILS the test if connected to a production or unsupported database to prevent data loss.
      */
     private void assertStagingDatabase() {
         assertNotNull(datasourceUrl, "Database URL must be configured");
         assertFalse(datasourceUrl.isEmpty(), "Database URL must not be empty");
         
         String lowerUrl = datasourceUrl.toLowerCase();
-        assertTrue(lowerUrl.contains(STAGING_DB_IDENTIFIER),
-                "SAFETY CHECK FAILED: Tests must run against a staging database!\n" +
-                "Current database URL: " + datasourceUrl + "\n" +
-                "Expected database URL to contain: '" + STAGING_DB_IDENTIFIER + "'\n" +
-                "This check prevents accidental data loss in production databases.");
         
-        System.out.println("✓ Staging database check passed: " + extractDatabaseName(datasourceUrl));
+        // Allow H2 database for local development
+        boolean isH2 = lowerUrl.contains("h2");
+        // Allow staging database for integration testing
+        boolean isStaging = lowerUrl.contains(STAGING_DB_IDENTIFIER);
+        
+        if (isH2) {
+            System.out.println("✓ H2 database detected - safe for local testing: " + extractDatabaseName(datasourceUrl));
+            return;
+        }
+        
+        if (isStaging) {
+            System.out.println("✓ Staging database check passed: " + extractDatabaseName(datasourceUrl));
+            return;
+        }
+        
+        // FAIL if neither H2 nor staging
+        fail("SAFETY CHECK FAILED: Tests must run against H2 (local) or staging database!\n" +
+                "Current database URL: " + datasourceUrl + "\n" +
+                "Expected database URL to contain: 'h2' (for local) or '" + STAGING_DB_IDENTIFIER + "' (for staging)\n" +
+                "This check prevents accidental data loss in production databases.");
     }
     
     /**
@@ -189,6 +204,7 @@ class PipelineApiE2ETest {
      * Uses DELETE instead of DROP to preserve schema (Hibernate ddl-auto=update won't recreate dropped tables).
      * Order matters due to foreign key constraints.
      * Uses a static flag to ensure this only runs ONCE per JVM session.
+     * Works with both SQL Server and H2 databases.
      */
     private void clearAllTables() {
         // Safety check: only clear tables once per test run
@@ -198,6 +214,9 @@ class PipelineApiE2ETest {
         }
         
         System.out.println("🗑️  Clearing all tables for clean test start...");
+        
+        // Detect database type from URL
+        boolean isH2 = datasourceUrl != null && datasourceUrl.toLowerCase().contains("h2");
         
         // Delete data in order respecting foreign key constraints
         // Child tables first, then parent tables
@@ -210,12 +229,18 @@ class PipelineApiE2ETest {
         
         for (String table : tablesToClear) {
             try {
-                // Use DELETE to clear data while preserving schema
-                // Check if table exists first (SQL Server syntax)
-                String sql = "IF OBJECT_ID('" + table + "', 'U') IS NOT NULL DELETE FROM " + table;
+                String sql;
+                if (isH2) {
+                    // H2 syntax: Check if table exists and delete
+                    sql = "DELETE FROM \"" + table + "\"";
+                } else {
+                    // SQL Server syntax: Check if table exists first
+                    sql = "IF OBJECT_ID('" + table + "', 'U') IS NOT NULL DELETE FROM " + table;
+                }
                 jdbcTemplate.execute(sql);
                 System.out.println("  ✓ Cleared table: " + table);
             } catch (Exception e) {
+                // Table might not exist yet (first run) - that's okay
                 System.out.println("  ⚠ Could not clear table " + table + ": " + e.getMessage());
             }
         }
@@ -269,7 +294,7 @@ class PipelineApiE2ETest {
         
         /**
          * Runs before all tests in this nested class.
-         * Validates staging database and drops all tables for a clean start.
+         * Validates database (staging or H2) and clears all tables for a clean start.
          */
         @BeforeAll
         void setupBeforeAllTests() {
@@ -277,7 +302,7 @@ class PipelineApiE2ETest {
             System.out.println("🔧 E2E Database Validation Tests - Setup");
             System.out.println("=".repeat(70));
             
-            // CRITICAL: Verify we're on staging database
+            // Verify we're on a safe database (staging or H2)
             assertStagingDatabase();
             
             // Clear all table data for a completely clean start
