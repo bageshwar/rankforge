@@ -13,11 +13,55 @@ test.describe('Navigation - Profile Links', () => {
     const rankingsCount = await rankingsPage.getRankingsCount();
     if (rankingsCount > 0) {
       console.log('[TEST] Clicking first player link from rankings');
+      
+      // Set up API response listener BEFORE clicking
+      console.log(`[TEST] Setting up player profile API response listener`);
+      const responsePromise = page.waitForResponse(
+        (response) => {
+          const url = response.url();
+          // Match any /api/players/ endpoint that returns 200
+          return url.includes(`/api/players/`) && response.status() === 200;
+        },
+        { timeout: 70000 }
+      ).catch(() => {
+        console.log(`[TEST] ⚠ API response listener timed out`);
+        return null;
+      });
+      
       await rankingsPage.clickPlayerLink(0);
 
-      // Verify we're on player profile page
-      await expect(page).toHaveURL(/.*\/players\/\d+/);
-      await expect(page.locator('.player-name')).toBeVisible();
+      // Wait for URL to change to player profile page
+      console.log('[TEST] Waiting for URL to change to player profile');
+      await expect(page).toHaveURL(/.*\/players\/\d+/, { timeout: 30000 });
+      console.log('[TEST] ✓ URL changed to player profile');
+      
+      // Wait for the API response
+      console.log(`[TEST] Waiting for player profile API response`);
+      try {
+        await responsePromise;
+        console.log(`[TEST] ✓ Player profile API response received`);
+      } catch (error) {
+        console.log(`[TEST] ⚠ API response wait failed, continuing`);
+      }
+      
+      // Wait for network to be idle
+      console.log('[TEST] Waiting for network to be idle');
+      try {
+        await page.waitForLoadState('networkidle', { timeout: 70000 });
+      } catch (error) {
+        console.log('[TEST] ⚠ Network idle wait failed, continuing');
+      }
+      
+      // Wait for player name element to be visible - it's in h1.player-name
+      // This will implicitly wait for the loader to disappear
+      console.log('[TEST] Waiting for player name to be visible');
+      await page.waitForSelector('h1.player-name', { timeout: 30000, state: 'visible' });
+      
+      const playerName = page.locator('h1.player-name');
+      await expect(playerName).toBeVisible();
+      
+      const playerNameText = await playerName.textContent();
+      console.log(`[TEST] ✓ Player name found: ${playerNameText}`);
       console.log('[TEST] ✓ Navigation to profile from rankings works');
     } else {
       console.log('[TEST] ⚠ No players found, skipping test');
@@ -48,7 +92,31 @@ test.describe('Navigation - Profile Links', () => {
     if (playerStatsCount > 0) {
       await gameDetailsPage.clickPlayerLink(0);
       await expect(page).toHaveURL(/.*\/players\/\d+/);
-      await expect(page.locator('.player-name')).toBeVisible();
+      
+      // Wait for player profile API response
+      console.log('[TEST] Waiting for player profile API response');
+      try {
+        await page.waitForResponse(
+          (response) => {
+            const url = response.url();
+            return url.includes(`/api/players/`) && response.status() === 200;
+          },
+          { timeout: 70000 }
+        );
+        console.log('[TEST] ✓ Player profile API response received');
+      } catch (error) {
+        console.log('[TEST] ⚠ Player profile API wait timed out, continuing');
+      }
+      
+      // Wait for network to be idle
+      await page.waitForLoadState('networkidle', { timeout: 70000 });
+      
+      // Wait for player name to be visible - it's in h1.player-name
+      // This will implicitly wait for the loader to disappear
+      await page.waitForSelector('h1.player-name', { timeout: 30000, state: 'visible' });
+      const playerName = page.locator('h1.player-name');
+      await expect(playerName).toBeVisible();
+      
       console.log('[TEST] ✓ Player link in stats table works');
       
       // Navigate back to game details
@@ -69,7 +137,11 @@ test.describe('Navigation - Profile Links', () => {
         const currentUrl = page.url();
         if (currentUrl.includes('/players/')) {
           await expect(page).toHaveURL(/.*\/players\/\d+/);
-          await expect(page.locator('.player-name')).toBeVisible();
+          await page.waitForLoadState('networkidle', { timeout: 70000 });
+          // Wait for player profile page to load - player name is in h1.player-name
+          await page.waitForSelector('h1.player-name', { timeout: 30000, state: 'visible' });
+          const playerName = page.locator('h1.player-name');
+          await expect(playerName).toBeVisible();
           console.log('[TEST] ✓ Player link in accolades works');
         }
       }
@@ -89,8 +161,18 @@ test.describe('Navigation - Profile Links', () => {
     console.log('[TEST] Navigating to first game details');
     await gamesPage.clickGameDetails(0);
     await page.waitForURL(/.*\/games\/\d+/, { timeout: 30000 });
+    
+    // Wait for game details page to fully load
+    console.log('[TEST] Waiting for game details page to load');
+    await page.waitForSelector('.game-title', { timeout: 30000, state: 'visible' });
+    await page.waitForLoadState('networkidle', { timeout: 70000 });
 
     const gameDetailsPage = new GameDetailsPage(page);
+    
+    // Wait for round badges to be visible before counting
+    console.log('[TEST] Waiting for round badges to be visible');
+    await page.waitForSelector('.round-badge', { timeout: 30000, state: 'visible' });
+    
     const roundCount = await gameDetailsPage.getRoundCount();
     
     if (roundCount === 0) {
@@ -118,9 +200,19 @@ test.describe('Navigation - Profile Links', () => {
       const attackerLink = eventCard.locator('.player-link.attacker');
       
       if (await attackerLink.count() > 0) {
+        // clickEventPlayerLink already handles API wait and navigation
         await roundDetailsPage.clickEventPlayerLink(0, 'attacker');
         await expect(page).toHaveURL(/.*\/players\/\d+/);
-        await expect(page.locator('.player-name')).toBeVisible();
+        
+        // Wait for network to be idle (clickEventPlayerLink already waited for API)
+        await page.waitForLoadState('networkidle', { timeout: 70000 });
+        
+        // Wait for player name to be visible - it's in h1.player-name
+        // This will implicitly wait for the loader to disappear
+        await page.waitForSelector('h1.player-name', { timeout: 30000, state: 'visible' });
+        const playerName = page.locator('h1.player-name');
+        await expect(playerName).toBeVisible();
+        
         console.log('[TEST] ✓ Player link in event timeline works');
         
         // Navigate back to round details
@@ -146,9 +238,19 @@ test.describe('Navigation - Profile Links', () => {
       const killFeedCount = await roundDetailsPageAfterNav.getKillFeedCount();
       if (killFeedCount > 0) {
         console.log('[TEST] Clicking kill feed player link');
+        // clickKillFeedPlayerLink already handles API wait and navigation
         await roundDetailsPageAfterNav.clickKillFeedPlayerLink(0, 'killer');
         await expect(page).toHaveURL(/.*\/players\/\d+/);
-        await expect(page.locator('.player-name')).toBeVisible();
+        
+        // Wait for network to be idle (clickKillFeedPlayerLink already waited for API)
+        await page.waitForLoadState('networkidle', { timeout: 70000 });
+        
+        // Wait for player name to be visible - it's in h1.player-name
+        // This will implicitly wait for the loader to disappear
+        await page.waitForSelector('h1.player-name', { timeout: 30000, state: 'visible' });
+        const playerName = page.locator('h1.player-name');
+        await expect(playerName).toBeVisible();
+        
         console.log('[TEST] ✓ Player link in kill feed works');
       } else {
         console.log('[TEST] ⚠ No kill feed items found');

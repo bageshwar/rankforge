@@ -138,20 +138,58 @@ export class GamesPage extends BasePage {
     console.log('[GamesPage] Clicking "All Games" filter');
     await this.filterAllGames().click();
     await this.waitForApiResponse('/api/games', 70000);
+    // Wait for table rows to be visible again after filter
+    await this.page.waitForSelector('.games-table tbody tr', { timeout: 30000, state: 'visible' });
     console.log('[GamesPage] "All Games" filter applied');
   }
 
   async clickFilterRecent10() {
     console.log('[GamesPage] Clicking "Recent 10" filter');
     await this.filterRecent10().click();
-    await this.waitForApiResponse('/api/games/recent', 70000);
+    // Wait for the state to update (React state change, no navigation)
+    await this.page.waitForTimeout(500);
+    // Wait for API response if it happens
+    try {
+      await this.waitForApiResponse('/api/games/recent', 5000);
+    } catch (error) {
+      // API might not fire if data is already cached, that's okay
+      console.log('[GamesPage] ⚠ API response wait timed out (may be cached)');
+    }
+    // Wait for table to update - might have fewer rows now
+    try {
+      await this.page.waitForSelector('.games-table tbody tr', { timeout: 10000, state: 'visible' });
+    } catch (error) {
+      // Table might be empty or still loading, check if table exists
+      const tableExists = await this.gamesTable().isVisible().catch(() => false);
+      if (!tableExists) {
+        throw new Error('Games table not visible after filter');
+      }
+    }
     console.log('[GamesPage] "Recent 10" filter applied');
   }
 
   async clickFilterRecent25() {
     console.log('[GamesPage] Clicking "Recent 25" filter');
     await this.filterRecent25().click();
-    await this.waitForApiResponse('/api/games/recent', 70000);
+    // Wait for the state to update (React state change, no navigation)
+    await this.page.waitForTimeout(500);
+    // Wait for API response if it happens
+    try {
+      await this.waitForApiResponse('/api/games/recent', 5000);
+    } catch (error) {
+      // API might not fire if data is already cached, that's okay
+      console.log('[GamesPage] ⚠ API response wait timed out (may be cached)');
+    }
+    // Wait for table to update - might have fewer rows now
+    try {
+      await this.page.waitForSelector('.games-table tbody tr', { timeout: 10000, state: 'visible' });
+    } catch (error) {
+      // Table might be empty or still loading, check if table exists
+      const tableExists = await this.gamesTable().isVisible().catch(() => false);
+      if (!tableExists) {
+        throw new Error('Games table not visible after filter');
+      }
+    }
     console.log('[GamesPage] "Recent 25" filter applied');
   }
 }

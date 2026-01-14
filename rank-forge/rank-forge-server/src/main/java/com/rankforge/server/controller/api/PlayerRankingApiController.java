@@ -29,6 +29,9 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -158,7 +161,8 @@ public class PlayerRankingApiController {
         LocalDate requestedDate = LocalDate.of(queryYear, queryMonth, 1);
         LocalDate currentDate = LocalDate.now();
         if (requestedDate.isAfter(currentDate)) {
-            return ResponseEntity.badRequest().build();
+            // Return empty response instead of 400 for future dates
+            return ResponseEntity.ok(new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0));
         }
         
         LeaderboardResponseDTO response = playerRankingService.getMonthlyPlayerRankingsWithStats(
