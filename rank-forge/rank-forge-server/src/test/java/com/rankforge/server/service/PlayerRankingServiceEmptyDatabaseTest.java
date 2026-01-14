@@ -170,7 +170,8 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetMonthlyPlayerRankings_WhenNoDataInMonth_ReturnsEmptyList() {
         // Mock empty repository results for the month
-        when(playerStatsRepository.findStatsByMonthRange(any(Instant.class), any(Instant.class)))
+        // First check for games, then for player stats
+        when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
         
         // Should return empty list without throwing exception
@@ -184,12 +185,10 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Test
     void testGetMonthlyPlayerRankingsWithStats_WhenNoDataInMonth_ReturnsEmptyResponse() {
         // Mock empty repository results for the month
-        when(playerStatsRepository.findStatsByMonthRange(any(Instant.class), any(Instant.class)))
+        // The service first checks for games, then for player stats
+        // If either is empty, it returns early without calling other methods
+        when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countTotalDistinctGamesInMonth(any(Instant.class), any(Instant.class)))
-                .thenReturn(0L);
-        when(gameRepository.calculateTotalRoundsInMonth(any(Instant.class), any(Instant.class)))
-                .thenReturn(0L);
         
         // Should return empty response without throwing exception
         assertDoesNotThrow(() -> {

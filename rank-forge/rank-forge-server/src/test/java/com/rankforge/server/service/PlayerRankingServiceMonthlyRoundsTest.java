@@ -20,7 +20,6 @@ package com.rankforge.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.interfaces.RankingAlgorithm;
-import com.rankforge.core.models.PlayerStats;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
@@ -140,8 +139,9 @@ class PlayerRankingServiceMonthlyRoundsTest {
                 .thenReturn(Arrays.asList(playerStats));
         when(playerStatsRepository.findLatestStatsBeforeDate(eq(playerId), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countDistinctGamesByPlayerIdInMonth(eq(playerId), any(Instant.class), any(Instant.class)))
-                .thenReturn(1L);
+        // Mock batch query method used by the service (returns List<Object[]> where Object[] = [playerId, gameCount])
+        when(playerStatsRepository.countDistinctGamesByPlayerIdsInMonth(anyList(), any(Instant.class), any(Instant.class)))
+                .thenReturn(Collections.singletonList(new Object[]{playerId, 1L}));
         when(playerStatsRepository.countTotalDistinctGamesInMonth(any(Instant.class), any(Instant.class)))
                 .thenReturn(1L);
         when(gameRepository.calculateTotalRoundsInMonth(any(Instant.class), any(Instant.class)))
@@ -200,8 +200,9 @@ class PlayerRankingServiceMonthlyRoundsTest {
                 .thenReturn(Arrays.asList(playerStats));
         when(playerStatsRepository.findLatestStatsBeforeDate(eq(fullFormatPlayerId), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countDistinctGamesByPlayerIdInMonth(eq(fullFormatPlayerId), any(Instant.class), any(Instant.class)))
-                .thenReturn(1L);
+        // Mock batch query method used by the service
+        when(playerStatsRepository.countDistinctGamesByPlayerIdsInMonth(anyList(), any(Instant.class), any(Instant.class)))
+                .thenReturn(Collections.singletonList(new Object[]{fullFormatPlayerId, 1L}));
         when(playerStatsRepository.countTotalDistinctGamesInMonth(any(Instant.class), any(Instant.class)))
                 .thenReturn(1L);
         when(gameRepository.calculateTotalRoundsInMonth(any(Instant.class), any(Instant.class)))
