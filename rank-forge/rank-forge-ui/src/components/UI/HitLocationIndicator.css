@@ -1,0 +1,78 @@
+/* Hit Location Indicator Styles */
+
+.hit-location-indicator {
+  vertical-align: middle;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.silhouette-image {
+  opacity: 0.9;
+}
+
+/* Hit marker container */
+.hit-marker {
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Pulsing effect */
+.hit-marker-pulse {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 30, 30, 0.6);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 1.2s ease-out infinite;
+}
+
+/* Center dot */
+.hit-marker-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff0000;
+  border: 2px solid #fff;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 12px rgba(255, 0, 0, 1), 0 0 6px rgba(255, 0, 0, 0.8);
+}
+
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(3);
+    opacity: 0;
+  }
+}
+
+/* Hover effect */
+.hit-location-indicator:hover .silhouette-image {
+  opacity: 1;
+}
+
+.hit-location-indicator:hover .hit-marker-dot {
+  background: #ff0000;
+  box-shadow: 0 0 16px rgba(255, 0, 0, 1), 0 0 8px rgba(255, 0, 0, 1);
+  transform: translate(-50%, -50%) scale(1.2);
+}
+
+/* Responsive sizing */
+@media (max-width: 768px) {
+  .hit-marker-pulse {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .hit-marker-dot {
+    width: 5px;
+    height: 5px;
+  }
+}
