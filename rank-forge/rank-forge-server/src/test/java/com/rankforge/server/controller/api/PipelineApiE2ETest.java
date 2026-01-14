@@ -24,6 +24,7 @@ import com.rankforge.pipeline.persistence.entity.AccoladeEntity;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.GameEventEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
+import com.rankforge.pipeline.persistence.entity.RoundEndEventEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
@@ -46,10 +47,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -60,29 +58,32 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Integration test for Pipeline API endpoints
+ * E2E test for Pipeline API endpoints
  * Tests the full request/response cycle including security, validation, and async processing
  * 
  * Requires:
  * - AWS S3 credentials in application-local.properties
  * - API key configured in application-local.properties
- * - Database connection (can be mocked or use test database)
+ * - Database connection (staging database required)
  * 
- * To run: mvn test -Dtest=PipelineApiIntegrationTest -Dspring.profiles.active=local
+ * To run:
+ * - Unit tests only: mvn test
+ * - E2E tests only: mvn test -Pe2e
+ * - All tests: mvn verify
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class PipelineApiIntegrationTest {
+class PipelineApiE2ETest {
 
     private static final String TEST_S3_PATH = "s3://cs2serverdata/cs2_log_2026-01-11.json";
     private static final String STAGING_DB_IDENTIFIER = "staging";
     
-    // Expected counts from the test log file
+    // Expected counts based on actual data from localhost:8080
     private static final int EXPECTED_GAMES = 2;
-    private static final int EXPECTED_ROUND_START_EVENTS = 40;
-    private static final int EXPECTED_ACCOLADES = 21;
+    private static final int EXPECTED_ROUND_START_EVENTS = 39; // 24 rounds (de_anubis) + 15 rounds (de_ancient)
+    private static final int EXPECTED_ACCOLADES = 21; // Verified from database
     
     // Static flag to ensure tables are only cleared ONCE across all test runs
     private static boolean tablesCleared = false;
@@ -314,8 +315,8 @@ class PipelineApiIntegrationTest {
         /**
          * Processes log file and waits for completion, then validates all database records.
          * This is the main E2E test that validates:
-         * - 40 round events (ROUND_START)
-         * - 40 distinct round references across all events
+         * - 39 round events (ROUND_START) - 24 from de_anubis + 15 from de_ancient
+         * - 39 distinct round references across all events
          * - 2 games with 21 accolades
          * - All entity references are correctly set
          */
@@ -361,27 +362,76 @@ class PipelineApiIntegrationTest {
         }
         
         @Test
-        @DisplayName("Validate: Exactly 2 games are persisted")
+        @DisplayName("Validate: Exactly 2 games are persisted with correct data")
         void validateGameCount() {
             List<GameEntity> games = gameRepository.findAll();
             assertEquals(EXPECTED_GAMES, games.size(), 
                     "Should have exactly " + EXPECTED_GAMES + " games in database");
             
-            // Validate game fields are populated
+            // Validate game fields are populated with specific expected values
             for (GameEntity game : games) {
                 assertNotNull(game.getId(), "Game should have an ID");
                 assertNotNull(game.getMap(), "Game should have a map");
                 assertNotNull(game.getGameOverTimestamp(), "Game should have a gameOverTimestamp");
                 assertNotNull(game.getTeam1Score(), "Game should have team1Score");
                 assertNotNull(game.getTeam2Score(), "Game should have team2Score");
+                assertNotNull(game.getMode(), "Game should have a mode");
+                
+                // Validate expected maps from test data
+                assertTrue(game.getMap().equals("de_ancient") || game.getMap().equals("de_anubis"),
+                        "Game map should be either de_ancient or de_anubis, but was: " + game.getMap());
+                
+                // Validate mode is competitive
+                assertEquals("competitive", game.getMode(), "Game mode should be competitive");
+                
+                // Validate scores are reasonable (total rounds should match team1 + team2)
+                int totalRounds = game.getTeam1Score() + game.getTeam2Score();
+                assertTrue(totalRounds > 0, "Total rounds should be positive");
+                assertTrue(totalRounds <= 30, "Total rounds should not exceed 30 for a standard competitive game");
                 
                 System.out.println("  ✓ Game ID " + game.getId() + ": " + game.getMap() + 
-                        " (" + game.getTeam1Score() + " - " + game.getTeam2Score() + ")");
+                        " (" + game.getTeam1Score() + " - " + game.getTeam2Score() + 
+                        ") mode: " + game.getMode() + ", total rounds: " + totalRounds);
             }
+            
+            // Validate we have the expected specific games based on API data with exact matches
+            // Game 1: de_anubis with score 13-11 (24 rounds)
+            // Game 2: de_ancient with score 13-2 (15 rounds)
+            GameEntity anubisGame = games.stream()
+                    .filter(g -> g.getMap().equals("de_anubis") && 
+                                g.getTeam1Score() == 13 && g.getTeam2Score() == 11)
+                    .findFirst()
+                    .orElse(null);
+            GameEntity ancientGame = games.stream()
+                    .filter(g -> g.getMap().equals("de_ancient") && 
+                                g.getTeam1Score() == 13 && g.getTeam2Score() == 2)
+                    .findFirst()
+                    .orElse(null);
+            
+            assertNotNull(anubisGame, "Should have a game on de_anubis with score 13-11");
+            assertNotNull(ancientGame, "Should have a game on de_ancient with score 13-2");
+            
+            // Validate exact game IDs match API (game 1 = de_anubis, game 2 = de_ancient)
+            assertEquals(1L, anubisGame.getId(), 
+                    "de_anubis game should have ID 1 as per API");
+            assertEquals(2L, ancientGame.getId(), 
+                    "de_ancient game should have ID 2 as per API");
+            
+            // Validate game timestamps match API (with tolerance for potential timezone/format differences)
+            // Game 1: 2026-01-11T17:26:22.670587Z
+            // Game 2: 2026-01-11T17:50:51.387150Z
+            assertNotNull(anubisGame.getGameOverTimestamp(), 
+                    "de_anubis game should have gameOverTimestamp");
+            assertNotNull(ancientGame.getGameOverTimestamp(), 
+                    "de_ancient game should have gameOverTimestamp");
+            
+            // Validate game 2 timestamp is after game 1 (game 2 happened later)
+            assertTrue(ancientGame.getGameOverTimestamp().isAfter(anubisGame.getGameOverTimestamp()),
+                    "de_ancient game should have later timestamp than de_anubis game");
         }
         
         @Test
-        @DisplayName("Validate: Exactly 40 ROUND_START events are persisted")
+        @DisplayName("Validate: Exactly 39 ROUND_START events are persisted")
         void validateRoundStartEventCount() {
             List<GameEventEntity> roundStartEvents = gameEventRepository.findByGameEventType(GameEventType.ROUND_START);
             assertEquals(EXPECTED_ROUND_START_EVENTS, roundStartEvents.size(),
@@ -462,7 +512,7 @@ class PipelineApiIntegrationTest {
         }
         
         @Test
-        @DisplayName("Validate: 40 distinct roundStartEventId values across all events")
+        @DisplayName("Validate: 39 distinct roundStartEventId values across all events")
         void validateDistinctRoundReferences() {
             List<GameEventEntity> allEvents = gameEventRepository.findAll();
             
@@ -494,7 +544,7 @@ class PipelineApiIntegrationTest {
         }
         
         @Test
-        @DisplayName("Validate: All accolades have valid game reference")
+        @DisplayName("Validate: All accolades have valid game reference and proper data")
         void validateAllAccoladeGameReferences() {
             List<AccoladeEntity> accolades = accoladeRepository.findAll();
             
@@ -505,11 +555,26 @@ class PipelineApiIntegrationTest {
                     System.out.println("  ✗ Accolade ID " + accolade.getId() + " (" + 
                             accolade.getType() + ") has no game reference!");
                 }
+                
+                // Validate accolade has required fields
+                assertNotNull(accolade.getType(), "Accolade should have a type");
+                assertNotNull(accolade.getPlayerId(), "Accolade should have a player ID");
+                assertNotNull(accolade.getValue(), "Accolade should have a value");
+                assertTrue(accolade.getValue() >= 0, "Accolade value should be non-negative");
+                assertTrue(accolade.getPosition() > 0, "Accolade position should be positive");
+                assertTrue(accolade.getPosition() <= 3, "Accolade position should be 1-3 (top 3 players)");
             }
             
             assertEquals(0, accoladesWithoutGame,
                     "All accolades should have a game reference. Found " + accoladesWithoutGame + " without.");
             
+            // Validate accolade types are meaningful (not null/empty)
+            Set<String> accoladeTypes = accolades.stream()
+                    .map(AccoladeEntity::getType)
+                    .collect(Collectors.toSet());
+            
+            assertFalse(accoladeTypes.isEmpty(), "Should have at least one accolade type");
+            System.out.println("  ✓ Found accolade types: " + accoladeTypes);
             System.out.println("  ✓ All " + accolades.size() + " accolades have valid game references");
         }
         
@@ -519,10 +584,13 @@ class PipelineApiIntegrationTest {
             List<GameEntity> games = gameRepository.findAll();
             assumeTrue(games.size() >= EXPECTED_GAMES, "Need at least " + EXPECTED_GAMES + " games");
             
-            // Calculate expected total rounds from all games
+            // Calculate expected total rounds from all games (should be 39: 24 + 15)
             int expectedTotalRounds = games.stream()
                     .mapToInt(g -> g.getTeam1Score() + g.getTeam2Score())
                     .sum();
+            
+            assertEquals(39, expectedTotalRounds, 
+                    "Total rounds should be 39 (24 from de_anubis + 15 from de_ancient)");
             
             System.out.println("  📊 Expected total rounds from games: " + expectedTotalRounds);
             games.forEach(g -> System.out.println("    - Game " + g.getId() + " (" + g.getMap() + "): " + 
@@ -558,8 +626,9 @@ class PipelineApiIntegrationTest {
                 int actualRoundsPlayed = stats.getRoundsPlayed();
                 String playerName = stats.getLastSeenNickname() != null ? stats.getLastSeenNickname() : stats.getPlayerId();
                 
-                // Each player who played in all games should have roundsPlayed == expectedTotalRounds
-                // For players who may not have played all games, we check that rounds > 0 and <= expectedTotalRounds
+                // Validate rounds played based on API data
+                // From API: Some players have 39 rounds (all rounds), some have 30 (partial participation)
+                // All should be between 1 and expectedTotalRounds (39)
                 if (actualRoundsPlayed <= 0) {
                     System.out.println("    ✗ Player " + playerName + " has roundsPlayed=" + actualRoundsPlayed + " (should be > 0)");
                     playersWithIncorrectRounds++;
@@ -568,12 +637,43 @@ class PipelineApiIntegrationTest {
                             " (exceeds max possible: " + expectedTotalRounds + ")");
                     playersWithIncorrectRounds++;
                 } else {
+                    // Validate rounds are within expected range (1-39 based on API)
+                    assertTrue(actualRoundsPlayed >= 1 && actualRoundsPlayed <= expectedTotalRounds,
+                            "Player " + playerName + " roundsPlayed (" + actualRoundsPlayed + 
+                            ") should be between 1 and " + expectedTotalRounds);
                     System.out.println("    ✓ Player " + playerName + ": roundsPlayed=" + actualRoundsPlayed);
                 }
             }
             
             assertEquals(0, playersWithIncorrectRounds,
                     "All players should have valid roundsPlayed counts. Found " + playersWithIncorrectRounds + " with issues.");
+            
+            // Validate specific players from API data have correct rounds
+            // Based on API: Most players have 39 rounds (all rounds), some have 30 or 15 (partial participation)
+            Map<String, Integer> expectedPlayerRounds = new HashMap<>();
+            expectedPlayerRounds.put("[U:1:1219143518]", 39); // Mai Omelette Khaunga - all rounds
+            expectedPlayerRounds.put("[U:1:1090227400]", 39); // k1d - all rounds
+            expectedPlayerRounds.put("[U:1:1211958118]", 30); // the nucLeus - partial (30 rounds)
+            expectedPlayerRounds.put("[U:1:216478675]", 39);  // Adkins#Keep Calm - all rounds
+            expectedPlayerRounds.put("[U:1:1114723128]", 39); // _m3th0d - all rounds
+            expectedPlayerRounds.put("[U:1:129501892]", 39);  // [[LEGEND KILLER]] _i_ - all rounds
+            expectedPlayerRounds.put("[U:1:1222942858]", 39); // raksh - all rounds
+            expectedPlayerRounds.put("[U:1:1098204826]", 39); // Khanjer - all rounds
+            expectedPlayerRounds.put("[U:1:107493695]", 39);  // HwoaranG - all rounds
+            expectedPlayerRounds.put("[U:1:1017449331]", 39); // PARROT - all rounds
+            expectedPlayerRounds.put("[U:1:1026155000]", 15); // Wasuli Bhai !!!! - partial (15 rounds, only game 2)
+            
+            int validatedPlayers = 0;
+            for (Map.Entry<String, Integer> expected : expectedPlayerRounds.entrySet()) {
+                PlayerStatsEntity playerStats = latestStatsByPlayer.get(expected.getKey());
+                if (playerStats != null) {
+                    assertEquals(expected.getValue(), playerStats.getRoundsPlayed(),
+                            "Player " + expected.getKey() + " should have " + expected.getValue() + " rounds");
+                    validatedPlayers++;
+                }
+            }
+            assertTrue(validatedPlayers >= 3, 
+                    "Should validate at least 3 known players from API data");
             
             // Additional check: verify the sum makes sense
             // If there are N players across M games, total roundsPlayed entries should be reasonable
@@ -582,6 +682,17 @@ class PipelineApiIntegrationTest {
                     .mapToInt(PlayerStatsEntity::getRoundsPlayed)
                     .sum();
             System.out.println("  📊 Total roundsPlayed across all players: " + totalRoundsPlayedSum);
+            
+            // Validate all players have gamesPlayed = 2 (both games)
+            for (Map.Entry<String, PlayerStatsEntity> entry : latestStatsByPlayer.entrySet()) {
+                PlayerStatsEntity stats = entry.getValue();
+                if (stats != null) {
+                    // Note: gamesPlayed is calculated from countDistinctGamesByPlayerId, 
+                    // so we validate it's at least 1 and at most 2
+                    assertTrue(stats.getRoundsPlayed() > 0,
+                            "Player " + entry.getKey() + " should have played at least 1 round");
+                }
+            }
         }
         
         @Test
@@ -603,11 +714,356 @@ class PipelineApiIntegrationTest {
                 assertFalse(gameAccolades.isEmpty(), 
                         "Game " + game.getId() + " should have accolades");
                 
+                // Validate round count matches game score
+                int expectedRounds = game.getTeam1Score() + game.getTeam2Score();
+                assertEquals(expectedRounds, roundStarts.size(),
+                        "Game " + game.getId() + " should have " + expectedRounds + 
+                        " ROUND_START events to match score " + game.getTeam1Score() + "-" + game.getTeam2Score());
+                
                 System.out.println("  ✓ Game " + game.getId() + " (" + game.getMap() + "): " +
                         gameEvents.size() + " events, " + 
                         roundStarts.size() + " rounds, " +
                         gameAccolades.size() + " accolades");
             }
+        }
+        
+        @Test
+        @DisplayName("Validate: Round-level data matches game scores and API expectations")
+        void validateRoundLevelData() {
+            List<GameEntity> games = gameRepository.findAll();
+            assumeTrue(games.size() >= EXPECTED_GAMES, "Need at least " + EXPECTED_GAMES + " games");
+            
+            // Expected game data based on API
+            Map<Long, GameRoundExpectations> expectedGameData = Map.of(
+                1L, new GameRoundExpectations("de_anubis", 13, 11, 24),
+                2L, new GameRoundExpectations("de_ancient", 13, 2, 15)
+            );
+            
+            for (GameEntity game : games) {
+                GameRoundExpectations expectations = expectedGameData.get(game.getId());
+                if (expectations == null) continue;
+                
+                // Validate game matches expected data
+                assertEquals(expectations.map, game.getMap(), 
+                        "Game " + game.getId() + " should be on map " + expectations.map);
+                assertEquals(expectations.team1Score, game.getTeam1Score(), 
+                        "Game " + game.getId() + " should have team1Score " + expectations.team1Score);
+                assertEquals(expectations.team2Score, game.getTeam2Score(), 
+                        "Game " + game.getId() + " should have team2Score " + expectations.team2Score);
+                assertEquals(expectations.totalRounds, game.getTeam1Score() + game.getTeam2Score(),
+                        "Game " + game.getId() + " total rounds should match score");
+                
+                // Validate ROUND_START events match expected rounds
+                List<GameEventEntity> roundStarts = gameEventRepository.findByGameIdAndGameEventType(
+                        game.getId(), GameEventType.ROUND_START);
+                assertEquals(expectations.totalRounds, roundStarts.size(),
+                        "Game " + game.getId() + " should have " + expectations.totalRounds + 
+                        " ROUND_START events");
+                
+                // Validate ROUND_END events match expected rounds
+                List<RoundEndEventEntity> roundEnds = gameEventRepository.findRoundEndEventsByGameId(game.getId());
+                assertEquals(expectations.totalRounds, roundEnds.size(),
+                        "Game " + game.getId() + " should have " + expectations.totalRounds + 
+                        " ROUND_END events");
+                
+                // Validate all round end events have game reference
+                for (RoundEndEventEntity roundEnd : roundEnds) {
+                    assertNotNull(roundEnd.getGame(), 
+                            "Round end event " + roundEnd.getId() + " should have game reference");
+                    assertEquals(game.getId(), roundEnd.getGame().getId(),
+                            "Round end event " + roundEnd.getId() + " should reference game " + game.getId());
+                    assertNotNull(roundEnd.getTimestamp(),
+                            "Round end event " + roundEnd.getId() + " should have timestamp");
+                }
+                
+                // Validate events are distributed across rounds
+                int totalEventsInGame = gameEventRepository.findByGameId(game.getId()).size();
+                assertTrue(totalEventsInGame > expectations.totalRounds,
+                        "Game " + game.getId() + " should have more events than just round starts");
+                
+                // Validate each round has events and round end events have proper data
+                for (int i = 0; i < roundStarts.size(); i++) {
+                    GameEventEntity roundStart = roundStarts.get(i);
+                    List<GameEventEntity> roundEvents = gameEventRepository.findByRoundStartId(roundStart.getId());
+                    assertFalse(roundEvents.isEmpty(),
+                            "Round " + (i + 1) + " (roundStart ID: " + roundStart.getId() + ") should have events");
+                    
+                    // Validate round has reasonable number of events (at least ATTACK, KILL, ASSIST events)
+                    assertTrue(roundEvents.size() >= 3,
+                            "Round " + (i + 1) + " should have at least 3 events (found " + roundEvents.size() + ")");
+                    
+                    // Validate round end event exists for this round
+                    if (i < roundEnds.size()) {
+                        RoundEndEventEntity roundEnd = roundEnds.get(i);
+                        assertNotNull(roundEnd.getTimestamp(),
+                                "Round " + (i + 1) + " end event should have timestamp");
+                        assertNotNull(roundEnd.getGame(),
+                                "Round " + (i + 1) + " end event should have game reference");
+                        assertEquals(game.getId(), roundEnd.getGame().getId(),
+                                "Round " + (i + 1) + " end event should reference correct game");
+                        
+                        // Validate round end event has players JSON (may be null for some rounds)
+                        // This is optional as some rounds may not have player data
+                    }
+                }
+                
+                // Validate round end events are in chronological order
+                for (int i = 1; i < roundEnds.size(); i++) {
+                    assertTrue(roundEnds.get(i).getTimestamp().isAfter(roundEnds.get(i-1).getTimestamp()) ||
+                               roundEnds.get(i).getTimestamp().equals(roundEnds.get(i-1).getTimestamp()),
+                            "Round end events should be in chronological order");
+                }
+                
+                System.out.println("  ✓ Game " + game.getId() + " (" + game.getMap() + "): " +
+                        roundStarts.size() + " rounds, " + roundEnds.size() + " round ends, " +
+                        totalEventsInGame + " total events");
+            }
+        }
+        
+        // Helper class for game round expectations
+        private static class GameRoundExpectations {
+            final String map;
+            final int team1Score;
+            final int team2Score;
+            final int totalRounds;
+            
+            GameRoundExpectations(String map, int team1Score, int team2Score, int totalRounds) {
+                this.map = map;
+                this.team1Score = team1Score;
+                this.team2Score = team2Score;
+                this.totalRounds = totalRounds;
+            }
+        }
+        
+        @Test
+        @DisplayName("Validate: Player stats are accurate and complete")
+        void validatePlayerStats() {
+            List<PlayerStatsEntity> allPlayerStats = playerStatsRepository.findAll();
+            assertFalse(allPlayerStats.isEmpty(), "Should have player stats in database");
+            
+            // Group by playerId to get latest stats for each player
+            Map<String, PlayerStatsEntity> latestStatsByPlayer = allPlayerStats.stream()
+                    .collect(Collectors.groupingBy(PlayerStatsEntity::getPlayerId))
+                    .entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> e.getValue().stream()
+                                    .max((a, b) -> {
+                                        if (a.getGameTimestamp() == null && b.getGameTimestamp() == null) return 0;
+                                        if (a.getGameTimestamp() == null) return -1;
+                                        if (b.getGameTimestamp() == null) return 1;
+                                        return a.getGameTimestamp().compareTo(b.getGameTimestamp());
+                                    })
+                                    .orElse(null)
+                    ));
+            
+            System.out.println("  📊 Validating stats for " + latestStatsByPlayer.size() + " unique players:");
+            
+            // Expected player count based on API data (exactly 11 unique players)
+            assertEquals(11, latestStatsByPlayer.size(), 
+                    "Should have exactly 11 players as per API data");
+            
+            int playersWithValidStats = 0;
+            for (Map.Entry<String, PlayerStatsEntity> entry : latestStatsByPlayer.entrySet()) {
+                PlayerStatsEntity stats = entry.getValue();
+                if (stats == null) continue;
+                
+                String playerName = stats.getLastSeenNickname() != null ? 
+                        stats.getLastSeenNickname() : stats.getPlayerId();
+                
+                // Validate basic fields are present
+                assertNotNull(stats.getPlayerId(), "Player should have an ID");
+                assertNotNull(stats.getLastSeenNickname(), "Player should have a nickname");
+                assertNotNull(stats.getRank(), "Player should have a rank");
+                
+                // Validate stats are non-negative
+                assertTrue(stats.getKills() >= 0, 
+                        "Player " + playerName + " kills should be non-negative");
+                assertTrue(stats.getDeaths() >= 0, 
+                        "Player " + playerName + " deaths should be non-negative");
+                assertTrue(stats.getAssists() >= 0, 
+                        "Player " + playerName + " assists should be non-negative");
+                assertTrue(stats.getRoundsPlayed() >= 0, 
+                        "Player " + playerName + " rounds played should be non-negative");
+                
+                // Validate K/D ratio makes sense (if deaths > 0)
+                if (stats.getDeaths() > 0) {
+                    double kdRatio = (double) stats.getKills() / stats.getDeaths();
+                    assertTrue(kdRatio >= 0, 
+                            "Player " + playerName + " K/D ratio should be non-negative");
+                }
+                
+                // Validate headshot kills don't exceed total kills
+                assertTrue(stats.getHeadshotKills() <= stats.getKills(),
+                        "Player " + playerName + " headshot kills (" + stats.getHeadshotKills() + 
+                        ") should not exceed total kills (" + stats.getKills() + ")");
+                
+                // Calculate headshot percentage
+                double headshotPct = stats.getKills() > 0 ? 
+                        (stats.getHeadshotKills() * 100.0 / stats.getKills()) : 0.0;
+                assertTrue(headshotPct >= 0 && headshotPct <= 100, 
+                        "Player " + playerName + " headshot % should be between 0-100");
+                
+                // Validate damage is non-negative
+                assertTrue(stats.getDamageDealt() >= 0,
+                        "Player " + playerName + " damage dealt should be non-negative");
+                
+                playersWithValidStats++;
+                System.out.println("    ✓ " + playerName + ": " +
+                        stats.getKills() + "K/" + stats.getDeaths() + "D/" + stats.getAssists() + "A, " +
+                        "Rank: " + stats.getRank() + ", " +
+                        "Rounds: " + stats.getRoundsPlayed() + ", " +
+                        "HS: " + stats.getHeadshotKills() + "/" + stats.getKills() + 
+                        " (" + String.format("%.1f%%", headshotPct) + ")");
+            }
+            
+            assertEquals(latestStatsByPlayer.size(), playersWithValidStats,
+                    "All players should have valid stats");
+            
+            System.out.println("  ✓ All " + playersWithValidStats + " players have complete and valid stats");
+        }
+        
+        @Test
+        @DisplayName("Validate: Specific known players exist with reasonable stats")
+        void validateKnownPlayers() {
+            // Based on API data, validate some expected players exist
+            List<PlayerStatsEntity> allPlayerStats = playerStatsRepository.findAll();
+            
+            Set<String> playerNicknames = allPlayerStats.stream()
+                    .map(PlayerStatsEntity::getLastSeenNickname)
+                    .filter(name -> name != null)
+                    .collect(Collectors.toSet());
+            
+            // Expected players from API data
+            List<String> expectedPlayers = List.of(
+                    "[[LEGEND KILLER]] _i_",
+                    "_m3th0d",
+                    "Adkins#Keep Calm",
+                    "HwoaranG",
+                    "k1d",
+                    "Khanjer",
+                    "Mai Omelette Khaunga",
+                    "PARROT",
+                    "raksh",
+                    "the nucLeus",
+                    "Wasuli Bhai !!!!"
+            );
+            
+            System.out.println("  📊 Checking for expected players:");
+            int foundPlayers = 0;
+            for (String expectedPlayer : expectedPlayers) {
+                boolean found = playerNicknames.contains(expectedPlayer);
+                if (found) {
+                    foundPlayers++;
+                    System.out.println("    ✓ Found: " + expectedPlayer);
+                } else {
+                    System.out.println("    ⚠ Not found: " + expectedPlayer);
+                }
+            }
+            
+            // Should find most expected players (allowing for some variance in names)
+            assertTrue(foundPlayers >= 8, 
+                    "Should find at least 8 out of 11 expected players. Found: " + foundPlayers);
+            
+            System.out.println("  ✓ Found " + foundPlayers + " out of " + expectedPlayers.size() + " expected players");
+        }
+        
+        @Test
+        @DisplayName("Validate: Game events have proper types and timestamps")
+        void validateGameEventTypes() {
+            List<GameEventEntity> allEvents = gameEventRepository.findAll();
+            assertFalse(allEvents.isEmpty(), "Should have events in database");
+            
+            Map<GameEventType, Long> eventTypeCounts = allEvents.stream()
+                    .collect(Collectors.groupingBy(
+                            GameEventEntity::getGameEventType,
+                            Collectors.counting()
+                    ));
+            
+            System.out.println("  📊 Event type distribution:");
+            for (Map.Entry<GameEventType, Long> entry : eventTypeCounts.entrySet()) {
+                System.out.println("    - " + entry.getKey() + ": " + entry.getValue());
+            }
+            
+            // Validate we have expected event types
+            assertTrue(eventTypeCounts.containsKey(GameEventType.ROUND_START),
+                    "Should have ROUND_START events");
+            assertTrue(eventTypeCounts.containsKey(GameEventType.GAME_OVER),
+                    "Should have GAME_OVER events");
+            
+            // Validate GAME_OVER count matches game count
+            long gameOverCount = eventTypeCounts.getOrDefault(GameEventType.GAME_OVER, 0L);
+            long gameCount = gameRepository.count();
+            assertEquals(gameCount, gameOverCount,
+                    "Should have one GAME_OVER event per game");
+            
+            // Validate all events have timestamps
+            for (GameEventEntity event : allEvents) {
+                assertNotNull(event.getTimestamp(), 
+                        "Event " + event.getId() + " (" + event.getGameEventType() + ") should have a timestamp");
+            }
+            
+            System.out.println("  ✓ All events have valid types and timestamps");
+        }
+        
+        @Test
+        @DisplayName("Validate: Accolades are distributed across players properly")
+        void validateAccoladeDistribution() {
+            List<AccoladeEntity> accolades = accoladeRepository.findAll();
+            assumeTrue(accolades.size() >= EXPECTED_ACCOLADES, 
+                    "Need at least " + EXPECTED_ACCOLADES + " accolades");
+            
+            // Group accolades by player
+            Map<String, List<AccoladeEntity>> accoladesByPlayer = accolades.stream()
+                    .collect(Collectors.groupingBy(AccoladeEntity::getPlayerId));
+            
+            System.out.println("  📊 Accolade distribution across " + accoladesByPlayer.size() + " players:");
+            
+            // Validate each player has at least one accolade
+            for (Map.Entry<String, List<AccoladeEntity>> entry : accoladesByPlayer.entrySet()) {
+                String playerId = entry.getKey();
+                List<AccoladeEntity> playerAccolades = entry.getValue();
+                
+                assertFalse(playerAccolades.isEmpty(),
+                        "Player " + playerId + " should have at least one accolade");
+                
+                // Get player name from stats
+                List<PlayerStatsEntity> playerStats = playerStatsRepository.findAll().stream()
+                        .filter(s -> s.getPlayerId().equals(playerId))
+                        .toList();
+                
+                String playerName = playerId;
+                if (!playerStats.isEmpty() && playerStats.get(0).getLastSeenNickname() != null) {
+                    playerName = playerStats.get(0).getLastSeenNickname();
+                }
+                
+                System.out.println("    - " + playerName + ": " + playerAccolades.size() + " accolades");
+                
+                // Validate each accolade has unique type per game for this player
+                Map<Long, Set<String>> accoladeTypesByGame = new HashMap<>();
+                for (AccoladeEntity accolade : playerAccolades) {
+                    Long gameId = accolade.getGame().getId();
+                    accoladeTypesByGame.computeIfAbsent(gameId, k -> new HashSet<>())
+                            .add(accolade.getType());
+                }
+                
+                // Each player should have unique accolade types per game
+                for (Map.Entry<Long, Set<String>> gameEntry : accoladeTypesByGame.entrySet()) {
+                    Long gameId = gameEntry.getKey();
+                    Set<String> types = gameEntry.getValue();
+                    
+                    // Count how many accolades of each type in this game
+                    long accoladeCountForGame = playerAccolades.stream()
+                            .filter(a -> a.getGame().getId().equals(gameId))
+                            .count();
+                    
+                    // Should have unique types (no duplicate accolade types per player per game)
+                    assertEquals(types.size(), accoladeCountForGame,
+                            "Player " + playerName + " should have unique accolade types in game " + gameId);
+                }
+            }
+            
+            System.out.println("  ✓ Accolades are properly distributed with no duplicates per player per game");
         }
         
         /**

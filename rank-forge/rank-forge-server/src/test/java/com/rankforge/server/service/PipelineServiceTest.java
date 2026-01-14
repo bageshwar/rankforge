@@ -26,6 +26,8 @@ import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for PipelineService
@@ -53,6 +56,12 @@ class PipelineServiceTest {
     @Mock
     private GameRepository gameRepository;
 
+    @Mock
+    private EntityManagerFactory entityManagerFactory;
+
+    @Mock
+    private EntityManager entityManager;
+
     private EventProcessingContext eventProcessingContext;
     private ObjectMapper objectMapper;
     private PipelineService pipelineService;
@@ -63,6 +72,17 @@ class PipelineServiceTest {
         eventProcessingContext = new EventProcessingContext();
         pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, 
                 accoladeRepository, gameRepository, objectMapper, eventProcessingContext);
+        
+        // Mock EntityManagerFactory to return EntityManager
+        when(entityManagerFactory.createEntityManager()).thenReturn(entityManager);
+        // Use reflection to set the EntityManagerFactory field
+        try {
+            java.lang.reflect.Field field = PipelineService.class.getDeclaredField("entityManagerFactory");
+            field.setAccessible(true);
+            field.set(pipelineService, entityManagerFactory);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set EntityManagerFactory", e);
+        }
     }
 
     @Test
