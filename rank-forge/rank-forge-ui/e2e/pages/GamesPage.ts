@@ -68,27 +68,39 @@ export class GamesPage extends BasePage {
 
   async getGameData(index: number) {
     const row = await this.getGameRow(index);
-    const date = await row.locator('.game-date').textContent();
-    const map = await row.locator('.map-badge').textContent();
-    const score = await row.locator('.score').textContent();
-    const duration = await row.locator('td').nth(3).textContent();
+    // Wait for row to be visible and scroll into view
+    await row.waitFor({ state: 'visible', timeout: 10000 });
+    await row.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    
+    const date = await this.safeTextContent(row.locator('.game-date'));
+    const map = await this.safeTextContent(row.locator('.map-badge'));
+    const score = await this.safeTextContent(row.locator('.score'));
+    const duration = await this.safeTextContent(row.locator('td').nth(3));
     
     return {
-      date: date?.trim() || '',
-      map: map?.trim() || '',
-      score: score?.trim() || '',
-      duration: duration?.trim() || '',
+      date: date || '',
+      map: map || '',
+      score: score || '',
+      duration: duration || '',
     };
   }
 
   async clickGameDetails(index: number) {
     console.log(`[GamesPage] Clicking game details for game at index ${index}`);
     const row = await this.getGameRow(index);
+    // Wait for row to be visible and scroll into view
+    await row.waitFor({ state: 'visible', timeout: 10000 });
+    await row.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    
     const detailsBtn = row.locator('.details-btn');
     
     // Wait for button to be visible and enabled
     console.log(`[GamesPage] Waiting for details button to be visible (index ${index})`);
     await detailsBtn.waitFor({ state: 'visible', timeout: 30000 });
+    await detailsBtn.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     console.log(`[GamesPage] Waiting for details button to be enabled (index ${index})`);
     await expect(detailsBtn).toBeEnabled({ timeout: 30000 });
     
@@ -136,7 +148,10 @@ export class GamesPage extends BasePage {
 
   async clickFilterAllGames() {
     console.log('[GamesPage] Clicking "All Games" filter');
-    await this.filterAllGames().click();
+    const filterBtn = this.filterAllGames();
+    await filterBtn.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    await this.safeClick(filterBtn);
     await this.waitForApiResponse('/api/games', 70000);
     // Wait for table rows to be visible again after filter
     await this.page.waitForSelector('.games-table tbody tr', { timeout: 30000, state: 'visible' });
@@ -145,7 +160,10 @@ export class GamesPage extends BasePage {
 
   async clickFilterRecent10() {
     console.log('[GamesPage] Clicking "Recent 10" filter');
-    await this.filterRecent10().click();
+    const filterBtn = this.filterRecent10();
+    await filterBtn.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    await this.safeClick(filterBtn);
     // Wait for the state to update (React state change, no navigation)
     await this.page.waitForTimeout(500);
     // Wait for API response if it happens
@@ -170,7 +188,10 @@ export class GamesPage extends BasePage {
 
   async clickFilterRecent25() {
     console.log('[GamesPage] Clicking "Recent 25" filter');
-    await this.filterRecent25().click();
+    const filterBtn = this.filterRecent25();
+    await filterBtn.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    await this.safeClick(filterBtn);
     // Wait for the state to update (React state change, no navigation)
     await this.page.waitForTimeout(500);
     // Wait for API response if it happens

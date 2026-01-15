@@ -108,4 +108,62 @@ export class BasePage {
     const elapsed = Date.now() - startTime;
     console.log(`[BasePage] ✓ Selector found: ${selector} (after ${elapsed}ms)`);
   }
+
+  /**
+   * Safely get count of elements with timeout and viewport handling
+   */
+  async safeCount(locator: Locator, timeout: number = 2000): Promise<number> {
+    try {
+      return await locator.count({ timeout });
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  /**
+   * Safely get text content with timeout, viewport handling, and scrolling
+   */
+  async safeTextContent(locator: Locator, timeout: number = 3000): Promise<string> {
+    try {
+      // Scroll into view first (no timeout - should be instant for local data)
+      await locator.scrollIntoViewIfNeeded();
+      return (await locator.textContent({ timeout }))?.trim() || '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  /**
+   * Safely check if element is visible with viewport handling
+   */
+  async safeIsVisible(locator: Locator, timeout: number = 3000): Promise<boolean> {
+    try {
+      // Check if element exists first
+      const count = await this.safeCount(locator, 1000);
+      if (count === 0) {
+        return false;
+      }
+      // Scroll into view (no timeout - should be instant)
+      await locator.scrollIntoViewIfNeeded();
+      return await locator.isVisible({ timeout });
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Safely click an element with viewport handling
+   */
+  async safeClick(locator: Locator, timeout: number = 5000): Promise<void> {
+    try {
+      // Wait for element to be visible
+      await locator.waitFor({ state: 'visible', timeout });
+      // Scroll into view (no timeout - should be instant)
+      await locator.scrollIntoViewIfNeeded();
+      // Click
+      await locator.click({ timeout });
+    } catch (error) {
+      throw new Error(`Failed to click element: ${error}`);
+    }
+  }
 }

@@ -81,8 +81,15 @@ test.describe('Rankings Page', () => {
       expect(actualData.playerName).toBe(expectedPlayer.playerName);
       
       // Validate rank - EXACT match (display position should match expected rank order)
+      expect(actualData.rank).toBeTruthy();
+      expect(actualData.rank.trim()).not.toBe('');
+      
       const rankText = actualData.rank.replace(/[🥇🥈🥉]/g, '').trim();
-      const actualRank = parseInt(rankText) || 0;
+      expect(rankText).toBeTruthy();
+      
+      const actualRank = parseInt(rankText);
+      expect(actualRank).not.toBeNaN();
+      
       // Rank in table is 1-indexed position, should match expected rank order
       expect(actualRank).toBe(i + 1);
       

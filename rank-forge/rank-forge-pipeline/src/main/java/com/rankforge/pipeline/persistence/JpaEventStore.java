@@ -106,6 +106,35 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     break;
                 default:
                     // KILL, ASSIST, ATTACK, BOMB_EVENT
+                    // Skip events that occur outside of an active round (between ROUND_END and next ROUND_START)
+                    RoundStartEventEntity currentRound = context.getCurrentRoundStart();
+                    if (currentRound == null) {
+                        logger.warn("Skipping {} event at {} - no active round (event occurred between rounds). " +
+                                "This event will not be persisted.", 
+                                event.getGameEventType(), event.getTimestamp());
+                        return; // Don't persist events outside of rounds
+                    }
+                    
+                    // Check if event occurred after the last round ended (even if currentRoundStart is still set)
+                    // This handles cases where events are processed out of chronological order
+                    Instant lastRoundEnd = context.getLastRoundEndTimestamp();
+                    if (lastRoundEnd != null && event.getTimestamp().isAfter(lastRoundEnd)) {
+                        // Event timestamp is after the last round ended, but before next round started
+                        // This means it's between rounds - skip it
+                        logger.warn("Skipping {} event at {} - occurred after round ended at {} but before next round started. " +
+                                "This event will not be persisted.", 
+                                event.getGameEventType(), event.getTimestamp(), lastRoundEnd);
+                        return; // Don't persist events that occur between rounds
+                    }
+                    
+                    // Additional safety check: verify event timestamp is reasonable relative to round start
+                    // This catches cases where events might be processed out of order
+                    if (event.getTimestamp().isBefore(currentRound.getTimestamp())) {
+                        logger.warn("Skipping {} event at {} - timestamp is before current round start at {}. " +
+                                "This suggests out-of-order processing.", 
+                                event.getGameEventType(), event.getTimestamp(), currentRound.getTimestamp());
+                        return; // Don't persist events with timestamps before the round started
+                    }
                     context.addEvent(entity);
             }
             
@@ -153,9 +182,11 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     killEntity.setWeapon(killEvent.getWeapon());
                     if (killEvent.getPlayer1() != null) {
                         killEntity.setPlayer1(killEvent.getPlayer1().getSteamId());
+                        killEntity.setPlayer1Team(killEvent.getPlayer1().getTeam());
                     }
                     if (killEvent.getPlayer2() != null) {
                         killEntity.setPlayer2(killEvent.getPlayer2().getSteamId());
+                        killEntity.setPlayer2Team(killEvent.getPlayer2().getTeam());
                     }
                     // Serialize coordinates to JSON
                     killEntity.setCoordinates(serializeCoordinates(killEvent));
@@ -169,9 +200,11 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     assistEntity.setWeapon(assistEvent.getWeapon());
                     if (assistEvent.getPlayer1() != null) {
                         assistEntity.setPlayer1(assistEvent.getPlayer1().getSteamId());
+                        assistEntity.setPlayer1Team(assistEvent.getPlayer1().getTeam());
                     }
                     if (assistEvent.getPlayer2() != null) {
                         assistEntity.setPlayer2(assistEvent.getPlayer2().getSteamId());
+                        assistEntity.setPlayer2Team(assistEvent.getPlayer2().getTeam());
                     }
                     // Serialize coordinates to JSON (may be null if not present in log)
                     assistEntity.setCoordinates(serializeCoordinates(assistEvent));
@@ -188,9 +221,11 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     attackEntity.setHealthRemaining(attackEvent.getHealthRemaining());
                     if (attackEvent.getPlayer1() != null) {
                         attackEntity.setPlayer1(attackEvent.getPlayer1().getSteamId());
+                        attackEntity.setPlayer1Team(attackEvent.getPlayer1().getTeam());
                     }
                     if (attackEvent.getPlayer2() != null) {
                         attackEntity.setPlayer2(attackEvent.getPlayer2().getSteamId());
+                        attackEntity.setPlayer2Team(attackEvent.getPlayer2().getTeam());
                     }
                     // Serialize coordinates to JSON
                     attackEntity.setCoordinates(serializeCoordinates(attackEvent));
@@ -427,7 +462,13 @@ public class JpaEventStore implements EventStore, GameEventListener {
                 game = entityManager.merge(game);
             }
             
-            entityManager.flush(); // Flush to get the generated ID
+            try {
+                entityManager.flush(); // Flush to get the generated ID
+            } catch (Exception e) {
+                logger.error("Failed to flush GameEntity. Game map: {}, Game ID: {}", 
+                        game.getMap(), game.getId(), e);
+                throw new RuntimeException("Failed to flush GameEntity", e);
+            }
             
             long gameTime = System.currentTimeMillis() - gameStartTime;
             
@@ -451,7 +492,13 @@ public class JpaEventStore implements EventStore, GameEventListener {
         for (GameEventEntity entity : entitiesToSave) {
             if (entity instanceof RoundStartEventEntity roundStart) {
                 // Ensure game reference is managed
-                if (game != null && !entityManager.contains(game)) {
+                if (game == null) {
+                    logger.error("Cannot persist RoundStartEventEntity - game is null! " +
+                            "This will create an orphan round. RoundStart timestamp: {}", 
+                            roundStart.getTimestamp());
+                    throw new IllegalStateException("Cannot persist RoundStartEventEntity: game is null");
+                }
+                if (!entityManager.contains(game)) {
                     game = entityManager.merge(game);
                 }
                 roundStart.setGame(game);
@@ -472,7 +519,14 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Flush to get RoundStartEventEntity IDs assigned
         if (!roundStartMap.isEmpty()) {
-            entityManager.flush();
+            try {
+                entityManager.flush();
+            } catch (Exception e) {
+                logger.error("Failed to flush RoundStartEventEntity instances. " +
+                        "This may cause orphan rounds. RoundStart count: {}", 
+                        roundStartCount, e);
+                throw new RuntimeException("Failed to flush RoundStartEventEntity instances", e);
+            }
         }
         
         // Build cache of managed roundStart entities by ID (after flush, they're all managed)
@@ -558,7 +612,13 @@ public class JpaEventStore implements EventStore, GameEventListener {
                 
                 // Flush periodically to reduce memory pressure and enable batch processing
                 if (batchCount >= BATCH_SIZE) {
-                    entityManager.flush();
+                    try {
+                        entityManager.flush();
+                    } catch (Exception e) {
+                        logger.error("Failed to flush batch of events. Batch count: {}, Event type: {}", 
+                                batchCount, entity.getGameEventType(), e);
+                        throw new RuntimeException("Failed to flush batch of events", e);
+                    }
                     batchCount = 0;
                 }
             }
@@ -566,7 +626,13 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Flush any remaining entities
         if (batchCount > 0) {
-            entityManager.flush();
+            try {
+                entityManager.flush();
+            } catch (Exception e) {
+                logger.error("Failed to flush remaining events. Remaining batch count: {}", 
+                        batchCount, e);
+                throw new RuntimeException("Failed to flush remaining events", e);
+            }
         }
         
         long otherEventsPersistTime = System.currentTimeMillis() - otherEventsPersistStart;
@@ -604,9 +670,17 @@ public class JpaEventStore implements EventStore, GameEventListener {
         
         // Flush all pending changes to database
         long finalFlushStart = System.currentTimeMillis();
-        entityManager.flush();
-        long finalFlushTime = System.currentTimeMillis() - finalFlushStart;
-        logger.debug("Final flush complete (took {}ms)", finalFlushTime);
+        try {
+            entityManager.flush();
+            long finalFlushTime = System.currentTimeMillis() - finalFlushStart;
+            logger.debug("Final flush complete (took {}ms)", finalFlushTime);
+        } catch (Exception e) {
+            logger.error("Failed to flush entities to database. " +
+                    "This may cause orphan records or missing data. " +
+                    "Accolades to save: {}, Events to save: {}", 
+                    accoladesToSave.size(), entitiesToSave.size(), e);
+            throw new RuntimeException("Failed to flush entities to database", e);
+        }
         
         context.clear();
         

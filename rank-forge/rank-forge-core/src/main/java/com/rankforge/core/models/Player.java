@@ -27,6 +27,7 @@ public class Player {
     private String name;
     private String steamId;
     private boolean isBot;
+    private String team; // "CT" or "T" (normalized from "TERRORIST")
 
     // Default constructor for Jackson deserialization
     public Player() {
@@ -37,6 +38,14 @@ public class Player {
         this.steamId = steamId;
         // TODO Handle "STEAM_ID_PENDING" cases
         this.isBot = (steamId == null) || "BOT".equals(steamId);
+    }
+
+    public Player(String name, String steamId, String team) {
+        this.name = name;
+        this.steamId = steamId;
+        // TODO Handle "STEAM_ID_PENDING" cases
+        this.isBot = (steamId == null) || "BOT".equals(steamId);
+        this.team = normalizeTeam(team);
     }
 
     public String getName() {
@@ -61,5 +70,27 @@ public class Player {
 
     public void setBot(boolean bot) {
         isBot = bot;
+    }
+
+    public String getTeam() {
+        return team;
+    }
+
+    public void setTeam(String team) {
+        this.team = normalizeTeam(team);
+    }
+
+    /**
+     * Normalize team value from log format to standard format.
+     * "TERRORIST" -> "T", "CT" -> "CT"
+     */
+    private static String normalizeTeam(String team) {
+        if (team == null) {
+            return null;
+        }
+        if ("TERRORIST".equalsIgnoreCase(team)) {
+            return "T";
+        }
+        return team;
     }
 }

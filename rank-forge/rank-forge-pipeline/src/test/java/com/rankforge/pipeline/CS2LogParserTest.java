@@ -121,12 +121,14 @@ class CS2LogParserTest {
             assertEquals("Player1", killer.getName());
             assertEquals("[U:1:123456]", killer.getSteamId());
             assertFalse(killer.isBot());
+            assertEquals("CT", killer.getTeam(), "Killer team should be CT");
             
             // Check victim
             Player victim = killEvent.getPlayer2();
             assertEquals("Player2", victim.getName());
             assertEquals("[U:1:789012]", victim.getSteamId());
             assertFalse(victim.isBot());
+            assertEquals("T", victim.getTeam(), "Victim team should be T (normalized from TERRORIST)");
             
             // Check weapon and headshot
             assertEquals("ak47", killEvent.getWeapon());
@@ -238,11 +240,13 @@ class CS2LogParserTest {
             Player assister = assistEvent.getPlayer1();
             assertEquals("Player1", assister.getName());
             assertEquals("[U:1:123456]", assister.getSteamId());
+            assertEquals("CT", assister.getTeam(), "Assisting player team should be CT");
             
             // Check victim
             Player victim = assistEvent.getPlayer2();
             assertEquals("Player2", victim.getName());
             assertEquals("[U:1:789012]", victim.getSteamId());
+            assertEquals("T", victim.getTeam(), "Victim team should be T (normalized from TERRORIST)");
             
             // Check assist type
             assertEquals(AssistEvent.AssistType.Regular, assistEvent.getAssistType());
@@ -520,12 +524,14 @@ class CS2LogParserTest {
             assertEquals("theWhiteNinja", attacker.getName());
             assertEquals("[U:1:1135799416]", attacker.getSteamId());
             assertFalse(attacker.isBot());
+            assertEquals("T", attacker.getTeam(), "Attacker team should be T (normalized from TERRORIST)");
             
             // Check victim
             Player victim = attackEvent.getPlayer2();
             assertEquals("Buckshot", victim.getName());
             assertEquals("BOT", victim.getSteamId()); // BOT
             assertTrue(victim.isBot());
+            assertEquals("CT", victim.getTeam(), "Victim team should be CT");
             
             // Check weapon and damage info
             assertEquals("ak47", attackEvent.getWeapon());
@@ -571,6 +577,12 @@ class CS2LogParserTest {
             assertEquals(35, attackEvent.getDamage());
             assertEquals(8, attackEvent.getArmorDamage());
             assertEquals("chest", attackEvent.getHitGroup());
+            
+            // Check team information
+            Player attacker = attackEvent.getPlayer1();
+            assertEquals("CT", attacker.getTeam(), "Attacker team should be CT");
+            Player victim = attackEvent.getPlayer2();
+            assertEquals("T", victim.getTeam(), "Victim team should be T (normalized from TERRORIST)");
             
             // Verify coordinates are required and present
             assertNotNull(attackEvent.getPlayer1X(), "Attack events must have coordinates");
@@ -628,6 +640,10 @@ class CS2LogParserTest {
             assertEquals("ak47", attackEvent.getWeapon());
             assertEquals(26, attackEvent.getDamage());
             assertEquals("right leg", attackEvent.getHitGroup());
+            
+            // Check team information
+            assertEquals("T", attackEvent.getPlayer1().getTeam(), "Attacker team should be T (normalized from TERRORIST)");
+            assertEquals("CT", attackEvent.getPlayer2().getTeam(), "Victim team should be CT");
         }
     }
 

@@ -76,12 +76,12 @@ public class CS2LogParser implements LogParser {
                     "\"(?<killerName>.+?)" +                           // Killer name
                     "<\\d+>" +
                     "<(?:BOT|(?<killerSteamId>\\[U:\\d+:\\d+\\]))>" + // Killer steam ID (if not BOT)
-                    "<(?:CT|TERRORIST)>\" " +
+                    "<(?<killerTeam>CT|TERRORIST)>\" " +               // Killer team
                     "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed (?:other )?" +  // Killer position, "other" is optional
                     "\"(?<victimName>.+?)" +                          // Victim name
                     "<\\d+>" +
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim steam ID (if not BOT)
-                    "<(?:CT|TERRORIST)>\" " +
+                    "<(?<victimTeam>CT|TERRORIST)>\" " +               // Victim team
                     "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] with " +  // Victim position
                     "\"(?<weapon>[^\"]+)\"" +                         // Weapon used
                     "(?<modifiers>(?: \\([^)]+\\))*)?\\n?"           // Optional modifiers like (headshot), (penetrated), (throughsmoke), etc.
@@ -95,12 +95,12 @@ public class CS2LogParser implements LogParser {
                     "\"(?<assistingPlayerName>.+?)" +                 // Assisting player name
                     "<\\d+>" +                                          // Player number
                     "<(?:BOT|(?<assistingPlayerSteamId>\\[U:\\d+:\\d+\\]))>" + // Steam ID or BOT
-                    "<(?:CT|TERRORIST)>\" " +                           // Team
+                    "<(?<assistingPlayerTeam>CT|TERRORIST)>\" " +       // Assisting player team
                     "(?<assistType>(?:flash-)?assisted) killing " +     // Assist type (flash or regular)
                     "\"(?<victimName>.+?)" +                         // Victim name
                     "<\\d+>" +                                         // Victim number
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim Steam ID or BOT
-                    "<(?:CT|TERRORIST)>\"\\n?"
+                    "<(?<victimTeam>CT|TERRORIST)>\"\\n?"
     );
 
     // L 04/20/2024 - 16:21:52: "theWhiteNinja<1><[U:1:1135799416]><TERRORIST>" [-538 758 -23] attacked "Buckshot<5><BOT><CT>" [81 907 80] with "ak47" (damage "109") (damage_armor "15") (health "0") (armor "76") (hitgroup "head")
@@ -540,11 +540,15 @@ public class CS2LogParser implements LogParser {
 
     private ParseLineResponse parseAssistEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
         // Assist events do NOT have coordinates in the log format
+        // Extract team information
+        String assistingPlayerTeam = matcher.group("assistingPlayerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
         AssistEvent assistEvent = new AssistEvent(
                 timestamp,
                 Map.of(),
-                new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId"), assistingPlayerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 null,
                 matcher.group("assistType").contains("flash")
                         ? AssistEvent.AssistType.Flash
@@ -572,10 +576,14 @@ public class CS2LogParser implements LogParser {
         String modifiers = matcher.group("modifiers");
         boolean isHeadshot = modifiers != null && modifiers.contains("headshot");
         
+        // Extract team information
+        String killerTeam = matcher.group("killerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
         KillEvent killEvent = new KillEvent(
                 timestamp, Map.of(),
-                new Player(matcher.group("killerName"), matcher.group("killerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("killerName"), matcher.group("killerSteamId"), killerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 matcher.group("weapon"),
                 isHeadshot
         );
@@ -639,10 +647,14 @@ public class CS2LogParser implements LogParser {
         Integer victimY = parseCoordinate(matcher.group("victimY"));
         Integer victimZ = parseCoordinate(matcher.group("victimZ"));
         
+        // Extract team information
+        String attackerTeam = matcher.group("attackerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
         AttackEvent attackEvent = new AttackEvent(
                 timestamp, Map.of(),
-                new Player(matcher.group("attackerName"), matcher.group("attackerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("attackerName"), matcher.group("attackerSteamId"), attackerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 matcher.group("weapon"),
                 matcher.group("damage"),
                 matcher.group("damageArmor"),

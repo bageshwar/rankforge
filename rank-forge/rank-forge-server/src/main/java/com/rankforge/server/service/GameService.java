@@ -847,10 +847,12 @@ public class GameService {
         if (player1Id != null) {
             dto.setPlayer1Id(player1Id);
             dto.setPlayer1Name(resolvePlayerName(player1Id, steamIdToName));
+            dto.setPlayer1Team(event.getPlayer1Team());
         }
         if (player2Id != null) {
             dto.setPlayer2Id(player2Id);
             dto.setPlayer2Name(resolvePlayerName(player2Id, steamIdToName));
+            dto.setPlayer2Team(event.getPlayer2Team());
         }
         
         // Set event-specific details

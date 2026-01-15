@@ -58,6 +58,7 @@ public class EventProcessingContext {
     
     private GameEntity currentGame;
     private RoundStartEventEntity currentRoundStart;
+    private Instant lastRoundEndTimestamp; // Track last ROUND_END timestamp to detect events between rounds
     private final List<GameEventEntity> pendingEntities = new ArrayList<>();
     private final List<AccoladeEntity> pendingAccolades = new ArrayList<>();
     
@@ -80,6 +81,7 @@ public class EventProcessingContext {
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
+        lastRoundEndTimestamp = null;
         roundEventCounts.clear();
         logger.info("GAME_CONTEXT: Set current game - map: {}", game != null ? game.getMap() : "null");
     }
@@ -98,6 +100,7 @@ public class EventProcessingContext {
         
         roundNumber++;
         eventsInCurrentRound = 0;
+        lastRoundEndTimestamp = null; // Clear when new round starts
         
         entity.setGame(currentGame);  // Game already exists!
         this.currentRoundStart = entity;
@@ -203,6 +206,8 @@ public class EventProcessingContext {
                     entity.getTimestamp());
         }
         
+        // Track the round end timestamp to detect events that occur after round end
+        this.lastRoundEndTimestamp = entity.getTimestamp();
         eventsInCurrentRound = 0;
         this.currentRoundStart = null;  // Round is complete
     }
@@ -343,6 +348,14 @@ public class EventProcessingContext {
     
     public RoundStartEventEntity getCurrentRoundStart() {
         return currentRoundStart;
+    }
+    
+    /**
+     * Returns the timestamp of the last ROUND_END event, or null if no round has ended yet.
+     * Used to detect events that occur between rounds (after ROUND_END but before next ROUND_START).
+     */
+    public Instant getLastRoundEndTimestamp() {
+        return lastRoundEndTimestamp;
     }
     
     public List<GameEventEntity> getPendingEntities() {

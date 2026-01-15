@@ -57,20 +57,28 @@ export class PlayerProfilePage extends BasePage {
   }
 
   async getPlayerName(): Promise<string | null> {
-    return await this.playerName().textContent();
+    const nameLocator = this.playerName();
+    await nameLocator.scrollIntoViewIfNeeded();
+    return await this.safeTextContent(nameLocator);
   }
 
   async getPlayerId(): Promise<string | null> {
-    return await this.playerIdBadge().textContent();
+    const idLocator = this.playerIdBadge();
+    await idLocator.scrollIntoViewIfNeeded();
+    return await this.safeTextContent(idLocator);
   }
 
   async getCurrentRank(): Promise<string | null> {
-    const rankNumber = await this.rankBadge().locator('.rank-number').textContent();
+    const rankBadge = this.rankBadge();
+    await rankBadge.scrollIntoViewIfNeeded();
+    const rankNumber = await this.safeTextContent(rankBadge.locator('.rank-number'));
     return rankNumber;
   }
 
   async getKDRatio(): Promise<string | null> {
-    const ratingValue = await this.currentRating().locator('.rating-value').textContent();
+    const rating = this.currentRating();
+    await rating.scrollIntoViewIfNeeded();
+    const ratingValue = await this.safeTextContent(rating.locator('.rating-value'));
     return ratingValue;
   }
 
@@ -80,14 +88,19 @@ export class PlayerProfilePage extends BasePage {
 
   async getStatCardData(index: number) {
     const card = await this.statCards().nth(index);
-    const icon = await card.locator('.stat-icon').textContent();
-    const value = await card.locator('.stat-value').textContent();
-    const label = await card.locator('.stat-label').textContent();
+    // Wait for card to be visible and scroll into view
+    await card.waitFor({ state: 'visible', timeout: 10000 });
+    await card.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    
+    const icon = await this.safeTextContent(card.locator('.stat-icon'));
+    const value = await this.safeTextContent(card.locator('.stat-value'));
+    const label = await this.safeTextContent(card.locator('.stat-label'));
     
     return {
-      icon: icon?.trim() || '',
-      value: value?.trim() || '',
-      label: label?.trim() || '',
+      icon: icon || '',
+      value: value || '',
+      label: label || '',
     };
   }
 
@@ -106,22 +119,29 @@ export class PlayerProfilePage extends BasePage {
 
   async getAccoladeItemData(index: number) {
     const item = await this.getAccoladeItem(index);
-    const type = await item.locator('.accolade-type').textContent();
-    const position = await item.locator('.accolade-position').textContent();
-    const value = await item.locator('.value-number').first().textContent();
+    // Wait for item to be visible and scroll into view
+    await item.waitFor({ state: 'visible', timeout: 10000 });
+    await item.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    
+    const type = await this.safeTextContent(item.locator('.accolade-type'));
+    const position = await this.safeTextContent(item.locator('.accolade-position'));
+    const value = await this.safeTextContent(item.locator('.value-number').first());
     
     return {
-      type: type?.trim() || '',
-      position: position?.trim() || '',
-      value: value?.trim() || '',
+      type: type || '',
+      position: position || '',
+      value: value || '',
     };
   }
 
   async clickViewGameLink(index: number) {
     const item = await this.getAccoladeItem(index);
+    await item.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     const gameLink = item.locator('.view-game-link');
-    if (await gameLink.count() > 0) {
-      await gameLink.click();
+    if (await this.safeCount(gameLink) > 0) {
+      await this.safeClick(gameLink);
       await this.waitForLoadState();
     }
   }
@@ -136,7 +156,12 @@ export class PlayerProfilePage extends BasePage {
 
   async getPastNickText(index: number): Promise<string | null> {
     const items = await this.pastNickItems();
-    return await items.nth(index).textContent();
+    const item = items.nth(index);
+    // Wait for item to be visible and scroll into view
+    await item.waitFor({ state: 'visible', timeout: 10000 });
+    await item.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    return await this.safeTextContent(item);
   }
 
   async getAllPastNicks(): Promise<string[]> {
@@ -144,9 +169,17 @@ export class PlayerProfilePage extends BasePage {
     const count = await items.count();
     const nicks: string[] = [];
     for (let i = 0; i < count; i++) {
-      const text = await items.nth(i).textContent();
+      const item = items.nth(i);
+      // Scroll each item into view
+      try {
+        await item.scrollIntoViewIfNeeded();
+        await this.page.waitForTimeout(100);
+      } catch (error) {
+        // Continue if scroll fails
+      }
+      const text = await this.safeTextContent(item);
       if (text) {
-        nicks.push(text.trim());
+        nicks.push(text);
       }
     }
     return nicks;

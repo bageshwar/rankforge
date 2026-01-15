@@ -73,12 +73,18 @@ export class GameDetailsPage extends BasePage {
   }
 
   async getMapName(): Promise<string | null> {
-    return await this.gameTitle().textContent();
+    const title = this.gameTitle();
+    await title.scrollIntoViewIfNeeded();
+    return await this.safeTextContent(title);
   }
 
   async getScore(): Promise<{ ct: string | null; t: string | null }> {
-    const ct = await this.headerScoreCT().textContent();
-    const t = await this.headerScoreT().textContent();
+    const ctLocator = this.headerScoreCT();
+    const tLocator = this.headerScoreT();
+    await ctLocator.scrollIntoViewIfNeeded();
+    await tLocator.scrollIntoViewIfNeeded();
+    const ct = await this.safeTextContent(ctLocator);
+    const t = await this.safeTextContent(tLocator);
     return { ct, t };
   }
 
@@ -92,6 +98,10 @@ export class GameDetailsPage extends BasePage {
   async clickRound(roundNumber: number) {
     console.log(`[GameDetailsPage] Clicking round ${roundNumber}`);
     const roundBadge = this.roundBadges().nth(roundNumber - 1);
+    // Wait for badge to be visible and scroll into view
+    await roundBadge.waitFor({ state: 'visible', timeout: 10000 });
+    await roundBadge.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     await roundBadge.click();
     console.log(`[GameDetailsPage] Round ${roundNumber} clicked, waiting for navigation`);
     await this.waitForLoadState();
@@ -109,6 +119,8 @@ export class GameDetailsPage extends BasePage {
 
   async getRoundBadgeClass(roundNumber: number): Promise<string | null> {
     const roundBadge = this.roundBadges().nth(roundNumber - 1);
+    await roundBadge.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     return await roundBadge.getAttribute('class');
   }
 
@@ -123,29 +135,33 @@ export class GameDetailsPage extends BasePage {
 
   async getPlayerStatData(index: number) {
     const row = await this.getPlayerStatRow(index);
+    // Wait for row to be visible and scroll into view
+    await row.waitFor({ state: 'visible', timeout: 5000 });
+    await row.scrollIntoViewIfNeeded();
+    
     // Get player name from the link or the cell (excluding rank icon)
     const playerLink = row.locator('.player-profile-link');
     let playerName: string | null = null;
-    if (await playerLink.count() > 0) {
-      playerName = await playerLink.textContent();
+    if (await this.safeCount(playerLink) > 0) {
+      playerName = await this.safeTextContent(playerLink);
     } else {
       // If no link, get text from cell and remove rank icon text
-      const cellText = await row.locator('.player-name-cell').textContent();
+      const cellText = await this.safeTextContent(row.locator('.player-name-cell'));
       playerName = cellText?.replace(/[🥇🥈🥉]/g, '').trim() || null;
     }
-    const kills = await row.locator('.kills-cell').textContent();
-    const deaths = await row.locator('.deaths-cell').textContent();
-    const assists = await row.locator('.assists-cell').textContent();
-    const damage = await row.locator('.damage-cell').textContent();
-    const headshotPct = await row.locator('.headshot-cell').textContent();
+    const kills = await this.safeTextContent(row.locator('.kills-cell'));
+    const deaths = await this.safeTextContent(row.locator('.deaths-cell'));
+    const assists = await this.safeTextContent(row.locator('.assists-cell'));
+    const damage = await this.safeTextContent(row.locator('.damage-cell'));
+    const headshotPct = await this.safeTextContent(row.locator('.headshot-cell'));
     
     return {
       playerName: playerName?.trim() || '',
-      kills: kills?.trim() || '',
-      deaths: deaths?.trim() || '',
-      assists: assists?.trim() || '',
-      damage: damage?.trim() || '',
-      headshotPct: headshotPct?.trim() || '',
+      kills: kills || '',
+      deaths: deaths || '',
+      assists: assists || '',
+      damage: damage || '',
+      headshotPct: headshotPct || '',
     };
   }
 
@@ -156,17 +172,64 @@ export class GameDetailsPage extends BasePage {
 
   async getRankIcon(index: number): Promise<string | null> {
     const row = await this.getPlayerStatRow(index);
-    const rankIcon = row.locator('.rank-icon');
-    if (await rankIcon.count() > 0) {
-      return await rankIcon.textContent();
+    await row.waitFor({ state: 'visible', timeout: 5000 });
+    await row.scrollIntoViewIfNeeded();
+    
+    // Rank icon is in: <td class="player-name-cell"><span class="rank-icon rank-gold">🥇</span>...</td>
+    const playerNameCell = row.locator('td.player-name-cell').first();
+    const rankIconSpan = playerNameCell.locator('span.rank-icon').first();
+    
+    // Check if rank icon exists
+    const count = await this.safeCount(rankIconSpan, 1000);
+    if (count > 0) {
+      // Try innerText first (better for emojis)
+      try {
+        const innerText = await rankIconSpan.innerText({ timeout: 2000 });
+        if (innerText && innerText.trim()) {
+          return innerText.trim();
+        }
+      } catch (error) {
+        // Fall back to textContent
+      }
+      
+      const text = await this.safeTextContent(rankIconSpan, 2000);
+      if (text && text.trim()) {
+        return text.trim();
+      }
     }
+    
+    // Fallback: extract emoji from player name cell text
+    try {
+      const cellInnerText = await playerNameCell.innerText({ timeout: 2000 });
+      if (cellInnerText) {
+        // Extract emoji from text (🥇🥈🥉)
+        const emojiMatch = cellInnerText.match(/[🥇🥈🥉]/);
+        if (emojiMatch) {
+          return emojiMatch[0];
+        }
+      }
+    } catch (error) {
+      // Continue to textContent fallback
+    }
+    
+    const cellText = await this.safeTextContent(playerNameCell, 2000);
+    if (cellText) {
+      // Extract emoji from text (🥇🥈🥉)
+      const emojiMatch = cellText.match(/[🥇🥈🥉]/);
+      if (emojiMatch) {
+        return emojiMatch[0];
+      }
+    }
+    
     return null;
   }
 
   async clickPlayerLink(index: number) {
     const row = await this.getPlayerStatRow(index);
+    await row.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     const playerLink = row.locator('.player-profile-link');
-    await playerLink.click();
+    await this.safeClick(playerLink);
     await this.waitForLoadState();
   }
 
@@ -181,22 +244,28 @@ export class GameDetailsPage extends BasePage {
 
   async getAccoladeData(index: number) {
     const card = await this.getAccoladeCard(index);
-    const type = await card.locator('.accolade-type').textContent();
-    const playerName = await card.locator('.accolade-player-link, .accolade-player').textContent();
-    const value = await card.locator('.accolade-value').textContent();
+    // Wait for card to be visible and scroll into view
+    await card.waitFor({ state: 'visible', timeout: 5000 });
+    await card.scrollIntoViewIfNeeded();
+    
+    const type = await this.safeTextContent(card.locator('.accolade-type'));
+    const playerName = await this.safeTextContent(card.locator('.accolade-player-link, .accolade-player'));
+    const value = await this.safeTextContent(card.locator('.accolade-value'));
     
     return {
-      type: type?.trim() || '',
-      playerName: playerName?.trim() || '',
-      value: value?.trim() || '',
+      type: type || '',
+      playerName: playerName || '',
+      value: value || '',
     };
   }
 
   async clickAccoladePlayerLink(index: number) {
     const card = await this.getAccoladeCard(index);
+    await card.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
     const playerLink = card.locator('.accolade-player-link');
-    if (await playerLink.count() > 0) {
-      await playerLink.click();
+    if (await this.safeCount(playerLink) > 0) {
+      await this.safeClick(playerLink);
       await this.waitForLoadState();
     }
   }

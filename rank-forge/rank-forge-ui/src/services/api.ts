@@ -79,8 +79,10 @@ export interface RoundEventDTO {
   timeOffsetMs: number;
   player1Id?: string;
   player1Name?: string;
+  player1Team?: string;
   player2Id?: string;
   player2Name?: string;
+  player2Team?: string;
   weapon?: string;
   isHeadshot?: boolean;
   damage?: number;

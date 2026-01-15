@@ -103,8 +103,9 @@ export class RoundDetailsPage extends BasePage {
 
   async getEventData(index: number) {
     const card = await this.getEventCard(index);
-    // Wait for event card to be visible
-    await card.waitFor({ state: 'visible', timeout: 30000 });
+    // Wait for event card to be visible and scroll into view
+    await card.waitFor({ state: 'visible', timeout: 5000 });
+    await card.scrollIntoViewIfNeeded();
     
     // Try multiple selectors for time
     let time = '';
@@ -116,8 +117,8 @@ export class RoundDetailsPage extends BasePage {
     ];
     for (const selector of timeSelectors) {
       const timeElement = card.locator(selector).first();
-      if (await timeElement.count() > 0) {
-        time = (await timeElement.textContent())?.trim() || '';
+      if (await this.safeCount(timeElement) > 0) {
+        time = await this.safeTextContent(timeElement);
         if (time) break;
       }
     }
@@ -134,8 +135,8 @@ export class RoundDetailsPage extends BasePage {
     ];
     for (const selector of eventTypeSelectors) {
       const eventTypeElement = card.locator(selector).first();
-      if (await eventTypeElement.count() > 0) {
-        eventType = (await eventTypeElement.textContent())?.trim() || '';
+      if (await this.safeCount(eventTypeElement) > 0) {
+        eventType = await this.safeTextContent(eventTypeElement);
         if (eventType) break;
       }
     }
@@ -150,8 +151,8 @@ export class RoundDetailsPage extends BasePage {
     ];
     for (const selector of iconSelectors) {
       const iconElement = card.locator(selector).first();
-      if (await iconElement.count() > 0) {
-        icon = (await iconElement.textContent())?.trim() || '';
+      if (await this.safeCount(iconElement) > 0) {
+        icon = await this.safeTextContent(iconElement);
         if (icon) break;
       }
     }
@@ -166,14 +167,18 @@ export class RoundDetailsPage extends BasePage {
   async clickEventPlayerLink(index: number, linkType: 'attacker' | 'victim' | 'assister' | 'bomber' = 'attacker') {
     console.log(`[RoundDetailsPage] Clicking event player link (${linkType}) for event at index ${index}`);
     // Wait for event cards to be visible
-    await this.eventCards().first().waitFor({ state: 'visible', timeout: 30000 });
+    await this.eventCards().first().waitFor({ state: 'visible', timeout: 5000 });
     const card = await this.getEventCard(index);
+    // Scroll card into view
+    await card.scrollIntoViewIfNeeded();
+    
     const playerLink = card.locator(`.player-link.${linkType}`);
     
     // Wait for the link to be visible
-    await playerLink.waitFor({ state: 'visible', timeout: 30000 });
+    await playerLink.waitFor({ state: 'visible', timeout: 5000 });
+    await playerLink.scrollIntoViewIfNeeded();
     
-    if (await playerLink.count() > 0) {
+    if (await this.safeCount(playerLink) > 0) {
       await playerLink.click();
       console.log(`[RoundDetailsPage] Event player link clicked, waiting for navigation`);
       await this.waitForLoadState();
@@ -196,15 +201,19 @@ export class RoundDetailsPage extends BasePage {
   async clickKillFeedPlayerLink(index: number, linkType: 'killer' | 'victim' = 'killer') {
     console.log(`[RoundDetailsPage] Clicking kill feed player link (${linkType}) for item at index ${index}`);
     // Wait for kill feed items to be visible
-    await this.killFeedItems().first().waitFor({ state: 'visible', timeout: 30000 });
+    await this.killFeedItems().first().waitFor({ state: 'visible', timeout: 5000 });
     const item = await this.getKillFeedItem(index);
+    // Scroll item into view
+    await item.scrollIntoViewIfNeeded();
+    
     const linkSelector = linkType === 'killer' ? '.killer-name' : '.victim-name';
     const playerLink = item.locator(linkSelector);
     
     // Wait for the link to be visible
-    await playerLink.waitFor({ state: 'visible', timeout: 30000 });
+    await playerLink.waitFor({ state: 'visible', timeout: 5000 });
+    await playerLink.scrollIntoViewIfNeeded();
     
-    if (await playerLink.count() > 0) {
+    if (await this.safeCount(playerLink) > 0) {
       await playerLink.click();
       console.log(`[RoundDetailsPage] Kill feed player link clicked, waiting for navigation`);
       await this.waitForLoadState();

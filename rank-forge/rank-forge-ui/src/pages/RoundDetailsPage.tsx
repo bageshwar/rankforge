@@ -228,10 +228,23 @@ export const RoundDetailsPage = () => {
   }, [roundDetails]);
 
   // Build player ID to team mapping from round events
-  // Note: GameDTO doesn't have player stats, so team mapping is not available
-  // Team colors will not be applied to player links
   const getPlayerTeamMap = (): Map<string, 'CT' | 'T'> => {
-    return new Map<string, 'CT' | 'T'>();
+    const teamMap = new Map<string, 'CT' | 'T'>();
+    
+    if (roundDetails?.events) {
+      roundDetails.events.forEach(event => {
+        // Map player1 team
+        if (event.player1Id && event.player1Team) {
+          teamMap.set(event.player1Id, event.player1Team as 'CT' | 'T');
+        }
+        // Map player2 team
+        if (event.player2Id && event.player2Team) {
+          teamMap.set(event.player2Id, event.player2Team as 'CT' | 'T');
+        }
+      });
+    }
+    
+    return teamMap;
   };
 
   const playerTeamMap = getPlayerTeamMap();

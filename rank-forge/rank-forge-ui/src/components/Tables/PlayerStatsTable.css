@@ -7,6 +7,8 @@
 .stats-table {
   width: 100%;
   border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .stats-table thead {

@@ -53,54 +53,143 @@ export class RankingsPage extends BasePage {
 
   async getRankingsCount(): Promise<number> {
     console.log('[RankingsPage] Getting rankings count');
-    // Check if page is still open
+    // Check if page is closed first
     if (this.page.isClosed()) {
-      console.log('[RankingsPage] ⚠ Page is closed, cannot get rankings count');
-      throw new Error('Page has been closed');
+      console.log('[RankingsPage] ⚠ Page is closed, returning 0');
+      return 0;
     }
+    
+    // Wait for rankings table to be visible
+    try {
+      await this.page.waitForSelector('.rankings-table', { timeout: 30000, state: 'visible' });
+    } catch (error) {
+      console.log('[RankingsPage] ⚠ Rankings table not visible, continuing with count');
+    }
+    
+    // Check again if page is still open
+    if (this.page.isClosed()) {
+      console.log('[RankingsPage] ⚠ Page closed while waiting, returning 0');
+      return 0;
+    }
+    
     // Wait for at least one row to be visible before counting
     try {
       await this.page.waitForSelector('.rankings-table tbody tr', { timeout: 10000, state: 'visible' });
     } catch (error) {
       console.log('[RankingsPage] ⚠ No rows visible yet, continuing with count');
     }
-    // Check again if page is still open before counting
+    
+    // Final check if page is still open before counting
     if (this.page.isClosed()) {
-      console.log('[RankingsPage] ⚠ Page closed while waiting, cannot get count');
-      throw new Error('Page has been closed');
+      console.log('[RankingsPage] ⚠ Page closed before counting, returning 0');
+      return 0;
     }
-    const count = await this.rankingsRows().count();
-    console.log(`[RankingsPage] Found ${count} players`);
-    return count;
+    
+    try {
+      const count = await this.rankingsRows().count({ timeout: 5000 });
+      console.log(`[RankingsPage] Found ${count} players`);
+      return count;
+    } catch (error) {
+      console.log('[RankingsPage] ⚠ Error getting count, returning 0');
+      return 0;
+    }
   }
 
   async getRankingRow(index: number) {
     const rows = await this.rankingsRows();
-    return rows.nth(index);
+    const row = rows.nth(index);
+    // Scroll row into view to ensure it's accessible
+    await row.scrollIntoViewIfNeeded();
+    return row;
   }
 
   async getRankingData(index: number) {
     const row = await this.getRankingRow(index);
-    // Rank is in the first cell with class "rank-cell", containing .rank-number
-    const rank = await row.locator('.rank-cell .rank-number').textContent();
-    const playerName = await row.locator('.player-cell .player-name').textContent();
+    // Wait for row to be visible
+    await row.waitFor({ state: 'visible', timeout: 5000 });
+    
+    // Rank is in: <td class="rank-cell"><span class="rank-number">1</span>...</td>
+    // Get the rank number directly from the span inside rank-cell
+    const rankCell = row.locator('td.rank-cell').first();
+    
+    // Wait for rank cell to be visible
+    await rankCell.waitFor({ state: 'visible', timeout: 5000 });
+    await rankCell.scrollIntoViewIfNeeded();
+    
+    const rankNumberSpan = rankCell.locator('span.rank-number').first();
+    
+    // Try innerText first (more reliable)
+    let rank = '';
+    
+    // Check if rank-number span exists
+    const spanCount = await rankNumberSpan.count();
+    if (spanCount === 0) {
+      // Try getting from rank-cell directly
+      const cellText = await rankCell.innerText({ timeout: 2000 });
+      if (cellText) {
+        // Remove emoji and any icon text, keep only the number
+        rank = cellText.replace(/[🥇🥈🥉]/g, '').replace(/\D/g, '').trim();
+      }
+      if (!rank) {
+        throw new Error(`Rank cell found but no rank number span and no text in cell for row ${index}`);
+      }
+    } else {
+      try {
+        rank = await rankNumberSpan.innerText({ timeout: 2000 });
+        if (rank) {
+          rank = rank.replace(/[🥇🥈🥉]/g, '').trim();
+        }
+      } catch (error) {
+        // Fall back to textContent
+        rank = await this.safeTextContent(rankNumberSpan, 2000);
+        if (rank) {
+          rank = rank.replace(/[🥇🥈🥉]/g, '').trim();
+        }
+      }
+      
+      // If still no rank found, try getting from rank-cell directly
+      if (!rank) {
+        try {
+          const cellText = await rankCell.innerText({ timeout: 2000 });
+          if (cellText) {
+            // Remove emoji and any icon text, keep only the number
+            rank = cellText.replace(/[🥇🥈🥉]/g, '').replace(/\D/g, '').trim();
+          }
+        } catch (error) {
+          const cellText = await this.safeTextContent(rankCell, 2000);
+          if (cellText) {
+            rank = cellText.replace(/[🥇🥈🥉]/g, '').replace(/\D/g, '').trim();
+          }
+        }
+      }
+      
+      // If rank is still empty, throw error with debug info
+      if (!rank) {
+        const cellHtml = await rankCell.innerHTML().catch(() => '');
+        const spanHtml = await rankNumberSpan.innerHTML().catch(() => '');
+        throw new Error(`Could not extract rank from row ${index}. Cell HTML: ${cellHtml.substring(0, 100)}, Span HTML: ${spanHtml.substring(0, 100)}`);
+      }
+    }
+    
+    const playerName = await this.safeTextContent(row.locator('.player-cell .player-name'));
     // Stats are in order: ELO (index 0), K/D (index 1), Kills (index 2), Deaths (index 3), Assists (index 4), HS% (index 5), Rounds (index 6), Games (index 7), Clutches (index 8), Damage (index 9)
-    const elo = await row.locator('.stat-cell').nth(0).textContent();
-    const kd = await row.locator('.stat-cell.kd-ratio').textContent();
-    const kills = await row.locator('.stat-cell').nth(2).textContent();
-    const deaths = await row.locator('.stat-cell').nth(3).textContent();
-    const assists = await row.locator('.stat-cell').nth(4).textContent();
-    const hs = await row.locator('.stat-cell.hs-percentage').textContent();
-    const rounds = await row.locator('.stat-cell').nth(6).textContent();
-    const games = await row.locator('.stat-cell').nth(7).textContent();
-    const clutches = await row.locator('.stat-cell').nth(8).textContent();
+    const elo = await this.safeTextContent(row.locator('.stat-cell').nth(0));
+    const kd = await this.safeTextContent(row.locator('.stat-cell.kd-ratio'));
+    const kills = await this.safeTextContent(row.locator('.stat-cell').nth(2));
+    const deaths = await this.safeTextContent(row.locator('.stat-cell').nth(3));
+    const assists = await this.safeTextContent(row.locator('.stat-cell').nth(4));
+    const hs = await this.safeTextContent(row.locator('.stat-cell.hs-percentage'));
+    const rounds = await this.safeTextContent(row.locator('.stat-cell').nth(6));
+    const games = await this.safeTextContent(row.locator('.stat-cell').nth(7));
+    const clutches = await this.safeTextContent(row.locator('.stat-cell').nth(8));
     // Damage is at index 9, and has class "damage"
-    const damage = await row.locator('.stat-cell.damage').textContent().catch(() => 
-      row.locator('.stat-cell').nth(9).textContent()
-    );
+    let damage = await this.safeTextContent(row.locator('.stat-cell.damage'));
+    if (!damage) {
+      damage = await this.safeTextContent(row.locator('.stat-cell').nth(9));
+    }
     
     return {
-      rank: rank?.trim() || '',
+      rank: rank || '',
       playerName: playerName?.trim() || '',
       elo: elo?.trim() || '',
       kd: kd?.trim() || '',

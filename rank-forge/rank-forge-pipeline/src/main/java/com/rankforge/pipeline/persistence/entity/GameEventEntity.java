@@ -54,6 +54,12 @@ public abstract class GameEventEntity {
     @Column(name = "player2", length = 255)
     private String player2;
     
+    @Column(name = "player1Team", length = 10)
+    private String player1Team; // "CT" or "T"
+    
+    @Column(name = "player2Team", length = 10)
+    private String player2Team; // "CT" or "T"
+    
     /**
      * Coordinates stored as JSON string.
      * Format: {"player1": {"x": 100, "y": 200, "z": 50}, "player2": {"x": 150, "y": 250, "z": 60}}
@@ -131,6 +137,22 @@ public abstract class GameEventEntity {
     
     public void setPlayer2(String player2) {
         this.player2 = player2;
+    }
+    
+    public String getPlayer1Team() {
+        return player1Team;
+    }
+    
+    public void setPlayer1Team(String player1Team) {
+        this.player1Team = player1Team;
+    }
+    
+    public String getPlayer2Team() {
+        return player2Team;
+    }
+    
+    public void setPlayer2Team(String player2Team) {
+        this.player2Team = player2Team;
     }
     
     public GameEntity getGame() {

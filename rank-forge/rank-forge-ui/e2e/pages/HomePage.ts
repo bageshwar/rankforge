@@ -20,7 +20,10 @@ export class HomePage extends BasePage {
 
   async clickRankingsLink() {
     console.log('[HomePage] Clicking rankings link');
-    await this.rankingsLink().click();
+    const link = this.rankingsLink();
+    await link.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    await this.safeClick(link);
     console.log('[HomePage] Rankings link clicked, waiting for navigation');
     await this.waitForLoadState();
     // Wait for rankings API call if navigating to rankings
@@ -30,7 +33,10 @@ export class HomePage extends BasePage {
 
   async clickGamesLink() {
     console.log('[HomePage] Clicking games link');
-    await this.gamesLink().click();
+    const link = this.gamesLink();
+    await link.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+    await this.safeClick(link);
     console.log('[HomePage] Games link clicked, waiting for navigation');
     await this.waitForLoadState();
     // Wait for games API call if navigating to games
