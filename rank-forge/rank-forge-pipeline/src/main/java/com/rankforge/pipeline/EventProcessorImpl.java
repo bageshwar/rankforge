@@ -241,6 +241,21 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
         gameEntity.setDuration(event.getDuration());
         gameEntity.setEndTime(event.getTimestamp());
         
+        // Set appServerId from context (extracted from ResetBreakpadAppId log line)
+        // This is required for multi-tenant isolation - fail if not set
+        Long appServerId = context.getAppServerId();
+        logger.debug("Creating GameEntity - appServerId from context: {}", appServerId);
+        if (appServerId == null) {
+            logger.error("appServerId is NULL in context when creating game. Map: {}, Timestamp: {}", 
+                    event.getMap(), event.getTimestamp());
+            throw new IllegalStateException(
+                    "appServerId must be set before creating a game. " +
+                    "ResetBreakpadAppId log line must be parsed before any games start. " +
+                    "Game map: " + event.getMap() + ", timestamp: " + event.getTimestamp());
+        }
+        gameEntity.setAppServerId(appServerId);
+        logger.debug("Set appServerId {} on GameEntity for map: {}", appServerId, event.getMap());
+        
         // Calculate startTime from duration (approximate)
         if (event.getDuration() != null) {
             gameEntity.setStartTime(event.getTimestamp().minusSeconds(event.getDuration()));

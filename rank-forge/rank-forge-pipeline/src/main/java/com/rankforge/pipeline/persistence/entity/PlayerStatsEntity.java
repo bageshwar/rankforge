@@ -79,6 +79,16 @@ public class PlayerStatsEntity {
     @Column(name = "createdAt")
     private Instant createdAt;
     
+    /**
+     * App Server ID identifying which dedicated server this player stat's logs came from.
+     * Extracted from ResetBreakpadAppId log line at the beginning of log processing.
+     * Enables multi-tenant isolation - all player stats from the same log file will have the same appServerId.
+     * 
+     * Required field - must be set for all new imports.
+     */
+    @Column(name = "appServerId", nullable = false)
+    private Long appServerId;
+    
     // Default constructor
     public PlayerStatsEntity() {
         this.createdAt = Instant.now();
@@ -204,5 +214,13 @@ public class PlayerStatsEntity {
     
     public void setGame(GameEntity game) {
         this.game = game;
+    }
+    
+    public Long getAppServerId() {
+        return appServerId;
+    }
+    
+    public void setAppServerId(Long appServerId) {
+        this.appServerId = appServerId;
     }
 }

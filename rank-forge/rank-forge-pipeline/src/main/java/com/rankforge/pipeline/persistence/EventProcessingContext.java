@@ -72,6 +72,24 @@ public class EventProcessingContext {
     private final Map<String, String> playerNameToSteamId = new HashMap<>();
     
     /**
+     * App Server ID extracted from ResetBreakpadAppId log line.
+     * This identifies which dedicated server the logs came from, enabling multi-tenant isolation.
+     * Set once at the beginning of log processing (before any games start).
+     * 
+     * MULTI-TENANT ARCHITECTURE:
+     * ---------------------------
+     * The appServerId enables isolation of data from different private servers:
+     * - Each log file import is associated with a specific server via appServerId
+     * - All Game, GameEvent, Accolade, and PlayerStats entities store this ID
+     * - This allows filtering and querying data by server, ensuring complete isolation
+     * - Future enhancements: Add indexes on appServerId for efficient filtering
+     * 
+     * The appServerId is extracted from log lines like:
+     * "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
+     */
+    private Long appServerId;
+    
+    /**
      * Called when GAME_OVER is processed (happens FIRST due to parser rewind).
      * Sets the current game context that all subsequent events will reference.
      */
@@ -103,6 +121,13 @@ public class EventProcessingContext {
         lastRoundEndTimestamp = null; // Clear when new round starts
         
         entity.setGame(currentGame);  // Game already exists!
+        // Set appServerId from context - must be set before any games/events
+        if (appServerId == null) {
+            throw new IllegalStateException(
+                    "appServerId must be set in context before processing rounds. " +
+                    "ResetBreakpadAppId log line must be parsed first.");
+        }
+        entity.setAppServerId(appServerId);
         this.currentRoundStart = entity;
         pendingEntities.add(entity);
         
@@ -116,6 +141,13 @@ public class EventProcessingContext {
     public void addEvent(GameEventEntity entity) {
         entity.setGame(currentGame);           // Game already exists!
         entity.setRoundStart(currentRoundStart); // Round already exists (may be null if outside round)
+        // Set appServerId from context - must be set before any games/events
+        if (appServerId == null) {
+            throw new IllegalStateException(
+                    "appServerId must be set in context before processing events. " +
+                    "ResetBreakpadAppId log line must be parsed first.");
+        }
+        entity.setAppServerId(appServerId);
         pendingEntities.add(entity);
         
         if (currentRoundStart != null) {
@@ -193,6 +225,13 @@ public class EventProcessingContext {
     public void onRoundEnd(RoundEndEventEntity entity) {
         entity.setGame(currentGame);
         entity.setRoundStart(currentRoundStart);
+        // Set appServerId from context - must be set before any games/events
+        if (appServerId == null) {
+            throw new IllegalStateException(
+                    "appServerId must be set in context before processing rounds. " +
+                    "ResetBreakpadAppId log line must be parsed first.");
+        }
+        entity.setAppServerId(appServerId);
         pendingEntities.add(entity);
         
         // Track this round's event count
@@ -256,6 +295,13 @@ public class EventProcessingContext {
      */
     public void addGameOverEvent(GameEventEntity gameOverEvent) {
         gameOverEvent.setGame(currentGame);
+        // Set appServerId from context - must be set before any games/events
+        if (appServerId == null) {
+            throw new IllegalStateException(
+                    "appServerId must be set in context before processing game over events. " +
+                    "ResetBreakpadAppId log line must be parsed first.");
+        }
+        gameOverEvent.setAppServerId(appServerId);
         pendingEntities.add(gameOverEvent);
         logger.debug("GAME_CONTEXT: GAME_OVER event added at {}", gameOverEvent.getTimestamp());
     }
@@ -274,6 +320,13 @@ public class EventProcessingContext {
             
             for (AccoladeEntity accolade : pendingAccolades) {
                 accolade.setGame(currentGame);
+                // Set appServerId from context - must be set before any games/events
+                if (appServerId == null) {
+                    throw new IllegalStateException(
+                            "appServerId must be set in context before linking accolades. " +
+                            "ResetBreakpadAppId log line must be parsed first.");
+                }
+                accolade.setAppServerId(appServerId);
                 // Set timestamp to game end time (when accolade was actually awarded)
                 if (gameEndTime != null) {
                     accolade.setCreatedAt(gameEndTime);
@@ -285,8 +338,34 @@ public class EventProcessingContext {
     }
     
     /**
+     * Sets the app server ID extracted from ResetBreakpadAppId log line.
+     * Should be called once at the beginning of log processing, before any games start.
+     * 
+     * @param appServerId The dedicated server app ID
+     */
+    public void setAppServerId(Long appServerId) {
+        if (this.appServerId != null && !this.appServerId.equals(appServerId)) {
+            logger.warn("AppServerId already set to {}, overwriting with {}", this.appServerId, appServerId);
+        }
+        this.appServerId = appServerId;
+        logger.info("APP_SERVER_CONTEXT: Set appServerId to {}", appServerId);
+    }
+    
+    /**
+     * Gets the app server ID for the current log processing session.
+     * 
+     * @return The app server ID, or null if not yet set
+     */
+    public Long getAppServerId() {
+        return appServerId;
+    }
+    
+    /**
      * Clears all context after GAME_PROCESSED is received.
      * Called after batch persisting all pending entities.
+     * 
+     * Note: appServerId is NOT cleared here because it applies to the entire log file,
+     * not just a single game. It should persist across all games in the same log processing session.
      */
     public void clear() {
         // Log summary before clearing
@@ -298,6 +377,8 @@ public class EventProcessingContext {
         pendingAccolades.clear();
         roundEventCounts.clear();
         playerNameToSteamId.clear();
+        // appServerId is NOT cleared - it persists for the entire log file processing session
+        // It will be cleared when a new log file processing session starts (new EventProcessingContext instance)
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
