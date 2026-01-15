@@ -26,6 +26,7 @@ import com.rankforge.core.models.Player;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -60,6 +61,7 @@ class CS2LogParserTest {
     private CS2LogParser parser;
     private ObjectMapper objectMapper;
     private List<String> mockLines;
+    private EventProcessingContext eventProcessingContext;
 
     @Mock
     private EventStore eventStore;
@@ -70,7 +72,8 @@ class CS2LogParserTest {
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        parser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
+        eventProcessingContext = new EventProcessingContext();
+        parser = new CS2LogParser(objectMapper, eventStore, accoladeStore, eventProcessingContext);
         mockLines = new ArrayList<>();
     }
 

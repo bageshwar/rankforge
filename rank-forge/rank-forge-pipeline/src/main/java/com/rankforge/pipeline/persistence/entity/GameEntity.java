@@ -65,6 +65,17 @@ public class GameEntity {
     @Column(name = "gameOverEventId")
     private Long gameOverEventId; // Foreign key to GameEventEntity (GAME_OVER event)
     
+    /**
+     * App Server ID identifying which dedicated server this game's logs came from.
+     * Extracted from ResetBreakpadAppId log line at the beginning of log processing.
+     * Enables multi-tenant isolation - all games, events, accolades, and player stats
+     * from the same log file will have the same appServerId.
+     * 
+     * Required field - must be set for all new imports.
+     */
+    @Column(name = "appServerId", nullable = false)
+    private Long appServerId;
+    
     // Default constructor
     public GameEntity() {
         this.createdAt = Instant.now();
@@ -157,5 +168,13 @@ public class GameEntity {
     
     public void setGameOverEventId(Long gameOverEventId) {
         this.gameOverEventId = gameOverEventId;
+    }
+    
+    public Long getAppServerId() {
+        return appServerId;
+    }
+    
+    public void setAppServerId(Long appServerId) {
+        this.appServerId = appServerId;
     }
 }

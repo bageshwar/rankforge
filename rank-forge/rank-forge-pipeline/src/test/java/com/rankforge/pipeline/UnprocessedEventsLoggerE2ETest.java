@@ -26,6 +26,7 @@ import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.util.ObjectMapperFactory;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,7 @@ class UnprocessedEventsLoggerE2ETest {
     
     private CS2LogParser parser;
     private ObjectMapper objectMapper;
+    private EventProcessingContext eventProcessingContext;
     
     // Set this to the path of your production log file
     // Example: "data/c1bfae12f00e0ef7fbacdcd0d6504637a03d70ee991c011ac3eeb3ee82b943a7-json.log"
@@ -78,7 +80,8 @@ class UnprocessedEventsLoggerE2ETest {
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        parser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
+        eventProcessingContext = new EventProcessingContext();
+        parser = new CS2LogParser(objectMapper, eventStore, accoladeStore, eventProcessingContext);
     }
     
     @Test

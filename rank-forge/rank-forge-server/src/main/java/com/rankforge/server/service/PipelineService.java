@@ -101,7 +101,7 @@ public class PipelineService {
         jpaEventStore.setEntityManager(entityManager);
         EventStore eventStore = jpaEventStore;
         
-        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext);
+        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext, gameRepository);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
         // Create ranking algorithm and service
@@ -116,8 +116,8 @@ public class PipelineService {
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
         eventProcessor.addGameEventListener((GameEventListener) statsRepo);
         
-        // Create log parser with accolade store
-        LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
+        // Create log parser with accolade store and event processing context
+        LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore, eventProcessingContext);
         
         // Create scheduler for async processing
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);

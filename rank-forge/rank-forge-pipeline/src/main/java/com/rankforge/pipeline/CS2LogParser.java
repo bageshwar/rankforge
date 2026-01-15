@@ -27,6 +27,7 @@ import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.models.Player;
 import com.rankforge.core.stores.EventStore;
 import com.rankforge.pipeline.persistence.AccoladeStore;
+import com.rankforge.pipeline.persistence.EventProcessingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -210,10 +211,18 @@ public class CS2LogParser implements LogParser {
             "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
                     "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
     );
+    
+    // Pattern for parsing ResetBreakpadAppId log line
+    // Format: ResetBreakpadAppId: Setting dedicated server app id: 2347773
+    // This appears at the beginning of log files, before any games start
+    private static final Pattern RESET_BREAKPAD_APP_ID_PATTERN = Pattern.compile(
+            "ResetBreakpadAppId: Setting dedicated server app id: (?<appServerId>\\d+)"
+    );
 
     private final ObjectMapper objectMapper;
     private final EventStore eventStore;
     private final AccoladeStore accoladeStore;
+    private final EventProcessingContext eventProcessingContext;
     private final List<Integer> roundStartLineIndices;
     private boolean matchStarted;
     private int matchProcessingIndex;
@@ -224,10 +233,12 @@ public class CS2LogParser implements LogParser {
     private String currentBombsite;         // Bombsite where bomb was planted (A or B)
     private Player currentBombDefuser;      // Player attempting to defuse (most recent)
 
-    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore) {
+    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore, 
+                       EventProcessingContext eventProcessingContext) {
         this.objectMapper = objectMapper;
         this.eventStore = eventStore;
         this.accoladeStore = accoladeStore;
+        this.eventProcessingContext = eventProcessingContext;
         this.roundStartLineIndices = new ArrayList<>();
         matchStarted = false;
         matchProcessingIndex = 0;
@@ -246,6 +257,22 @@ public class CS2LogParser implements LogParser {
 
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
             line = jsonNode.get("log").asText();
+            
+            // Parse ResetBreakpadAppId log line early (before any games start)
+            // This identifies which dedicated server the logs came from
+            // Format: "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
+            Matcher resetBreakpadMatcher = RESET_BREAKPAD_APP_ID_PATTERN.matcher(line);
+            if (resetBreakpadMatcher.find()) {
+                try {
+                    Long appServerId = Long.parseLong(resetBreakpadMatcher.group("appServerId"));
+                    eventProcessingContext.setAppServerId(appServerId);
+                    logger.info("Parsed appServerId: {} from log line at index {}", appServerId, currentIndex);
+                } catch (NumberFormatException e) {
+                    logger.warn("Failed to parse appServerId from line: {}", line, e);
+                }
+                // Return empty - this is just metadata, not a game event
+                return Optional.empty();
+            }
 
             if (matchProcessingIndex == currentIndex && matchStarted) {
                 logger.debug("Resetting match state at {} after processing all rounds", currentIndex);

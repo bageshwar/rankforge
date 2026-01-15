@@ -27,6 +27,7 @@ import com.rankforge.core.models.PlayerStats;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
+import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,17 +48,27 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
     private final PlayerStatsRepository repository;
     private final Map<String, PlayerStats> playerStatsMap;
     private final EventProcessingContext context;
+    private final GameRepository gameRepository;
     
     public JpaPlayerStatsStore(PlayerStatsRepository repository) {
         this.repository = repository;
         this.playerStatsMap = new ConcurrentHashMap<>();
         this.context = null; // For backward compatibility
+        this.gameRepository = null; // For backward compatibility
     }
     
     public JpaPlayerStatsStore(PlayerStatsRepository repository, EventProcessingContext context) {
         this.repository = repository;
         this.playerStatsMap = new ConcurrentHashMap<>();
         this.context = context;
+        this.gameRepository = null; // GameRepository not available in this constructor
+    }
+    
+    public JpaPlayerStatsStore(PlayerStatsRepository repository, EventProcessingContext context, GameRepository gameRepository) {
+        this.repository = repository;
+        this.playerStatsMap = new ConcurrentHashMap<>();
+        this.context = context;
+        this.gameRepository = gameRepository;
     }
     
     /**
@@ -131,10 +142,20 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
             List<PlayerStatsEntity> entitiesToSave = new ArrayList<>();
             
             // Always create new entities for historical tracking
+            // Validate appServerId is set in context before creating entities
+            Long appServerId = context != null ? context.getAppServerId() : null;
+            if (appServerId == null) {
+                throw new IllegalStateException(
+                        "appServerId must be set in EventProcessingContext before storing PlayerStats. " +
+                        "ResetBreakpadAppId log line must be parsed first.");
+            }
+            
             for (PlayerStats stat : uniqueStats.values()) {
                 PlayerStatsEntity entity = convertToEntity(stat);
                 entity.setGameTimestamp(gameTimestamp);
                 entity.setGame(game); // Set game reference for confident deletion
+                // Set appServerId from context (extracted from ResetBreakpadAppId log line)
+                entity.setAppServerId(appServerId);
                 entity.setLastUpdated(stat.getLastUpdated() != null ? stat.getLastUpdated() : Instant.now());
                 entitiesToSave.add(entity);
             }
@@ -198,6 +219,36 @@ public class JpaPlayerStatsStore implements PlayerStatsStore, GameEventListener 
         if (context != null) {
             game = context.getCurrentGame();
         }
+        
+        // If game is not in context (e.g., context was cleared), try to find it from repository
+        // This can happen if listeners are called in a different order
+        if (game == null && gameRepository != null) {
+            // Find the most recently persisted game with matching timestamp
+            // Since we don't have the map, we'll get the most recent game
+            // This is a fallback - ideally the game should be in context
+            List<GameEntity> recentGames = gameRepository.findAll().stream()
+                    .filter(g -> g.getGameOverTimestamp() != null && 
+                            Math.abs(g.getGameOverTimestamp().getEpochSecond() - gameTimestamp.getEpochSecond()) <= 1)
+                    .sorted((a, b) -> b.getGameOverTimestamp().compareTo(a.getGameOverTimestamp()))
+                    .limit(1)
+                    .toList();
+            
+            if (!recentGames.isEmpty()) {
+                game = recentGames.get(0);
+                logger.debug("Found game from repository (context game was null): Game ID {}, map: {}", 
+                        game.getId(), game.getMap());
+            }
+        }
+        
+        // Validate game is set - it's required for PlayerStats
+        if (game == null) {
+            logger.error("Cannot store PlayerStats - game entity is null in context and could not be found in repository. Timestamp: {}", gameTimestamp);
+            throw new IllegalStateException(
+                    "Game entity must be available before storing PlayerStats. " +
+                    "This should happen when GameOverEvent is processed. " +
+                    "Timestamp: " + gameTimestamp);
+        }
+        
         storeBatch(playerStatsMap.values(), gameTimestamp, game);
         playerStatsMap.clear();
     }

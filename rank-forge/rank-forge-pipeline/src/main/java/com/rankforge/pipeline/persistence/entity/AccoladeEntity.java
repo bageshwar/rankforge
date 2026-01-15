@@ -61,6 +61,16 @@ public class AccoladeEntity {
     @JoinColumn(name = "gameId", nullable = false)
     private GameEntity game;
     
+    /**
+     * App Server ID identifying which dedicated server this accolade's logs came from.
+     * Extracted from ResetBreakpadAppId log line at the beginning of log processing.
+     * Enables multi-tenant isolation - all accolades from the same log file will have the same appServerId.
+     * 
+     * Required field - must be set for all new imports.
+     */
+    @Column(name = "appServerId", nullable = false)
+    private Long appServerId;
+    
     // Default constructor
     public AccoladeEntity() {
         this.createdAt = Instant.now();
@@ -137,5 +147,13 @@ public class AccoladeEntity {
     
     public void setGame(GameEntity game) {
         this.game = game;
+    }
+    
+    public Long getAppServerId() {
+        return appServerId;
+    }
+    
+    public void setAppServerId(Long appServerId) {
+        this.appServerId = appServerId;
     }
 }
