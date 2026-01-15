@@ -40,7 +40,30 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Parser for CS2 server log format
+ * Parser for CS2 game server log files.
+ * 
+ * THREADING MODEL:
+ * ----------------
+ * This class is designed to be INSTANCE-PER-PARSING-SESSION. It is NOT thread-safe and should NOT be shared.
+ * 
+ * Architecture:
+ * - Each HTTP request to process a log file creates a NEW GameRankingSystem instance
+ * - Each GameRankingSystem creates a NEW CS2LogParser instance
+ * - Each parser processes lines SEQUENTIALLY within a single thread
+ * - State fields (matchStarted, currentBombPlanter, etc.) are scoped to ONE log file processing session
+ * 
+ * Flow:
+ *   HTTP Request 1 → @Async → New GameRankingSystem → New CS2LogParser (instance 1)
+ *   HTTP Request 2 → @Async → New GameRankingSystem → New CS2LogParser (instance 2)
+ * 
+ * Therefore:
+ * - Instance fields are safe to use for tracking state across events in a single log file
+ * - No synchronization is needed since each instance is used by only one thread
+ * - Parallel log processing is achieved by creating multiple parser instances, not sharing one
+ * 
+ * @see com.rankforge.server.service.LogProcessingService#processLogFileAsync
+ * @see com.rankforge.server.service.PipelineService#createGameRankingSystem
+ * 
  * Author bageshwar.pn
  * Date 26/10/24
  */
@@ -53,30 +76,31 @@ public class CS2LogParser implements LogParser {
                     "\"(?<killerName>.+?)" +                           // Killer name
                     "<\\d+>" +
                     "<(?:BOT|(?<killerSteamId>\\[U:\\d+:\\d+\\]))>" + // Killer steam ID (if not BOT)
-                    "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] killed " +
+                    "<(?<killerTeam>CT|TERRORIST)>\" " +               // Killer team
+                    "\\[(?<killerX>-?\\d+) (?<killerY>-?\\d+) (?<killerZ>-?\\d+)\\] killed (?:other )?" +  // Killer position, "other" is optional
                     "\"(?<victimName>.+?)" +                          // Victim name
                     "<\\d+>" +
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim steam ID (if not BOT)
-                    "<(?:CT|TERRORIST)>\" " +
-                    "\\[-?\\d+ -?\\d+ -?\\d+\\] with " +
+                    "<(?<victimTeam>CT|TERRORIST)>\" " +               // Victim team
+                    "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] with " +  // Victim position
                     "\"(?<weapon>[^\"]+)\"" +                         // Weapon used
-                    "(?<isHeadshot> \\(headshot\\))?\\n?"
+                    "(?<modifiers>(?: \\([^)]+\\))*)?\\n?"           // Optional modifiers like (headshot), (penetrated), (throughsmoke), etc.
     );
 
 
-    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>
+    // L 04/20/2024 - 17:52:34: "MYTH<9><[U:1:1598851733]><CT>" assisted killing "Wasuli Bhai !!!<4><[U:1:1026155000]><TERRORIST>"
+    // Note: Assist events do NOT have coordinates in the log format
     private static final Pattern ASSIST_PATTERN = Pattern.compile(
             "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
                     "\"(?<assistingPlayerName>.+?)" +                 // Assisting player name
                     "<\\d+>" +                                          // Player number
                     "<(?:BOT|(?<assistingPlayerSteamId>\\[U:\\d+:\\d+\\]))>" + // Steam ID or BOT
-                    "<(?:CT|TERRORIST)>\" " +                           // Team
+                    "<(?<assistingPlayerTeam>CT|TERRORIST)>\" " +       // Assisting player team
                     "(?<assistType>(?:flash-)?assisted) killing " +     // Assist type (flash or regular)
                     "\"(?<victimName>.+?)" +                         // Victim name
                     "<\\d+>" +                                         // Victim number
                     "<(?:BOT|(?<victimSteamId>\\[U:\\d+:\\d+\\]))>" + // Victim Steam ID or BOT
-                    "<(?:CT|TERRORIST)>\"\\n?"
+                    "<(?<victimTeam>CT|TERRORIST)>\"\\n?"
     );
 
     // L 04/20/2024 - 16:21:52: "theWhiteNinja<1><[U:1:1135799416]><TERRORIST>" [-538 758 -23] attacked "Buckshot<5><BOT><CT>" [81 907 80] with "ak47" (damage "109") (damage_armor "15") (health "0") (armor "76") (hitgroup "head")
@@ -104,22 +128,22 @@ public class CS2LogParser implements LogParser {
     private static final Pattern ATTACK_PATTERN = Pattern.compile(
             "L (?<time>\\d{2}\\/\\d{2}\\/\\d{4} - \\d{2}:\\d{2}:\\d{2}): " +
                     // Attacker info with Steam ID in new format and team
-                    "\"(?<attackerName>[^<]+)<(?<attackerId>\\d+)><(?<attackerSteamId>\\[U:\\d:\\d+\\]|BOT)><(?<attackerTeam>\\w+)>\" " +
+                    "\"(?<attackerName>[^<]+)<(?<attackerId>\\d+)><(?<attackerSteamId>\\[U:\\d+:\\d+\\]|BOT)><(?<attackerTeam>\\w+)>\" " +
                     // Attacker position
                     "\\[(?<attackerX>-?\\d+) (?<attackerY>-?\\d+) (?<attackerZ>-?\\d+)\\] " +
                     // Action
                     "attacked " +
                     // Victim info
-                    "\"(?<victimName>[^<]+)<(?<victimId>\\d+)><(?<victimSteamId>\\[U:\\d:\\d+\\]|BOT)><(?<victimTeam>\\w+)>\" " +
+                    "\"(?<victimName>[^<]+)<(?<victimId>\\d+)><(?<victimSteamId>\\[U:\\d+:\\d+\\]|BOT)><(?<victimTeam>\\w+)>\" " +
                     // Victim position
                     "\\[(?<victimX>-?\\d+) (?<victimY>-?\\d+) (?<victimZ>-?\\d+)\\] " +
                     // Weapon and damage details
-                    "with \"(?<weapon>\\w+)\" " +
+                    "with \"(?<weapon>[^\"]+)\" " +
                     "\\(damage \"(?<damage>\\d+)\"\\) " +
                     "\\(damage_armor \"(?<damageArmor>\\d+)\"\\) " +
                     "\\(health \"(?<healthRemaining>\\d+)\"\\) " +
                     "\\(armor \"(?<armorRemaining>\\d+)\"\\) " +
-                    "\\(hitgroup \"(?<hitgroup>\\w+)\"\\)"
+                    "\\(hitgroup \"(?<hitgroup>[^\"]+)\"\\)\\n?"  // Optional newline at end
     );
 
     private static final Pattern ROUND_END_PATTERN = Pattern.compile(
@@ -152,6 +176,40 @@ public class CS2LogParser implements LogParser {
             "SCORE: (?<score>\\d+(?:\\.\\d+)?)" +                // Score (integer or decimal)
             "\\s*"                                               // Optional trailing whitespace
     );
+    
+    // Bomb event patterns
+    // Format: L MM/DD/YYYY - HH:MM:SS: "PlayerName<ID><[U:1:123]><TEAM>" triggered "Planted_The_Bomb" at bombsite X
+    private static final Pattern BOMB_PLANT_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "\"(?<playerName>[^<]+)" +
+                    "<\\d+>" +
+                    "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                    "<(?:CT|TERRORIST)>\" " +
+                    "triggered \"Planted_The_Bomb\" at bombsite (?<bombsite>[AB])\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: "PlayerName<ID><[U:1:123]><CT>" triggered "Begin_Bomb_Defuse_With_Kit"
+    // OR: "Begin_Bomb_Defuse_Without_Kit"
+    private static final Pattern BOMB_DEFUSE_START_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "\"(?<playerName>[^<]+)" +
+                    "<\\d+>" +
+                    "<(?:BOT|(?<steamId>\\[U:\\d+:\\d+\\]))>" +
+                    "<CT>\" " +
+                    "triggered \"Begin_Bomb_Defuse_(?:With|Without)_Kit\"\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: Team "CT" triggered "SFUI_Notice_Bomb_Defused" (CT "12") (T "7")
+    private static final Pattern BOMB_DEFUSED_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "Team \"CT\" triggered \"SFUI_Notice_Bomb_Defused\".*\\r?\\n?"
+    );
+    
+    // Format: L MM/DD/YYYY - HH:MM:SS: Team "TERRORIST" triggered "SFUI_Notice_Target_Bombed" (CT "1") (T "5")
+    private static final Pattern BOMB_EXPLODED_PATTERN = Pattern.compile(
+            "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
+                    "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
+    );
 
     private final ObjectMapper objectMapper;
     private final EventStore eventStore;
@@ -159,6 +217,12 @@ public class CS2LogParser implements LogParser {
     private final List<Integer> roundStartLineIndices;
     private boolean matchStarted;
     private int matchProcessingIndex;
+    
+    // Bomb event state tracking (per round)
+    // These are cleared on each Round_Start and used to attribute team-level bomb events to players
+    private Player currentBombPlanter;      // Player who planted the bomb in current round
+    private String currentBombsite;         // Bombsite where bomb was planted (A or B)
+    private Player currentBombDefuser;      // Player attempting to defuse (most recent)
 
     public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore) {
         this.objectMapper = objectMapper;
@@ -182,12 +246,9 @@ public class CS2LogParser implements LogParser {
 
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
             line = jsonNode.get("log").asText();
-            
-            //logger.debug("Parsing line {} (matchStarted={}, matchProcessingIndex={}): {}",
-            //        currentIndex, matchStarted, matchProcessingIndex, line);
 
             if (matchProcessingIndex == currentIndex && matchStarted) {
-                logger.info("Resetting round at {}", currentIndex);
+                logger.debug("Resetting match state at {} after processing all rounds", currentIndex);
                 // reset all state, we have processed all rounds of this match
                 this.matchStarted = false;
                 this.matchProcessingIndex = 0;
@@ -195,10 +256,26 @@ public class CS2LogParser implements LogParser {
             }
 
             // track rounds till match is not started (then process them)
-            if (!matchStarted && line.contains("World triggered \"Round_Start\"")) {
-                this.roundStartLineIndices.add(currentIndex);
-                logger.debug("Tracking round start at {} (total tracked: {})", currentIndex, roundStartLineIndices.size());
-                return Optional.empty();
+            if (line.contains("World triggered \"Round_Start\"")) {
+                // We're processing a game if matchProcessingIndex > 0 and currentIndex < matchProcessingIndex
+                // (we're between the rewind point and the game over)
+                boolean isProcessingGame = matchProcessingIndex > 0 && currentIndex < matchProcessingIndex;
+                
+                // If matchStarted is true but we have no rounds tracked AND we're not currently processing a game,
+                // we're starting a new game after a previous game finished. Reset matchStarted to false so we can 
+                // track round starts for this new game.
+                if (matchStarted && roundStartLineIndices.size() == 0 && !isProcessingGame) {
+                    logger.debug("Detected new game: resetting matchStarted=false to track round starts at {}", currentIndex);
+                    this.matchStarted = false;
+                    this.matchProcessingIndex = 0;
+                }
+                
+                if (!matchStarted) {
+                    this.roundStartLineIndices.add(currentIndex);
+                    logger.debug("Tracking round start at {} (total tracked: {})", 
+                            currentIndex, roundStartLineIndices.size());
+                    return Optional.empty();
+                }
             }
 
             Matcher gameOverMatcher = GAME_OVER_LOG_PATTERN.matcher(line);
@@ -208,7 +285,9 @@ public class CS2LogParser implements LogParser {
                     return Optional.of(parseGameOverEvent(gameOverMatcher, timestamp, lines, currentIndex));
                 } else {
                     logger.info("Skipping Game at index {}: {}", currentIndex, line);
+                    // Reset state so we can track round starts for the next game
                     this.roundStartLineIndices.clear();
+                    this.matchStarted = false;
                     return Optional.empty();
                 }
 
@@ -224,6 +303,12 @@ public class CS2LogParser implements LogParser {
             }
 
             // Try to match different event patterns
+            // Check attack pattern first - it's more specific than kill
+            Matcher attackMatcher = ATTACK_PATTERN.matcher(line);
+            if (attackMatcher.matches()) {
+                return Optional.of(parseAttackEvent(attackMatcher, timestamp, lines, currentIndex));
+            }
+
             Matcher killMatcher = KILL_PATTERN.matcher(line);
             if (killMatcher.matches()) {
                 return Optional.of(parseKillEvent(killMatcher, timestamp, lines, currentIndex));
@@ -234,9 +319,26 @@ public class CS2LogParser implements LogParser {
                 return Optional.of(parseAssistEvent(assistMatcher, timestamp, lines, currentIndex));
             }
 
-            Matcher attackMatcher = ATTACK_PATTERN.matcher(line);
-            if (attackMatcher.find()) {
-                return Optional.of(parseAttackEvent(attackMatcher, timestamp, lines, currentIndex));
+            // Check for bomb events
+            Matcher bombPlantMatcher = BOMB_PLANT_PATTERN.matcher(line);
+            if (bombPlantMatcher.matches()) {
+                return Optional.of(parseBombPlantEvent(bombPlantMatcher, timestamp, currentIndex));
+            }
+
+            Matcher bombDefuseStartMatcher = BOMB_DEFUSE_START_PATTERN.matcher(line);
+            if (bombDefuseStartMatcher.matches()) {
+                storeBombDefuser(bombDefuseStartMatcher);
+                return Optional.empty(); // Don't create event, just track for later
+            }
+
+            Matcher bombDefusedMatcher = BOMB_DEFUSED_PATTERN.matcher(line);
+            if (bombDefusedMatcher.matches()) {
+                return Optional.of(createBombDefusedEvent(timestamp, currentIndex));
+            }
+
+            Matcher bombExplodedMatcher = BOMB_EXPLODED_PATTERN.matcher(line);
+            if (bombExplodedMatcher.matches()) {
+                return Optional.of(createBombExplodedEvent(timestamp, currentIndex));
             }
 
             if (line.contains("World triggered \"Round_End\"")) {
@@ -285,6 +387,11 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseRoundStartEvent(Instant timestamp, List<String> lines, int currentIndex) throws JsonProcessingException {
+        // Clear bomb state for new round
+        this.currentBombPlanter = null;
+        this.currentBombsite = null;
+        this.currentBombDefuser = null;
+        
         RoundStartEvent roundStartEvent = new RoundStartEvent(timestamp, Map.of());
         return new ParseLineResponse(roundStartEvent, currentIndex);
     }
@@ -310,12 +417,22 @@ public class CS2LogParser implements LogParser {
         parseAndQueueAccolades(lines, currentIndex);
         
         // rewind back team1+team2 score rounds to start the tracking
-        int roundToStart = this.roundStartLineIndices.size() - (scoreTeam1 + scoreTeam2);
+        int totalRounds = scoreTeam1 + scoreTeam2;
+        
+        if (this.roundStartLineIndices.size() < totalRounds) {
+            throw new IllegalStateException(String.format(
+                    "Catastrophic failure: Not enough round starts tracked. Expected at least %d rounds (score %d:%d), " +
+                    "but only tracked %d round starts. Log file may be incomplete or missing Round_Start events.",
+                    totalRounds, scoreTeam1, scoreTeam2, this.roundStartLineIndices.size()));
+        }
+        
+        // We have tracked enough rounds, rewind back to the start of the match
+        int roundToStart = this.roundStartLineIndices.size() - totalRounds;
         int indexToStart = this.roundStartLineIndices.get(roundToStart) - 1;
         this.matchProcessingIndex = currentIndex;
         this.roundStartLineIndices.clear();
         logger.info("In game over, moving pointer back {} rounds to {}, game over at {}, duration: {} min", 
-                (scoreTeam1 + scoreTeam2), indexToStart, matchProcessingIndex, duration);
+                totalRounds, indexToStart, matchProcessingIndex, duration);
         return new ParseLineResponse(new GameOverEvent(
                 timestamp,
                 new HashMap<String, String>(),
@@ -380,7 +497,7 @@ public class CS2LogParser implements LogParser {
             // Queue accolades for deferred persistence (will be linked to GameEntity later)
             if (!accolades.isEmpty()) {
                 accoladeStore.queueAccolades(accolades);
-                logger.info("Parsed and queued {} accolades for game over event", accolades.size());
+                logger.debug("Parsed and queued {} accolades for game over event", accolades.size());
             } else {
                 logger.debug("No accolades found for game over event");
             }
@@ -422,17 +539,24 @@ public class CS2LogParser implements LogParser {
     }
 
     private ParseLineResponse parseAssistEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AssistEvent(
+        // Assist events do NOT have coordinates in the log format
+        // Extract team information
+        String assistingPlayerTeam = matcher.group("assistingPlayerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
+        AssistEvent assistEvent = new AssistEvent(
                 timestamp,
                 Map.of(),
-                new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("assistingPlayerName"), matcher.group("assistingPlayerSteamId"), assistingPlayerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 null,
                 matcher.group("assistType").contains("flash")
                         ? AssistEvent.AssistType.Flash
                         : AssistEvent.AssistType.Regular
-
-        ), currentIndex);
+        );
+        // Coordinates remain null for assist events
+        
+        return new ParseLineResponse(assistEvent, currentIndex);
     }
 
     private Instant parseTimestamp(String group) {
@@ -441,24 +565,167 @@ public class CS2LogParser implements LogParser {
 
     private ParseLineResponse parseKillEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
         // TODO Fix parse for killing bots, its steamId gets set as Null right now
-        return new ParseLineResponse(new KillEvent(
+        Integer killerX = parseCoordinate(matcher.group("killerX"));
+        Integer killerY = parseCoordinate(matcher.group("killerY"));
+        Integer killerZ = parseCoordinate(matcher.group("killerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        // Check for headshot in modifiers (could be (headshot), (headshot penetrated), (headshot throughsmoke), etc.)
+        String modifiers = matcher.group("modifiers");
+        boolean isHeadshot = modifiers != null && modifiers.contains("headshot");
+        
+        // Extract team information
+        String killerTeam = matcher.group("killerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
+        KillEvent killEvent = new KillEvent(
                 timestamp, Map.of(),
-                new Player(matcher.group("killerName"), matcher.group("killerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("killerName"), matcher.group("killerSteamId"), killerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 matcher.group("weapon"),
-                matcher.group(0).contains("headshot")
-        ), currentIndex);
+                isHeadshot
+        );
+        killEvent.setPlayer1X(killerX);
+        killEvent.setPlayer1Y(killerY);
+        killEvent.setPlayer1Z(killerZ);
+        killEvent.setPlayer2X(victimX);
+        killEvent.setPlayer2Y(victimY);
+        killEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(killEvent, currentIndex);
+    }
+    
+    private Integer parseCoordinate(String coordStr) {
+        try {
+            return coordStr != null ? Integer.parseInt(coordStr) : null;
+        } catch (NumberFormatException e) {
+            logger.warn("Failed to parse coordinate: {}", coordStr);
+            return null;
+        }
+    }
+
+    /**
+     * Package-private method for testing individual event parsing without state machine checks.
+     * This method directly attempts to parse a log line as various event types.
+     * 
+     * @param logLine The extracted log content (not JSON wrapped)
+     * @param timestamp The timestamp for the event
+     * @return Optional containing the parsed event, or empty if no pattern matched
+     */
+    Optional<GameEvent> parseEventForTesting(String logLine, Instant timestamp) {
+        // Try attack pattern
+        Matcher attackMatcher = ATTACK_PATTERN.matcher(logLine);
+        if (attackMatcher.matches()) {
+            ParseLineResponse response = parseAttackEvent(attackMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        // Try kill pattern
+        Matcher killMatcher = KILL_PATTERN.matcher(logLine);
+        if (killMatcher.matches()) {
+            ParseLineResponse response = parseKillEvent(killMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        // Try assist pattern
+        Matcher assistMatcher = ASSIST_PATTERN.matcher(logLine);
+        if (assistMatcher.matches()) {
+            ParseLineResponse response = parseAssistEvent(assistMatcher, timestamp, null, 0);
+            return Optional.of(response.getGameEvent());
+        }
+        
+        return Optional.empty();
     }
 
     private ParseLineResponse parseAttackEvent(Matcher matcher, Instant timestamp, List<String> lines, int currentIndex) {
-        return new ParseLineResponse(new AttackEvent(
+        Integer attackerX = parseCoordinate(matcher.group("attackerX"));
+        Integer attackerY = parseCoordinate(matcher.group("attackerY"));
+        Integer attackerZ = parseCoordinate(matcher.group("attackerZ"));
+        Integer victimX = parseCoordinate(matcher.group("victimX"));
+        Integer victimY = parseCoordinate(matcher.group("victimY"));
+        Integer victimZ = parseCoordinate(matcher.group("victimZ"));
+        
+        // Extract team information
+        String attackerTeam = matcher.group("attackerTeam");
+        String victimTeam = matcher.group("victimTeam");
+        
+        AttackEvent attackEvent = new AttackEvent(
                 timestamp, Map.of(),
-                new Player(matcher.group("attackerName"), matcher.group("attackerSteamId")),
-                new Player(matcher.group("victimName"), matcher.group("victimSteamId")),
+                new Player(matcher.group("attackerName"), matcher.group("attackerSteamId"), attackerTeam),
+                new Player(matcher.group("victimName"), matcher.group("victimSteamId"), victimTeam),
                 matcher.group("weapon"),
                 matcher.group("damage"),
                 matcher.group("damageArmor"),
-                matcher.group("hitgroup")
-        ), currentIndex);
+                matcher.group("hitgroup"),
+                matcher.group("healthRemaining")
+        );
+        attackEvent.setPlayer1X(attackerX);
+        attackEvent.setPlayer1Y(attackerY);
+        attackEvent.setPlayer1Z(attackerZ);
+        attackEvent.setPlayer2X(victimX);
+        attackEvent.setPlayer2Y(victimY);
+        attackEvent.setPlayer2Z(victimZ);
+        
+        return new ParseLineResponse(attackEvent, currentIndex);
+    }
+
+    private ParseLineResponse parseBombPlantEvent(Matcher matcher, Instant timestamp, int currentIndex) {
+        String playerName = matcher.group("playerName").trim();
+        String steamId = matcher.group("steamId");
+        String bombsite = matcher.group("bombsite");
+        
+        // Store for later attribution
+        this.currentBombPlanter = new Player(steamId != null ? steamId : playerName, playerName);
+        this.currentBombsite = bombsite;
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            Map.of("bombsite", bombsite),
+            steamId != null ? steamId : playerName,
+            BombEvent.BombEventType.PLANT,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
+    }
+
+    private void storeBombDefuser(Matcher matcher) {
+        String playerName = matcher.group("playerName").trim();
+        String steamId = matcher.group("steamId");
+        // Store most recent defuser (overwrites previous if multiple attempts)
+        this.currentBombDefuser = new Player(steamId != null ? steamId : playerName, playerName);
+    }
+
+    private ParseLineResponse createBombDefusedEvent(Instant timestamp, int currentIndex) {
+        if (this.currentBombDefuser == null) {
+            logger.warn("Bomb defused but no defuser tracked - returning empty event");
+            return new ParseLineResponse(new GameProcessedEvent(timestamp, Map.of()), currentIndex);
+        }
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            this.currentBombsite != null ? Map.of("bombsite", this.currentBombsite) : Map.of(),
+            this.currentBombDefuser.getSteamId(),
+            BombEvent.BombEventType.DEFUSE,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
+    }
+
+    private ParseLineResponse createBombExplodedEvent(Instant timestamp, int currentIndex) {
+        if (this.currentBombPlanter == null) {
+            logger.warn("Bomb exploded but no planter tracked - returning empty event");
+            return new ParseLineResponse(new GameProcessedEvent(timestamp, Map.of()), currentIndex);
+        }
+        
+        BombEvent bombEvent = new BombEvent(
+            timestamp,
+            this.currentBombsite != null ? Map.of("bombsite", this.currentBombsite) : Map.of(),
+            this.currentBombPlanter.getSteamId(),
+            BombEvent.BombEventType.EXPLODE,
+            0
+        );
+        return new ParseLineResponse(bombEvent, currentIndex);
     }
 }

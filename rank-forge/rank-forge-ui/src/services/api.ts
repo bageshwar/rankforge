@@ -22,6 +22,7 @@ export interface PlayerRankingDTO {
   roundsPlayed: number;
   clutchesWon: number;
   damageDealt: number;
+  gamesPlayed: number;
 }
 
 export interface GameDTO {
@@ -47,6 +48,9 @@ export interface PlayerStatDTO {
   deaths: number;
   assists: number;
   rating: number;
+  damage: number;
+  headshotKills: number;
+  headshotPercentage: number;
 }
 
 export interface AccoladeDTO {
@@ -75,8 +79,10 @@ export interface RoundEventDTO {
   timeOffsetMs: number;
   player1Id?: string;
   player1Name?: string;
+  player1Team?: string;
   player2Id?: string;
   player2Name?: string;
+  player2Team?: string;
   weapon?: string;
   isHeadshot?: boolean;
   damage?: number;
@@ -142,17 +148,26 @@ export interface PlayerProfileDTO {
   accoladesByType: Record<string, number>;
   mostFrequentAccolade: string;
   totalAccolades: number;
+  pastNicks?: string[];
+}
+
+// Leaderboard response with summary stats
+export interface LeaderboardResponseDTO {
+  rankings: PlayerRankingDTO[];
+  totalGames: number;
+  totalRounds: number;
+  totalPlayers: number;
 }
 
 // Rankings API
 export const rankingsApi = {
-  getAll: async (): Promise<PlayerRankingDTO[]> => {
-    const response = await apiClient.get<PlayerRankingDTO[]>('/rankings');
+  getAllWithStats: async (): Promise<LeaderboardResponseDTO> => {
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/stats');
     return response.data;
   },
 
-  getTop: async (limit: number = 10): Promise<PlayerRankingDTO[]> => {
-    const response = await apiClient.get<PlayerRankingDTO[]>('/rankings/top', {
+  getTopWithStats: async (limit: number = 10): Promise<LeaderboardResponseDTO> => {
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/top/stats', {
       params: { limit },
     });
     return response.data;
@@ -172,6 +187,24 @@ export const rankingsApi = {
 
   health: async (): Promise<string> => {
     const response = await apiClient.get<string>('/rankings/health');
+    return response.data;
+  },
+
+  getMonthlyLeaderboard: async (
+    year?: number,
+    month?: number,
+    limit?: number,
+    offset?: number
+  ): Promise<LeaderboardResponseDTO> => {
+    const params: Record<string, number> = {};
+    if (year !== undefined) params.year = year;
+    if (month !== undefined) params.month = month;
+    if (limit !== undefined) params.limit = limit;
+    if (offset !== undefined) params.offset = offset;
+    
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/leaderboard/monthly', {
+      params,
+    });
     return response.data;
   },
 };

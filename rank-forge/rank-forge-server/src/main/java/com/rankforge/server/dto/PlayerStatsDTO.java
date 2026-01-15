@@ -11,6 +11,9 @@ public class PlayerStatsDTO {
     private int assists;
     private double rating;
     private String team; // "CT" or "T"
+    private int damage; // Total damage dealt in the game
+    private int headshotKills; // Number of headshot kills in the game
+    private double headshotPercentage; // Percentage of kills that were headshots
     
     public PlayerStatsDTO() {}
     
@@ -22,6 +25,9 @@ public class PlayerStatsDTO {
         this.assists = assists;
         this.rating = rating;
         this.team = team;
+        this.damage = 0;
+        this.headshotKills = 0;
+        this.headshotPercentage = 0.0;
     }
     
     public String getPlayerName() {
@@ -78,6 +84,30 @@ public class PlayerStatsDTO {
     
     public void setTeam(String team) {
         this.team = team;
+    }
+    
+    public int getDamage() {
+        return damage;
+    }
+    
+    public void setDamage(int damage) {
+        this.damage = damage;
+    }
+    
+    public int getHeadshotKills() {
+        return headshotKills;
+    }
+    
+    public void setHeadshotKills(int headshotKills) {
+        this.headshotKills = headshotKills;
+    }
+    
+    public double getHeadshotPercentage() {
+        return headshotPercentage;
+    }
+    
+    public void setHeadshotPercentage(double headshotPercentage) {
+        this.headshotPercentage = headshotPercentage;
     }
     
     public double getKdRatio() {

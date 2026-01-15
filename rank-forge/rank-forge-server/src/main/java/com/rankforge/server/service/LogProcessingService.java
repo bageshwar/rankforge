@@ -63,13 +63,14 @@ public class LogProcessingService {
         
         // Process asynchronously but return jobId immediately
         CompletableFuture.runAsync(() -> {
+            GameRankingSystem rankingSystem = null;
             try {
                 // Download file from S3 into memory
                 List<String> lines = s3Service.downloadFileAsLines(s3Path);
                 logger.info("Downloaded {} lines from S3 for job {}", lines.size(), jobId);
                 
                 // Create pipeline components for this job
-                GameRankingSystem rankingSystem = pipelineService.createGameRankingSystem();
+                rankingSystem = pipelineService.createGameRankingSystem();
                 
                 // Process lines using pipeline
                 processLogLines(rankingSystem, lines, s3Path);
@@ -79,6 +80,16 @@ public class LogProcessingService {
             } catch (Exception e) {
                 logger.error("Error processing log file for job {} from S3 path: {}", jobId, s3Path, e);
                 // Error is logged but doesn't fail the request since it's async
+            } finally {
+                // Always close resources to prevent connection leaks
+                if (rankingSystem != null) {
+                    try {
+                        rankingSystem.close();
+                        logger.debug("Cleaned up resources for job {}", jobId);
+                    } catch (Exception e) {
+                        logger.error("Error cleaning up resources for job {}", jobId, e);
+                    }
+                }
             }
         });
         
@@ -90,8 +101,13 @@ public class LogProcessingService {
      * Processes log lines using the GameRankingSystem
      */
     private void processLogLines(GameRankingSystem rankingSystem, List<String> lines, String source) {
-        logger.debug("Processing {} log lines from {}", lines.size(), source);
-        rankingSystem.processLines(lines);
-        logger.info("Completed processing {} log lines from {}", lines.size(), source);
+        logger.info("Processing {} log lines from {}", lines.size(), source);
+        try {
+            rankingSystem.processLines(lines);
+            logger.info("Completed processing {} log lines from {}", lines.size(), source);
+        } catch (Exception e) {
+            logger.error("Exception during processLines for {} lines from {}", lines.size(), source, e);
+            throw e;
+        }
     }
 }

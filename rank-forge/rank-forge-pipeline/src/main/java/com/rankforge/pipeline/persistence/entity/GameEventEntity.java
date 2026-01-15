@@ -34,7 +34,8 @@ import java.time.Instant;
 public abstract class GameEventEntity {
     
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "game_event_seq")
+    @SequenceGenerator(name = "game_event_seq", sequenceName = "game_event_seq", allocationSize = 50)
     private Long id;
     
     @Column(name = "at", nullable = false)
@@ -52,6 +53,21 @@ public abstract class GameEventEntity {
     
     @Column(name = "player2", length = 255)
     private String player2;
+    
+    @Column(name = "player1Team", length = 10)
+    private String player1Team; // "CT" or "T"
+    
+    @Column(name = "player2Team", length = 10)
+    private String player2Team; // "CT" or "T"
+    
+    /**
+     * Coordinates stored as JSON string.
+     * Format: {"player1": {"x": 100, "y": 200, "z": 50}, "player2": {"x": 150, "y": 250, "z": 60}}
+     * Only populated for events that have coordinates (KILL, ATTACK).
+     * Null for other event types.
+     */
+    @Column(name = "coordinates", columnDefinition = "NVARCHAR(MAX)")
+    private String coordinates;
     
     // Managed relationship to GameEntity - FK set before batch persist
     @ManyToOne(fetch = FetchType.LAZY)
@@ -123,6 +139,22 @@ public abstract class GameEventEntity {
         this.player2 = player2;
     }
     
+    public String getPlayer1Team() {
+        return player1Team;
+    }
+    
+    public void setPlayer1Team(String player1Team) {
+        this.player1Team = player1Team;
+    }
+    
+    public String getPlayer2Team() {
+        return player2Team;
+    }
+    
+    public void setPlayer2Team(String player2Team) {
+        this.player2Team = player2Team;
+    }
+    
     public GameEntity getGame() {
         return game;
     }
@@ -137,5 +169,13 @@ public abstract class GameEventEntity {
     
     public void setRoundStart(RoundStartEventEntity roundStart) {
         this.roundStart = roundStart;
+    }
+    
+    public String getCoordinates() {
+        return coordinates;
+    }
+    
+    public void setCoordinates(String coordinates) {
+        this.coordinates = coordinates;
     }
 }

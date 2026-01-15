@@ -26,6 +26,7 @@ import com.rankforge.pipeline.persistence.entity.RoundStartEventEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,6 +58,7 @@ public class EventProcessingContext {
     
     private GameEntity currentGame;
     private RoundStartEventEntity currentRoundStart;
+    private Instant lastRoundEndTimestamp; // Track last ROUND_END timestamp to detect events between rounds
     private final List<GameEventEntity> pendingEntities = new ArrayList<>();
     private final List<AccoladeEntity> pendingAccolades = new ArrayList<>();
     
@@ -79,6 +81,7 @@ public class EventProcessingContext {
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
+        lastRoundEndTimestamp = null;
         roundEventCounts.clear();
         logger.info("GAME_CONTEXT: Set current game - map: {}", game != null ? game.getMap() : "null");
     }
@@ -97,6 +100,7 @@ public class EventProcessingContext {
         
         roundNumber++;
         eventsInCurrentRound = 0;
+        lastRoundEndTimestamp = null; // Clear when new round starts
         
         entity.setGame(currentGame);  // Game already exists!
         this.currentRoundStart = entity;
@@ -202,6 +206,8 @@ public class EventProcessingContext {
                     entity.getTimestamp());
         }
         
+        // Track the round end timestamp to detect events that occur after round end
+        this.lastRoundEndTimestamp = entity.getTimestamp();
         eventsInCurrentRound = 0;
         this.currentRoundStart = null;  // Round is complete
     }
@@ -257,13 +263,24 @@ public class EventProcessingContext {
     /**
      * Links all pending accolades to the current game.
      * Should be called after setCurrentGame() when accolades were queued before game existed.
+     * Sets the accolade timestamp to the game's end time (when the accolade was actually awarded).
      */
     public void linkAccoladesToGame() {
         if (currentGame != null) {
+            // Use game end time as the timestamp when the accolade was awarded
+            Instant gameEndTime = currentGame.getEndTime() != null 
+                    ? currentGame.getEndTime() 
+                    : currentGame.getGameOverTimestamp();
+            
             for (AccoladeEntity accolade : pendingAccolades) {
                 accolade.setGame(currentGame);
+                // Set timestamp to game end time (when accolade was actually awarded)
+                if (gameEndTime != null) {
+                    accolade.setCreatedAt(gameEndTime);
+                }
             }
-            logger.debug("GAME_CONTEXT: Linked {} accolades to game", pendingAccolades.size());
+            logger.debug("GAME_CONTEXT: Linked {} accolades to game with end time {}", 
+                    pendingAccolades.size(), gameEndTime);
         }
     }
     
@@ -291,16 +308,16 @@ public class EventProcessingContext {
      */
     private void logRoundSummary() {
         String map = currentGame != null ? currentGame.getMap() : "unknown";
-        logger.info("=== ROUND SUMMARY for game on {} ===", map);
-        logger.info("Total rounds: {}", roundNumber);
-        logger.info("Events without round reference: {}", eventsWithoutRound);
+        logger.debug("=== ROUND SUMMARY for game on {} ===", map);
+        logger.debug("Total rounds: {}", roundNumber);
+        logger.debug("Events without round reference: {}", eventsWithoutRound);
         
         int totalWithRound = 0;
         for (Map.Entry<RoundStartEventEntity, Integer> entry : roundEventCounts.entrySet()) {
             totalWithRound += entry.getValue();
         }
-        logger.info("Total events with round reference: {}", totalWithRound);
-        logger.info("Total pending entities: {}", pendingEntities.size());
+        logger.debug("Total events with round reference: {}", totalWithRound);
+        logger.debug("Total pending entities: {}", pendingEntities.size());
         
         // Count entities by type
         Map<String, Integer> typeCounts = new HashMap<>();
@@ -317,10 +334,10 @@ public class EventProcessingContext {
             }
         }
         
-        logger.info("Events WITH roundStart reference: {}", withRoundRef);
-        logger.info("Events WITHOUT roundStart reference: {}", withoutRoundRef);
-        logger.info("Event type breakdown: {}", typeCounts);
-        logger.info("=== END ROUND SUMMARY ===");
+        logger.debug("Events WITH roundStart reference: {}", withRoundRef);
+        logger.debug("Events WITHOUT roundStart reference: {}", withoutRoundRef);
+        logger.debug("Event type breakdown: {}", typeCounts);
+        logger.debug("=== END ROUND SUMMARY ===");
     }
     
     // Getters
@@ -331,6 +348,14 @@ public class EventProcessingContext {
     
     public RoundStartEventEntity getCurrentRoundStart() {
         return currentRoundStart;
+    }
+    
+    /**
+     * Returns the timestamp of the last ROUND_END event, or null if no round has ended yet.
+     * Used to detect events that occur between rounds (after ROUND_END but before next ROUND_START).
+     */
+    public Instant getLastRoundEndTimestamp() {
+        return lastRoundEndTimestamp;
     }
     
     public List<GameEventEntity> getPendingEntities() {

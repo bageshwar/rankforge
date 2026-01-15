@@ -1,0 +1,6 @@
+# Extracted unprocessed event examples for testing
+# Pattern: L <DATE> - <TIME>: "<VALUE>" [<COORDS>] killed "<VALUE>" [<COORDS>] with "<VALUE>" (attackerinair)
+# Count: 2
+
+{"log":"L 01/07/2026 - 17:12:30: \"Wasuli Bhai !!!!<7><[U:1:1026155000]><TERRORIST>\" [1054 2039 -157] killed \"_m3th0d<4><[U:1:1114723128]><CT>\" [1049 2187 -40] with \"p90\" (attackerinair)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}
+{"log":"L 01/07/2026 - 17:25:43: \"Khanjer<0><[U:1:1098204826]><CT>\" [1938 531 183] killed \"Wasuli Bhai !!!!<7><[U:1:1026155000]><TERRORIST>\" [1868 688 160] with \"usp_silencer\" (attackerinair)","stream":"stdout","time":"2026-01-07T16:00:00.000Z"}

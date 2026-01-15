@@ -23,6 +23,7 @@ import com.rankforge.core.interfaces.EventProcessor;
 import com.rankforge.core.interfaces.LogParser;
 import com.rankforge.core.internal.ParseLineResponse;
 import com.rankforge.core.stores.EventStore;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,31 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Core system class that coordinates all components with batch processing
+ * Main system for processing game logs and computing rankings.
+ * 
+ * THREADING MODEL:
+ * ----------------
+ * This class is designed to be INSTANCE-PER-REQUEST. Each log processing request creates a new instance.
+ * 
+ * Architecture:
+ * - Created per HTTP request in LogProcessingService.processLogFileAsync()
+ * - Each instance owns its own CS2LogParser, EventProcessor, and other components
+ * - NOT thread-safe - should not be shared across threads
+ * - Implements AutoCloseable for proper resource cleanup (EntityManager, etc.)
+ * 
+ * Lifecycle:
+ *   1. Created: pipelineService.createGameRankingSystem()
+ *   2. Used: rankingSystem.processLines(lines)
+ *   3. Closed: rankingSystem.close() in finally block
+ * 
+ * This design allows:
+ * - Parallel processing of multiple log files (each gets its own instance)
+ * - Stateful parsing without synchronization concerns
+ * - Clean resource management per request
+ * 
+ * @see com.rankforge.server.service.LogProcessingService#processLogFileAsync
+ * @see com.rankforge.server.service.PipelineService#createGameRankingSystem
+ * 
  * Author bageshwar.pn
  * Date 26/10/24
  */
@@ -46,14 +71,23 @@ public class GameRankingSystem {
     private final EventProcessor eventProcessor;
     private final EventStore eventStore;
     private final ScheduledExecutorService scheduler;
+    private final EntityManager entityManager;
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler) {
+        this(logParser, eventProcessor, eventStore, scheduler, null);
+    }
+    
+    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler,
+                           EntityManager entityManager) {
         this.logParser = logParser;
         this.eventProcessor = eventProcessor;
         this.eventStore = eventStore;
         this.scheduler = scheduler;
+        this.entityManager = entityManager;
     }
 
     public void startProcessing(String logFile) throws IOException {
@@ -87,7 +121,7 @@ public class GameRankingSystem {
      * @param lines the log lines to process
      */
     public void processLines(List<String> lines) {
-        logger.debug("Starting batch processing of {} log lines", lines.size());
+        logger.info("Starting batch processing of {} log lines", lines.size());
 
         for (int i = 0; i < lines.size(); i++) {
             Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(lines.get(i), lines, i);
@@ -117,5 +151,34 @@ public class GameRankingSystem {
 
     private List<String> readNewLines(String logFile) throws IOException {
         return Files.readAllLines(Path.of(logFile));
+    }
+    
+    /**
+     * Closes resources associated with this GameRankingSystem.
+     * This should be called after processing is complete to prevent connection leaks.
+     */
+    public void close() {
+        if (entityManager != null && entityManager.isOpen()) {
+            try {
+                // Ensure any active transaction is rolled back before closing
+                if (entityManager.getTransaction().isActive()) {
+                    logger.warn("Active transaction found during close, rolling back");
+                    entityManager.getTransaction().rollback();
+                }
+                entityManager.close();
+                logger.debug("Closed EntityManager for GameRankingSystem");
+            } catch (Exception e) {
+                logger.error("Error closing EntityManager", e);
+            }
+        }
+        
+        if (scheduler != null && !scheduler.isShutdown()) {
+            try {
+                scheduler.shutdown();
+                logger.debug("Shutdown scheduler for GameRankingSystem");
+            } catch (Exception e) {
+                logger.error("Error shutting down scheduler", e);
+            }
+        }
     }
 }

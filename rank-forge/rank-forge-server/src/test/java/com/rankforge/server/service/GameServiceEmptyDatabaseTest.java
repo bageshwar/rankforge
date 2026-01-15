@@ -107,12 +107,13 @@ class GameServiceEmptyDatabaseTest {
 
     @Test
     void testGetGameById_WhenDatabaseIsEmpty_ReturnsNull() {
-        // Mock empty repository result
-        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
+        // Mock repository to return empty Optional (simulating game not found)
+        // Use a valid numeric ID so findById is actually called
+        when(gameRepository.findById(anyLong())).thenReturn(Optional.empty());
 
         // Should return null without throwing exception
         assertDoesNotThrow(() -> {
-            var result = gameService.getGameById("some-game-id");
+            var result = gameService.getGameById("123");
             assertNull(result, "Should return null when database is empty");
         });
     }

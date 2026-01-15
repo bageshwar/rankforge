@@ -7,6 +7,9 @@ import { GamesPage } from './pages/GamesPage';
 import { GameDetailsPage } from './pages/GameDetailsPage';
 import { RoundDetailsPage } from './pages/RoundDetailsPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
+import { WeaponSpriteTest } from './pages/WeaponSpriteTest';
+import { SpecialIconsTest } from './pages/SpecialIconsTest';
+import { WeaponIconsTestPage } from './pages/WeaponIconsTestPage';
 import './App.css';
 
 function App() {
@@ -22,6 +25,9 @@ function App() {
             <Route path="/games" element={<GamesPage />} />
             <Route path="/games/:gameId" element={<GameDetailsPage />} />
             <Route path="/games/:gameId/rounds/:roundNumber" element={<RoundDetailsPage />} />
+            <Route path="/weapon-sprite-test" element={<WeaponSpriteTest />} />
+            <Route path="/special-icons-test" element={<SpecialIconsTest />} />
+            <Route path="/weapon-icons-test" element={<WeaponIconsTestPage />} />
           </Routes>
         </main>
         <Footer />

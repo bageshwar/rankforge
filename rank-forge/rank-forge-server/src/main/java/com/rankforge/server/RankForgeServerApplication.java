@@ -20,6 +20,7 @@ package com.rankforge.server;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
@@ -29,6 +30,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  */
 @SpringBootApplication(scanBasePackages = {"com.rankforge.server", "com.rankforge.pipeline.persistence"})
 @EnableAsync
+@EnableCaching
 public class RankForgeServerApplication {
 
     public static void main(String[] args) {

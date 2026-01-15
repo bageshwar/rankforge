@@ -3,9 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
+import { PlayerStatsTable, type PlayerStat } from '../components/Tables/PlayerStatsTable';
 import { gamesApi } from '../services/api';
 import { extractSteamId } from '../utils/steamId';
 import type { GameDTO, GameDetailsDTO } from '../services/api';
+import '../components/Tables/PlayerStatsTable.css'; // Import shared table styles
 import './GameDetailsPage.css';
 
 // Map accolade types to icons
@@ -36,7 +38,7 @@ export const GameDetailsPage = () => {
   const [gameDetails, setGameDetails] = useState<GameDetailsDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
     if (gameId) {
       loadGameDetails();
@@ -78,6 +80,30 @@ export const GameDetailsPage = () => {
     }
   };
 
+  const getPlayerStats = (): PlayerStat[] => {
+    if (!gameDetails?.playerStats) return [];
+    
+    // Calculate kill rankings (for gold/silver/bronze badges)
+    // Sort by kills descending to determine rank
+    const sortedByKills = [...gameDetails.playerStats]
+      .sort((a, b) => b.kills - a.kills);
+    
+    // Map to PlayerStat format with killRank
+    return gameDetails.playerStats.map((player) => {
+      const killRankIndex = sortedByKills.findIndex(p => p.playerId === player.playerId);
+      return {
+        playerName: player.playerName,
+        playerId: player.playerId,
+        kills: player.kills,
+        deaths: player.deaths,
+        assists: player.assists,
+        damage: player.damage,
+        headshotPercentage: player.headshotPercentage,
+        killRank: killRankIndex + 1, // 1 = most kills, 2 = second most, etc.
+      };
+    });
+  };
+
   if (loading) {
     return (
       <PageContainer backgroundClass="bg-game-details">
@@ -100,7 +126,7 @@ export const GameDetailsPage = () => {
   }
 
   return (
-    <PageContainer backgroundClass="bg-game-details">
+    <PageContainer mapName={game.map}>
       <Link to="/games" className="back-btn">
         ← Back to Games
       </Link>
@@ -140,8 +166,9 @@ export const GameDetailsPage = () => {
         <div className="section-card card-bg rounds-section">
           <h2 className="section-title">⏱️ Round Timeline</h2>
           <p className="rounds-description">
-            Round-by-round results (Green = CT Win, Orange = T Win) • Click a round for details
+            Round-by-round results: <span className="color-legend">Blue = CT Win</span> | <span className="color-legend">Orange = T Win</span>
           </p>
+          <p className="rounds-hint">Click a round to view detailed events</p>
           <div className="rounds-timeline">
             {gameDetails.rounds.map((round, idx) => (
               <Link
@@ -162,49 +189,11 @@ export const GameDetailsPage = () => {
       {/* Player Statistics - Tabular */}
       <div className="section-card card-bg player-stats-section">
         <h2 className="section-title">👥 Player Statistics</h2>
-        {gameDetails?.playerStats && gameDetails.playerStats.length > 0 ? (
-          <div className="stats-table-container">
-            <table className="stats-table">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>K</th>
-                  <th>D</th>
-                  <th>A</th>
-                  <th>K/D</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gameDetails.playerStats.map((player, idx) => {
-                  const steamId = extractSteamId(player.playerId);
-                  return (
-                    <tr key={idx}>
-                      <td className="player-name-cell">
-                        {steamId ? (
-                          <Link to={`/players/${steamId}`} className="player-profile-link">
-                            {player.playerName}
-                          </Link>
-                        ) : (
-                          player.playerName
-                        )}
-                      </td>
-                      <td className="kills-cell">{player.kills}</td>
-                      <td className="deaths-cell">{player.deaths}</td>
-                      <td className="assists-cell">{player.assists}</td>
-                      <td className="rating-cell">
-                        {player.deaths > 0 
-                          ? (player.kills / player.deaths).toFixed(2) 
-                          : player.kills.toFixed(2)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="no-data">No player statistics available.</div>
-        )}
+        <PlayerStatsTable 
+          players={getPlayerStats()} 
+          showRankings={true}
+          defaultSortColumn="kills"
+        />
       </div>
 
       {/* Accolades */}
@@ -220,7 +209,11 @@ export const GameDetailsPage = () => {
                   <div className="accolade-content">
                     <div className="accolade-type">{accolade.typeDescription}</div>
                     {steamId ? (
-                      <Link to={`/players/${steamId}`} className="accolade-player-link">
+                      <Link 
+                        to={`/players/${steamId}`} 
+                        className="accolade-player-link"
+                        data-testid={`testid-accolade-player-link-${steamId}`}
+                      >
                         {accolade.playerName}
                       </Link>
                     ) : (

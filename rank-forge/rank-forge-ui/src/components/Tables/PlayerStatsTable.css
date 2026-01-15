@@ -1,0 +1,211 @@
+/* Player Stats Table - Shared Component Styles */
+
+.stats-table-container {
+  overflow-x: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stats-table thead {
+  background: rgba(74, 144, 226, 0.15);
+}
+
+.stats-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-accent-blue);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.stats-table th:not(:first-child) {
+  text-align: center;
+  width: 60px;
+}
+
+.stats-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+}
+
+.stats-table tbody tr:hover {
+  background: rgba(74, 144, 226, 0.08);
+}
+
+.stats-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.player-name-cell {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.player-profile-link {
+  color: var(--color-text-primary);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  margin: -0.25rem -0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: inline-block;
+}
+
+.player-profile-link:hover {
+  color: var(--color-accent-blue);
+  background: rgba(74, 144, 226, 0.15);
+}
+
+.kills-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #4caf50;
+}
+
+.deaths-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #f44336;
+}
+
+.assists-cell {
+  text-align: center;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.damage-cell {
+  text-align: center;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.headshot-cell {
+  text-align: center;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.rank-icon {
+  font-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Gold - Rank 1 */
+.stats-table tbody tr.rank-gold {
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.25), rgba(255, 183, 0, 0.2), rgba(255, 215, 0, 0.25)) !important;
+  outline: 2px solid #ffd700;
+  outline-offset: -1px;
+}
+
+.stats-table tbody tr.rank-gold:hover {
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.4), rgba(255, 183, 0, 0.35), rgba(255, 215, 0, 0.4)) !important;
+}
+
+.rank-icon.rank-gold {
+  font-size: 1.8rem !important;
+}
+
+/* Silver - Rank 2 */
+.stats-table tbody tr.rank-silver {
+  background: linear-gradient(90deg, rgba(192, 192, 192, 0.2), rgba(220, 220, 220, 0.15), rgba(192, 192, 192, 0.2)) !important;
+  outline: 2px solid #c0c0c0;
+  outline-offset: -1px;
+}
+
+.stats-table tbody tr.rank-silver:hover {
+  background: linear-gradient(90deg, rgba(192, 192, 192, 0.35), rgba(220, 220, 220, 0.3), rgba(192, 192, 192, 0.35)) !important;
+}
+
+.rank-icon.rank-silver {
+  font-size: 1.6rem !important;
+}
+
+/* Bronze - Rank 3 */
+.stats-table tbody tr.rank-bronze {
+  background: linear-gradient(90deg, rgba(205, 127, 50, 0.2), rgba(184, 115, 51, 0.15), rgba(205, 127, 50, 0.2)) !important;
+  outline: 2px solid #cd7f32;
+  outline-offset: -1px;
+}
+
+.stats-table tbody tr.rank-bronze:hover {
+  background: linear-gradient(90deg, rgba(205, 127, 50, 0.35), rgba(184, 115, 51, 0.3), rgba(205, 127, 50, 0.35)) !important;
+}
+
+.rank-icon.rank-bronze {
+  font-size: 1.6rem !important;
+}
+
+.no-data {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* Sortable columns */
+.stats-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  position: relative;
+  padding-right: 1.5rem;
+}
+
+.stats-table th.sortable:hover {
+  background-color: rgba(74, 144, 226, 0.2);
+  color: var(--color-accent-blue);
+}
+
+.stats-table th.sortable:active {
+  background-color: rgba(74, 144, 226, 0.3);
+}
+
+.stats-table th.sortable::after {
+  content: '↕';
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  opacity: 0.4;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+.stats-table th.sortable:hover::after {
+  opacity: 0.7;
+  color: var(--color-accent-blue);
+}
+
+/* Active sort indicator */
+.stats-table th.sortable[data-sort-active="true"] {
+  color: var(--color-accent-blue);
+  font-weight: 700;
+}
+
+.stats-table th.sortable[data-sort-active="true"]::after {
+  opacity: 1;
+  color: var(--color-accent-blue);
+  content: '↓';
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.stats-table th.sortable[data-sort-active="true"][data-sort-direction="asc"]::after {
+  content: '↑';
+}

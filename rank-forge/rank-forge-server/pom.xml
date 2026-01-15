@@ -59,6 +59,13 @@
             <version>${spring.boot.version}</version>
         </dependency>
 
+        <!-- Spring Boot Starter Cache -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+            <version>${spring.boot.version}</version>
+        </dependency>
+
         <!-- Spring Boot Starter Data JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -92,6 +99,13 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
             <version>2.20.26</version>
+        </dependency>
+
+        <!-- H2 Database for local development -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
         </dependency>
 
         <!-- Test dependencies -->
@@ -241,7 +255,100 @@
                     <parameters>true</parameters>
                 </configuration>
             </plugin>
+
+            <!-- Maven Surefire Plugin - Unit Tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <!-- By default, exclude E2E tests from unit test phase -->
+                    <!-- Use regex pattern to exclude E2E tests -->
+                    <excludes>
+                        <exclude>%regex[.*E2ETest.*]</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Failsafe Plugin - E2E Tests -->
+            <!-- Only runs when explicitly invoked or in e2e profile -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <includes>
+                        <include>%regex[.*E2ETest.*]</include>
+                    </includes>
+                </configuration>
+                <!-- No default executions - only runs in e2e profile -->
+            </plugin>
         </plugins>
     </build>
+
+    <!-- Profiles for different test scenarios -->
+    <profiles>
+        <!-- E2E profile: runs E2E tests (Java + UI) (mvn verify -Pe2e) -->
+        <profile>
+            <id>e2e</id>
+            <build>
+                <plugins>
+                    <!-- Skip unit tests in E2E profile -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <skipTests>true</skipTests>
+                        </configuration>
+                    </plugin>
+                    
+                    <!-- Run Java E2E tests with Failsafe -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <version>3.2.5</version>
+                        <configuration>
+                            <includes>
+                                <include>%regex[.*E2ETest.*]</include>
+                            </includes>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    
+                    <!-- Run UI E2E tests -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>ui-e2e-tests</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <workingDirectory>${project.parent.basedir}/rank-forge-ui</workingDirectory>
+                                    <executable>npm</executable>
+                                    <arguments>
+                                        <argument>run</argument>
+                                        <argument>test:e2e</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

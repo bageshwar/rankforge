@@ -19,14 +19,50 @@
 }
 
 .game-header {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+  background: linear-gradient(
+    135deg, 
+    rgba(26, 26, 26, 0.92) 0%, 
+    rgba(45, 45, 45, 0.88) 50%, 
+    rgba(26, 26, 26, 0.92) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: var(--color-text-primary);
   padding: 2rem;
   border-radius: 16px;
   margin-bottom: 2rem;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(74, 144, 226, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(74, 144, 226, 0.25),
+    0 0 40px rgba(74, 144, 226, 0.15),
+    inset 0 2px 0 rgba(74, 144, 226, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Elegant rotating shimmer animation */
+.game-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 60%);
+  animation: rotate-gradient 15s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes rotate-gradient {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.game-header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .game-title {
@@ -93,6 +129,49 @@
   padding: 1.5rem;
   border-radius: 12px;
   margin-bottom: 1.5rem;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(74, 144, 226, 0.15);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(74, 144, 226, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.section-card:hover {
+  border-color: rgba(74, 144, 226, 0.25);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 30px rgba(74, 144, 226, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.section-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 8px,
+      rgba(255, 255, 255, 0.008) 8px,
+      rgba(255, 255, 255, 0.008) 9px
+    );
+  pointer-events: none;
+  z-index: 1;
+}
+
+.section-card > * {
+  position: relative;
+  z-index: 2;
 }
 
 .section-title {
@@ -105,88 +184,123 @@
 }
 
 /* Player Statistics Table */
+/* Base styles are in PlayerStatsTable.css - only GameDetailsPage-specific styles here */
 .player-stats-section {
   overflow: hidden;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 25px rgba(76, 175, 80, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
 }
 
-.stats-table-container {
-  overflow-x: auto;
+.player-stats-section:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 35px rgba(76, 175, 80, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
-.stats-table {
-  width: 100%;
-  border-collapse: collapse;
+/* Enhanced animations for game details page */
+.stats-table tbody tr.rank-gold {
+  animation: glow-gold 2s ease-in-out infinite;
 }
 
-.stats-table thead {
-  background: rgba(74, 144, 226, 0.15);
+@keyframes glow-gold {
+  0%, 100% { 
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4), inset 0 0 30px rgba(255, 215, 0, 0.1);
+  }
+  50% { 
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.7), inset 0 0 50px rgba(255, 215, 0, 0.2);
+  }
 }
 
-.stats-table th {
-  padding: 0.75rem 1rem;
-  text-align: left;
-  font-weight: 600;
-  color: var(--color-accent-blue);
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 1px;
+.stats-table tbody tr.rank-gold td {
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
 }
 
-.stats-table th:not(:first-child) {
-  text-align: center;
-  width: 60px;
+.rank-icon.rank-gold {
+  font-size: 2.2rem !important;
+  filter: drop-shadow(0 0 12px rgba(255, 215, 0, 1));
+  animation: pulse-icon-gold 1.5s ease-in-out infinite;
 }
 
-.stats-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: var(--color-text-secondary);
+@keyframes pulse-icon-gold {
+  0%, 100% { 
+    transform: scale(1);
+    filter: drop-shadow(0 0 12px rgba(255, 215, 0, 1));
+  }
+  50% { 
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 25px rgba(255, 215, 0, 1)) drop-shadow(0 0 40px rgba(255, 183, 0, 0.8));
+  }
 }
 
-.stats-table tbody tr:hover {
-  background: rgba(74, 144, 226, 0.08);
+.stats-table tbody tr.rank-silver {
+  animation: glow-silver 2.5s ease-in-out infinite;
 }
 
-.stats-table tbody tr:last-child td {
-  border-bottom: none;
+@keyframes glow-silver {
+  0%, 100% { 
+    box-shadow: 0 0 12px rgba(192, 192, 192, 0.3), inset 0 0 25px rgba(192, 192, 192, 0.08);
+  }
+  50% { 
+    box-shadow: 0 0 25px rgba(220, 220, 220, 0.6), inset 0 0 40px rgba(192, 192, 192, 0.15);
+  }
 }
 
-.player-name-cell {
-  font-weight: 500;
-  color: var(--color-text-primary);
+.stats-table tbody tr.rank-silver td {
+  border-bottom: 1px solid rgba(192, 192, 192, 0.3);
 }
 
-.player-profile-link {
-  color: var(--color-text-primary);
-  text-decoration: none;
-  padding: 0.25rem 0.5rem;
-  margin: -0.25rem -0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: inline-block;
+.rank-icon.rank-silver {
+  font-size: 2rem !important;
+  filter: drop-shadow(0 0 10px rgba(220, 220, 220, 0.9));
+  animation: pulse-icon-silver 1.8s ease-in-out infinite;
 }
 
-.player-profile-link:hover {
-  color: var(--color-accent-blue);
-  background: rgba(74, 144, 226, 0.15);
+@keyframes pulse-icon-silver {
+  0%, 100% { 
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(220, 220, 220, 0.9));
+  }
+  50% { 
+    transform: scale(1.18);
+    filter: drop-shadow(0 0 20px rgba(220, 220, 220, 1)) drop-shadow(0 0 35px rgba(192, 192, 192, 0.7));
+  }
 }
 
-.kills-cell {
-  text-align: center;
-  font-weight: 600;
-  color: #4caf50;
+.stats-table tbody tr.rank-bronze {
+  animation: glow-bronze 3s ease-in-out infinite;
 }
 
-.deaths-cell {
-  text-align: center;
-  font-weight: 600;
-  color: #f44336;
+@keyframes glow-bronze {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.3), inset 0 0 20px rgba(205, 127, 50, 0.08);
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(232, 168, 80, 0.5), inset 0 0 35px rgba(205, 127, 50, 0.12);
+  }
 }
 
-.assists-cell {
-  text-align: center;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+.stats-table tbody tr.rank-bronze td {
+  border-bottom: 1px solid rgba(205, 127, 50, 0.3);
+}
+
+.rank-icon.rank-bronze {
+  font-size: 1.9rem !important;
+  filter: drop-shadow(0 0 8px rgba(232, 168, 80, 0.8));
+  animation: pulse-icon-bronze 2s ease-in-out infinite;
+}
+
+@keyframes pulse-icon-bronze {
+  0%, 100% { 
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px rgba(232, 168, 80, 0.8));
+  }
+  50% { 
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 18px rgba(232, 168, 80, 1)) drop-shadow(0 0 30px rgba(205, 127, 50, 0.6));
+  }
 }
 
 .rating-cell {
@@ -195,15 +309,93 @@
   color: var(--color-accent-blue);
 }
 
+/* Sortable columns */
+.stats-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  position: relative;
+  padding-right: 1.5rem;
+}
+
+.stats-table th.sortable:hover {
+  background-color: rgba(74, 144, 226, 0.2);
+  color: var(--color-primary);
+}
+
+.stats-table th.sortable:active {
+  background-color: rgba(74, 144, 226, 0.3);
+}
+
+.stats-table th.sortable::after {
+  content: '↕';
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  opacity: 0.4;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+.stats-table th.sortable:hover::after {
+  opacity: 0.7;
+  color: var(--color-primary);
+}
+
+/* Active sort indicator */
+.stats-table th.sortable[data-sort-active="true"] {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.stats-table th.sortable[data-sort-active="true"]::after {
+  opacity: 1;
+  color: var(--color-primary);
+  content: '↓';
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.stats-table th.sortable[data-sort-active="true"][data-sort-direction="asc"]::after {
+  content: '↑';
+}
+
 /* Round Timeline */
 .rounds-section {
   overflow: hidden;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 25px rgba(74, 144, 226, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.rounds-section:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 35px rgba(74, 144, 226, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 .rounds-description {
   color: var(--color-text-tertiary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   font-size: 0.9rem;
+}
+
+.rounds-description .color-legend {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.rounds-hint {
+  color: var(--color-text-quaternary);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .rounds-timeline {
@@ -253,6 +445,17 @@
 /* Accolades */
 .accolades-section {
   overflow: hidden;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 25px rgba(255, 193, 7, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.accolades-section:hover {
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 35px rgba(255, 193, 7, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 .accolades-grid {
@@ -265,17 +468,24 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(35, 35, 35, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 10px;
   padding: 0.75rem 1rem;
   border-left: 3px solid var(--color-warning);
+  border: 1px solid rgba(255, 193, 7, 0.1);
+  border-left: 3px solid var(--color-warning);
   transition: all 0.2s ease;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .accolade-card:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(45, 45, 45, 0.7);
+  border-color: rgba(255, 193, 7, 0.2);
   transform: translateX(2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .accolade-icon {

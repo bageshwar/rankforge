@@ -101,7 +101,7 @@ public class PipelineService {
         jpaEventStore.setEntityManager(entityManager);
         EventStore eventStore = jpaEventStore;
         
-        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository);
+        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
         // Create ranking algorithm and service
@@ -110,7 +110,7 @@ public class PipelineService {
         
         // Create event processor with shared context for direct entity reference linking
         EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService, 
-                eventProcessingContext);
+                eventProcessingContext, gameRepository);
         
         // Wire event listeners
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
@@ -122,9 +122,9 @@ public class PipelineService {
         // Create scheduler for async processing
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         
-        // Create and return game ranking system
+        // Create and return game ranking system with EntityManager for cleanup
         GameRankingSystem rankingSystem = new GameRankingSystem(
-                logParser, eventProcessor, eventStore, scheduler);
+                logParser, eventProcessor, eventStore, scheduler, entityManager);
         
         logger.debug("Successfully created GameRankingSystem with all components");
         return rankingSystem;
