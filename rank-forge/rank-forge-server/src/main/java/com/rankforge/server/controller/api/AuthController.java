@@ -107,8 +107,10 @@ public class AuthController {
             UserDTO userDTO = new UserDTO(user);
             AuthResponseDTO authResponse = new AuthResponseDTO(token, userDTO, expiresAt);
             
-            // Redirect to frontend with token in query parameter
-            String redirectUrl = frontendCallbackUrl + "?token=" + token;
+            // SECURITY NOTE: Token in URL query param can appear in logs/referrers
+            // For production, consider implementing a code exchange pattern
+            // For v0, this is acceptable as tokens are short-lived (7 days) and HTTPS required
+            String redirectUrl = frontendCallbackUrl + "?token=" + java.net.URLEncoder.encode(token, java.nio.charset.StandardCharsets.UTF_8);
             
             // Return redirect response
             return ResponseEntity.status(HttpStatus.FOUND)
@@ -118,15 +120,15 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             logger.error("Invalid Steam authentication: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Invalid Steam authentication: " + e.getMessage()));
+                    .body(Map.of("error", "Invalid Steam authentication"));
         } catch (IOException e) {
             logger.error("Error fetching Steam profile: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to fetch Steam profile: " + e.getMessage()));
+                    .body(Map.of("error", "Failed to fetch Steam profile"));
         } catch (Exception e) {
             logger.error("Unexpected error during Steam authentication: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Authentication failed: " + e.getMessage()));
+                    .body(Map.of("error", "Authentication failed"));
         }
     }
     

@@ -69,9 +69,13 @@ See `STEAM_LOGIN_TESTING.md` for complete testing guide.
 
 ## Known Limitations
 - JWT stored in localStorage (standard for SPAs, but not httpOnly)
+- JWT token passed in URL query parameter during OAuth callback (can appear in logs/referrers)
+  - Mitigation: Tokens are short-lived (7 days), HTTPS required in production
+  - Future: Implement code exchange pattern for better security
 - No token refresh mechanism (tokens expire after 7 days)
 - No rate limiting on auth endpoints (can be added later)
 - VAC ban check is non-blocking (fails gracefully)
+- Error messages don't expose internal details (good for security)
 
 ## Future Enhancements
 - Token refresh endpoint
