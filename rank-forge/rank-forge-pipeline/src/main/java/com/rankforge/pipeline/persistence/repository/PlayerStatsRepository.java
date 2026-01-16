@@ -61,8 +61,10 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
     /**
      * Find the latest stats for all players (one record per player - most recent gameTimestamp)
      * Gets all records, then filters to latest per player using a subquery
+     * Uses JOIN FETCH to eagerly load the game relationship
      */
     @Query("SELECT p FROM PlayerStatsEntity p " +
+           "LEFT JOIN FETCH p.game " +
            "WHERE p.gameTimestamp = (" +
            "  SELECT MAX(p2.gameTimestamp) FROM PlayerStatsEntity p2 WHERE p2.playerId = p.playerId" +
            ") " +
@@ -119,6 +121,38 @@ public interface PlayerStatsRepository extends JpaRepository<PlayerStatsEntity, 
      */
     @Query("SELECT p FROM PlayerStatsEntity p WHERE p.game.id = :gameId")
     List<PlayerStatsEntity> findByGameId(@Param("gameId") Long gameId);
+    
+    /**
+     * Find all player stats entries for games in the specified list.
+     * This returns all stats records (not just latest per player).
+     * Used as a first step, then we filter to latest per player in Java.
+     * 
+     * @param gameIds List of game IDs to filter by
+     * @return List of all PlayerStatsEntity entries for the specified games
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p WHERE p.game.id IN :gameIds ORDER BY p.playerId ASC, p.gameTimestamp DESC, p.id DESC")
+    List<PlayerStatsEntity> findAllStatsByGameIds(@Param("gameIds") List<Long> gameIds);
+    
+    /**
+     * Find the latest stats for all players filtered by game IDs.
+     * Gets the latest stats per player (most recent gameTimestamp) for stats that belong to the specified games.
+     * This is used for clan-based filtering in all-time leaderboards.
+     * 
+     * @param gameIds List of game IDs to filter by
+     * @return List of PlayerStatsEntity with latest stats per player for the specified games
+     */
+    @Query("SELECT p FROM PlayerStatsEntity p " +
+           "WHERE p.game.id IN :gameIds " +
+           "AND p.gameTimestamp = (" +
+           "  SELECT MAX(p2.gameTimestamp) FROM PlayerStatsEntity p2 " +
+           "  WHERE p2.playerId = p.playerId AND p2.game.id IN :gameIds" +
+           ") " +
+           "AND p.id = (" +
+           "  SELECT MAX(p3.id) FROM PlayerStatsEntity p3 " +
+           "  WHERE p3.playerId = p.playerId AND p3.game.id IN :gameIds AND p3.gameTimestamp = p.gameTimestamp" +
+           ") " +
+           "ORDER BY p.rank ASC")
+    List<PlayerStatsEntity> findLatestStatsForAllPlayersByGameIds(@Param("gameIds") List<Long> gameIds);
     
     /**
      * Find all player stats records within a specific month range (inclusive)

@@ -43,11 +43,13 @@ public class LogProcessingService {
     
     private final S3Service s3Service;
     private final PipelineService pipelineService;
+    private final PlayerRankingService playerRankingService;
 
     @Autowired
-    public LogProcessingService(S3Service s3Service, PipelineService pipelineService) {
+    public LogProcessingService(S3Service s3Service, PipelineService pipelineService, PlayerRankingService playerRankingService) {
         this.s3Service = s3Service;
         this.pipelineService = pipelineService;
+        this.playerRankingService = playerRankingService;
     }
 
     /**
@@ -91,6 +93,18 @@ public class LogProcessingService {
                 
                 // Process lines using pipeline
                 processLogLines(rankingSystem, lines, s3Path, clan);
+                
+                // Evict cache for the clan after processing completes
+                if (clan != null && clan.getId() != null) {
+                    try {
+                        playerRankingService.evictCacheForClan(clan.getId());
+                        logger.info("Evicted leaderboard cache for clan {} after processing job {}", clan.getId(), jobId);
+                    } catch (Exception e) {
+                        logger.warn("Failed to evict cache for clan {} after processing job {}: {}", 
+                                clan.getId(), jobId, e.getMessage());
+                        // Don't fail the job if cache eviction fails
+                    }
+                }
                 
                 logger.info("Successfully completed log processing job {} for S3 path: {}", jobId, s3Path);
                 

@@ -48,6 +48,9 @@ class LogProcessingServiceTest {
 
     @Mock
     private PipelineService pipelineService;
+    
+    @Mock
+    private PlayerRankingService playerRankingService;
 
     @Mock
     private GameRankingSystem gameRankingSystem;
@@ -56,7 +59,7 @@ class LogProcessingServiceTest {
 
     @BeforeEach
     void setUp() {
-        logProcessingService = new LogProcessingService(s3Service, pipelineService);
+        logProcessingService = new LogProcessingService(s3Service, pipelineService, playerRankingService);
     }
 
     @Test

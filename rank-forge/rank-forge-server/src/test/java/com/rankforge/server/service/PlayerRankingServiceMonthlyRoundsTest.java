@@ -73,6 +73,9 @@ class PlayerRankingServiceMonthlyRoundsTest {
     @Mock
     private ClanService clanService;
     
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
+    
     private PlayerRankingService playerRankingService;
     
     private Instant novemberStart;
@@ -87,7 +90,8 @@ class PlayerRankingServiceMonthlyRoundsTest {
                 gameEventRepository, 
                 objectMapper,
                 rankingAlgorithm,
-                clanService
+                clanService,
+                cacheManager
         );
         
         // November 2025 boundaries

@@ -59,13 +59,16 @@ class PlayerRankingServiceEmptyDatabaseTest {
 
     @Mock
     private ClanService clanService;
+    
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
 
     private PlayerRankingService playerRankingService;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper, rankingAlgorithm, clanService);
+        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper, rankingAlgorithm, clanService, cacheManager);
     }
 
     @Test
