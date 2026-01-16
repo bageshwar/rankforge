@@ -12,10 +12,9 @@ export const ClanManagementSection = () => {
   const [creating, setCreating] = useState(false);
   
   // Form state
-  const [appServerId, setAppServerId] = useState<string>('');
   const [clanName, setClanName] = useState<string>('');
   const [telegramChannelId, setTelegramChannelId] = useState<string>('');
-  const [serverCheckResult, setServerCheckResult] = useState<{ claimed: boolean } | null>(null);
+  const [newlyCreatedClan, setNewlyCreatedClan] = useState<ClanDTO | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -37,67 +36,29 @@ export const ClanManagementSection = () => {
     }
   };
 
-  const checkServer = async () => {
-    const serverId = parseInt(appServerId);
-    if (isNaN(serverId) || serverId <= 0) {
-      setServerCheckResult(null);
-      return;
-    }
-
-    try {
-      const result = await clansApi.checkAppServer(serverId);
-      setServerCheckResult(result);
-    } catch (err) {
-      console.error('Error checking server:', err);
-      setServerCheckResult({ claimed: false });
-    }
-  };
-
-  useEffect(() => {
-    if (appServerId) {
-      const timeoutId = setTimeout(() => {
-        checkServer();
-      }, 500); // Debounce
-      return () => clearTimeout(timeoutId);
-    } else {
-      setServerCheckResult(null);
-    }
-  }, [appServerId]);
-
   const handleCreateClan = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const serverId = parseInt(appServerId);
-    if (isNaN(serverId) || serverId <= 0) {
-      setError('Please enter a valid app server ID');
-      return;
-    }
-
-    if (serverCheckResult?.claimed) {
-      setError('This app server ID is already claimed by another clan');
-      return;
-    }
 
     try {
       setCreating(true);
       setError(null);
       
       const request: CreateClanRequest = {
-        appServerId: serverId,
         name: clanName.trim() || undefined,
         telegramChannelId: telegramChannelId.trim() || undefined,
       };
       
-      await clansApi.create(request);
+      const createdClan = await clansApi.create(request);
+      
+      // Store the newly created clan with API key
+      setNewlyCreatedClan(createdClan);
       
       // Reset form
-      setAppServerId('');
       setClanName('');
       setTelegramChannelId('');
       setShowCreateForm(false);
-      setServerCheckResult(null);
       
-      // Reload clans
+      // Reload clans to get updated list
       await loadClans();
     } catch (err: any) {
       console.error('Error creating clan:', err);
@@ -106,6 +67,10 @@ export const ClanManagementSection = () => {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleDismissApiKey = () => {
+    setNewlyCreatedClan(null);
   };
 
   const handleTransferAdmin = async (clanId: number, newAdminId: number) => {
@@ -128,7 +93,35 @@ export const ClanManagementSection = () => {
       
       {error && <div className="clan-error-message">{error}</div>}
 
-      {/* Create Clan Form */}
+      {/* Show API Key for newly created clan */}
+      {newlyCreatedClan && newlyCreatedClan.apiKey && (
+        <div className="api-key-display">
+          <h3>✅ Clan Created Successfully!</h3>
+          <p className="api-key-instructions">
+            Your API key has been generated. <strong>Copy it now</strong> - you won't be able to see it again!
+          </p>
+          <div className="api-key-box">
+            <code className="api-key-value">{newlyCreatedClan.apiKey}</code>
+            <button
+              className="copy-api-key-btn"
+              onClick={() => {
+                navigator.clipboard.writeText(newlyCreatedClan.apiKey!);
+                alert('API key copied to clipboard!');
+              }}
+            >
+              📋 Copy
+            </button>
+          </div>
+          <p className="api-key-next-steps">
+            <strong>Next steps:</strong> Configure the App Server ID after your server boots. Visit the Clan Management page for full setup.
+          </p>
+          <button className="dismiss-api-key-btn" onClick={handleDismissApiKey}>
+            Got it, continue
+          </button>
+        </div>
+      )}
+
+      {/* Create Clan Form (Step 1) */}
       {!showCreateForm ? (
         <button
           className="create-clan-btn"
@@ -138,27 +131,10 @@ export const ClanManagementSection = () => {
         </button>
       ) : (
         <form className="create-clan-form" onSubmit={handleCreateClan}>
-          <h3>Create New Clan</h3>
-          
-          <div className="form-group">
-            <label htmlFor="appServerId">
-              App Server ID <span className="required">*</span>
-            </label>
-            <input
-              id="appServerId"
-              type="number"
-              value={appServerId}
-              onChange={(e) => setAppServerId(e.target.value)}
-              placeholder="Enter app server ID"
-              required
-              min="1"
-            />
-            {serverCheckResult !== null && (
-              <div className={`server-check-result ${serverCheckResult.claimed ? 'claimed' : 'available'}`}>
-                {serverCheckResult.claimed ? '⚠️ Already claimed' : '✓ Available'}
-              </div>
-            )}
-          </div>
+          <h3>Create New Clan (Step 1 of 2)</h3>
+          <p className="form-description">
+            Create your clan and get an API key. You'll configure the App Server ID in step 2 after your server boots.
+          </p>
 
           <div className="form-group">
             <label htmlFor="clanName">Clan Name (Optional)</label>
@@ -190,10 +166,8 @@ export const ClanManagementSection = () => {
               className="cancel-btn"
               onClick={() => {
                 setShowCreateForm(false);
-                setAppServerId('');
                 setClanName('');
                 setTelegramChannelId('');
-                setServerCheckResult(null);
                 setError(null);
               }}
             >
@@ -202,9 +176,9 @@ export const ClanManagementSection = () => {
             <button
               type="submit"
               className="submit-btn"
-              disabled={creating || serverCheckResult?.claimed === true}
+              disabled={creating}
             >
-              {creating ? 'Creating...' : 'Create Clan'}
+              {creating ? 'Creating...' : 'Create Clan & Generate API Key'}
             </button>
           </div>
         </form>
@@ -220,7 +194,12 @@ export const ClanManagementSection = () => {
                 <div className="clan-info">
                   <h4>{clan.name || `Clan #${clan.id}`}</h4>
                   <div className="clan-meta">
-                    <span className="clan-id">App Server ID: {clan.appServerId}</span>
+                    <span className={`clan-status ${!clan.appServerId || clan.status === 'PENDING' ? 'pending' : 'active'}`}>
+                      {!clan.appServerId || clan.status === 'PENDING' ? '⏳ PENDING' : '✅ ACTIVE'}
+                    </span>
+                    {clan.appServerId && (
+                      <span className="clan-id">App Server ID: {clan.appServerId}</span>
+                    )}
                     {clan.adminUserId === user?.id && (
                       <span className="admin-badge">👑 Admin</span>
                     )}

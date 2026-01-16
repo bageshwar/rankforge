@@ -299,3 +299,110 @@
 .no-clans-message p {
   margin: 0.5rem 0;
 }
+
+/* API Key Display */
+.api-key-display {
+  background: rgba(102, 126, 234, 0.2);
+  border: 2px solid rgba(102, 126, 234, 0.5);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.api-key-display h3 {
+  color: #fff;
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+}
+
+.api-key-instructions {
+  color: #e0e0e0;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.api-key-box {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.api-key-value {
+  flex: 1;
+  color: #4ade80;
+  font-size: 1rem;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.copy-api-key-btn {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.copy-api-key-btn:hover {
+  background: rgba(74, 222, 128, 0.3);
+}
+
+.api-key-next-steps {
+  color: #e0e0e0;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.dismiss-api-key-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  margin-top: 1rem;
+  transition: all 0.3s ease;
+}
+
+.dismiss-api-key-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Status Badge */
+.clan-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.clan-status.pending {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.clan-status.active {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+/* Form Description */
+.form-description {
+  color: #b0b0b0;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}

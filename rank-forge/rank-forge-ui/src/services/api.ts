@@ -191,12 +191,15 @@ export interface LeaderboardResponseDTO {
 // Clan types
 export interface ClanDTO {
   id: number;
-  appServerId: number;
+  appServerId?: number | null; // Nullable - only set after step 2
   name?: string;
   telegramChannelId?: string;
   adminUserId: number;
   createdAt: number;
   updatedAt: number;
+  apiKey?: string; // Only populated when creating new clan (shown once)
+  hasApiKey?: boolean; // Indicates if key exists (but not the value)
+  status?: string; // PENDING or ACTIVE
 }
 
 export interface ClanMembershipDTO {
@@ -207,9 +210,24 @@ export interface ClanMembershipDTO {
 }
 
 export interface CreateClanRequest {
-  appServerId: number;
   name?: string;
   telegramChannelId?: string;
+  // appServerId is NOT in step 1 - it's configured in step 2
+}
+
+export interface ConfigureAppServerRequest {
+  appServerId: number;
+}
+
+export interface RegenerateApiKeyResponse {
+  apiKey: string;
+  rotatedAt: number;
+}
+
+export interface ApiKeyStatus {
+  hasApiKey: boolean;
+  apiKeyCreatedAt?: number;
+  apiKeyRotatedAt?: number;
 }
 
 export interface TransferAdminRequest {
@@ -432,6 +450,23 @@ export const usersApi = {
 export const clansApi = {
   create: async (clanData: CreateClanRequest): Promise<ClanDTO> => {
     const response = await apiClient.post<ClanDTO>('/clans', clanData);
+    return response.data;
+  },
+
+  configureAppServerId: async (clanId: number, appServerId: number): Promise<ClanDTO> => {
+    const response = await apiClient.put<ClanDTO>(`/clans/${clanId}/configure-app-server`, {
+      appServerId,
+    });
+    return response.data;
+  },
+
+  regenerateApiKey: async (clanId: number): Promise<RegenerateApiKeyResponse> => {
+    const response = await apiClient.post<RegenerateApiKeyResponse>(`/clans/${clanId}/regenerate-api-key`);
+    return response.data;
+  },
+
+  getApiKeyStatus: async (clanId: number): Promise<ApiKeyStatus> => {
+    const response = await apiClient.get<ApiKeyStatus>(`/clans/${clanId}/api-key-status`);
     return response.data;
   },
 
