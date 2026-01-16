@@ -4,9 +4,23 @@
   gap: 2rem;
   margin-bottom: 2rem;
   padding: 2rem;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.my-profile-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent-blue), var(--color-accent-orange), var(--color-accent-blue));
 }
 
 .profile-avatar-section {
@@ -22,12 +36,13 @@
   height: 48px;
   border: 3px solid;
   border-radius: 50%;
-  background: white;
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 .profile-info {
@@ -35,27 +50,34 @@
 }
 
 .player-name {
-  font-size: 2rem;
-  margin: 0 0 0.5rem;
-  color: #333;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, var(--color-text-primary) 0%, var(--color-text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .player-id-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: #f0f0f0;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  background: rgba(74, 144, 226, 0.2);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--color-accent-blue);
+  margin-bottom: 0.75rem;
 }
 
 .vac-banned-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: #ffebee;
-  color: #d32f2f;
-  border-radius: 4px;
+  background: rgba(211, 47, 47, 0.2);
+  border: 1px solid rgba(211, 47, 47, 0.4);
+  color: #ff6b6b;
+  border-radius: 20px;
   font-size: 0.875rem;
   font-weight: 500;
   margin-left: 0.5rem;
@@ -66,8 +88,9 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
   border: 2px solid;
-  border-radius: 8px;
+  border-radius: 12px;
   margin-top: 0.5rem;
 }
 
@@ -79,7 +102,7 @@
 .rank-number {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #333;
+  color: var(--color-text-primary);
 }
 
 .stats-grid {
@@ -90,25 +113,51 @@
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
   padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(74, 144, 226, 0) 0%, rgba(74, 144, 226, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(74, 144, 226, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
 }
 
 .stat-label {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  margin-bottom: 0.25rem;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #333;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
 }
 
 .quick-actions {
@@ -121,46 +170,51 @@
 .action-btn {
   display: inline-block;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--color-accent-blue);
+  color: var(--color-text-primary);
   text-decoration: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   border: none;
   cursor: pointer;
 }
 
 .action-btn:hover {
+  background: var(--color-accent-blue-secondary);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .action-btn.secondary {
-  background: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .action-btn.secondary:hover {
-  box-shadow: 0 4px 12px rgba(27, 40, 56, 0.4);
+  border-color: rgba(74, 144, 226, 0.4);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.2);
 }
 
 .no-stats-message {
   text-align: center;
   padding: 3rem;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(45, 45, 45, 0.9) 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .no-stats-message p {
   font-size: 1.125rem;
-  color: #666;
+  color: var(--color-text-secondary);
   margin-bottom: 1.5rem;
 }
 
 .error-message {
-  background: #ffebee;
-  color: #d32f2f;
+  background: rgba(211, 47, 47, 0.2);
+  border: 1px solid rgba(211, 47, 47, 0.4);
+  color: #ff6b6b;
   padding: 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
@@ -168,14 +222,21 @@
 }
 
 .back-btn {
-  display: inline-block;
-  margin-bottom: 1.5rem;
-  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--color-accent-blue);
+  color: var(--color-text-primary);
+  border-radius: 8px;
   text-decoration: none;
   font-weight: 500;
-  transition: opacity 0.2s;
+  margin-bottom: 2rem;
+  transition: all 0.3s ease;
 }
 
 .back-btn:hover {
-  opacity: 0.8;
+  background: var(--color-accent-blue-secondary);
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.4);
+  transform: translateY(-2px);
 }

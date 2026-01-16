@@ -6,18 +6,21 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.8) 0%, rgba(45, 45, 45, 0.8) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 0.5rem 1rem;
-  color: white;
+  color: var(--color-text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
 .user-menu-trigger:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, rgba(45, 45, 45, 0.9) 0%, rgba(26, 26, 26, 0.9) 100%);
+  border-color: rgba(74, 144, 226, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
 }
 
 .user-name {
@@ -40,9 +43,11 @@
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(45, 45, 45, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
   min-width: 200px;
   z-index: 1000;
   overflow: hidden;
@@ -57,23 +62,25 @@
   background: none;
   border: none;
   text-align: left;
-  color: #333;
+  color: var(--color-text-primary);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
   text-decoration: none;
   font-size: 0.9375rem;
 }
 
 .user-menu-item:hover {
-  background: #f5f5f5;
+  background: rgba(74, 144, 226, 0.15);
+  color: var(--color-accent-blue);
 }
 
 .user-menu-item.logout {
-  color: #d32f2f;
+  color: #ff6b6b;
 }
 
 .user-menu-item.logout:hover {
-  background: #ffebee;
+  background: rgba(211, 47, 47, 0.15);
+  color: #ff8787;
 }
 
 .menu-icon {
@@ -84,6 +91,6 @@
 
 .user-menu-divider {
   height: 1px;
-  background: #e0e0e0;
+  background: rgba(255, 255, 255, 0.1);
   margin: 0.25rem 0;
 }
