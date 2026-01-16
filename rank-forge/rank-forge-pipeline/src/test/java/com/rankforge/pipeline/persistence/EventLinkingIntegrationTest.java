@@ -600,6 +600,7 @@ class EventLinkingIntegrationTest {
 
     private GameEntity createGameEntity(Instant gameOverTimestamp, String map, int team1Score, int team2Score) {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setGameOverTimestamp(gameOverTimestamp);
         game.setMap(map);
         game.setMode("competitive");

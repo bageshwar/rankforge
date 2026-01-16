@@ -5,23 +5,36 @@ import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { gamesApi } from '../services/api';
 import type { GameDTO } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import './GamesPage.css';
 
 export const GamesPage = () => {
+  const { user } = useAuth();
   const [games, setGames] = useState<GameDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Get default clan ID from user
+  const defaultClanId = user?.defaultClanId || null;
 
   useEffect(() => {
     loadGames();
-  }, [limit]);
+  }, [limit, defaultClanId]);
 
   const loadGames = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = limit ? await gamesApi.getRecent(limit) : await gamesApi.getAll();
+      
+      // Require default clan - show error if not set
+      if (!defaultClanId) {
+        setError('Please select a default clan in your profile to view games.');
+        setGames([]);
+        return;
+      }
+      
+      const data = limit ? await gamesApi.getRecent(limit, defaultClanId) : await gamesApi.getAll(defaultClanId);
       setGames(data);
     } catch (err) {
       setError('Failed to load games. Please try again later.');
@@ -74,7 +87,13 @@ export const GamesPage = () => {
         </div>
       </div>
 
-      {games.length === 0 ? (
+      {!defaultClanId && (
+        <div className="clan-required-message">
+          <p>⚠️ Please select a default clan in your <Link to="/my-profile" className="inline-link">profile</Link> to view games.</p>
+        </div>
+      )}
+
+      {games.length === 0 && defaultClanId ? (
         <div className="no-games">
           <h3>No games processed yet</h3>
           <p>Games will appear here once the CS2 log processing pipeline has analyzed completed matches.</p>

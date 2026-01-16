@@ -20,6 +20,10 @@ package com.rankforge.server.controller.api;
 
 import com.rankforge.server.dto.PlayerProfileDTO;
 import com.rankforge.server.dto.UserDTO;
+import com.rankforge.server.entity.Clan;
+import com.rankforge.server.entity.User;
+import com.rankforge.server.repository.UserRepository;
+import com.rankforge.server.service.ClanService;
 import com.rankforge.server.service.PlayerProfileService;
 import com.rankforge.server.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -49,6 +54,12 @@ public class UserController {
     
     @Autowired
     private PlayerProfileService playerProfileService;
+    
+    @Autowired
+    private ClanService clanService;
+    
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Get current authenticated user profile
@@ -135,6 +146,55 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error fetching user avatar: {}", e.getMessage());
             return ResponseEntity.ok(Map.of("avatarUrl", "/default-avatar.png"));
+        }
+    }
+    
+    /**
+     * Update default clan for current user
+     */
+    @PutMapping("/me/default-clan")
+    public ResponseEntity<?> updateDefaultClan(@RequestBody Map<String, Long> request, HttpServletRequest httpRequest) {
+        try {
+            String steamId64 = (String) httpRequest.getAttribute("steamId64");
+            
+            if (steamId64 == null) {
+                return ResponseEntity.status(401)
+                        .body(Map.of("error", "Unauthorized. Missing authentication."));
+            }
+            
+            Long clanId = request.get("clanId");
+            
+            // Get current user
+            Optional<User> userOpt = userRepository.findBySteamId64(steamId64);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(404)
+                        .body(Map.of("error", "User not found"));
+            }
+            
+            User user = userOpt.get();
+            
+            // If clanId is provided, verify it exists and user is a member
+            if (clanId != null) {
+                // Verify clan exists and user is a member
+                List<Clan> userClans = clanService.getClansForUser(user.getId());
+                boolean isMember = userClans.stream().anyMatch(c -> c.getId().equals(clanId));
+                
+                if (!isMember) {
+                    return ResponseEntity.status(403)
+                            .body(Map.of("error", "You are not a member of this clan"));
+                }
+            }
+            
+            // Update default clan
+            user.setDefaultClanId(clanId);
+            userRepository.save(user);
+            
+            return ResponseEntity.ok(Map.of("success", true, "defaultClanId", clanId != null ? clanId : "null"));
+            
+        } catch (Exception e) {
+            logger.error("Error updating default clan: {}", e.getMessage(), e);
+            return ResponseEntity.status(500)
+                    .body(Map.of("error", "Failed to update default clan"));
         }
     }
     

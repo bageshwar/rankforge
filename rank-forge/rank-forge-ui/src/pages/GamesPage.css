@@ -175,6 +175,26 @@
   margin: 2rem 0;
 }
 
+.clan-required-message {
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  color: #ffc107;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.clan-required-message .inline-link {
+  color: #ffc107;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.clan-required-message .inline-link:hover {
+  color: #ffd700;
+}
+
 @media (max-width: 768px) {
   .games-table {
     font-size: 0.85rem;

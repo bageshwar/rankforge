@@ -5,15 +5,17 @@ import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
 import { PlayerAvatar } from '../components/UI/PlayerAvatar';
 import { useAuth } from '../contexts/AuthContext';
-import { playersApi } from '../services/api';
+import { playersApi, clansApi, usersApi, type ClanDTO } from '../services/api';
 import type { PlayerProfileDTO } from '../services/api';
 import './MyProfilePage.css';
 
 export const MyProfilePage = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [profile, setProfile] = useState<PlayerProfileDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [clans, setClans] = useState<ClanDTO[]>([]);
+  const [updatingClan, setUpdatingClan] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -29,6 +31,10 @@ export const MyProfilePage = () => {
         // Load player stats (don't refresh user - it causes infinite loop)
         const data = await playersApi.getProfile(user.steamId3);
         setProfile(data);
+        
+        // Load clans
+        const userClans = await clansApi.getMyClans();
+        setClans(userClans);
       } catch (err) {
         console.error('Error loading profile:', err);
         setError('Failed to load your profile. Please try again later.');
@@ -39,6 +45,19 @@ export const MyProfilePage = () => {
 
     loadProfile();
   }, [user?.steamId3]); // Only depend on steamId3, not entire user object
+
+  const handleDefaultClanChange = async (clanId: number | null) => {
+    try {
+      setUpdatingClan(true);
+      await usersApi.updateDefaultClan(clanId);
+      await refreshUser(); // Refresh user to get updated defaultClanId
+    } catch (err) {
+      console.error('Error updating default clan:', err);
+      alert('Failed to update default clan. Please try again.');
+    } finally {
+      setUpdatingClan(false);
+    }
+  };
 
   const formatNumber = (num: number, decimals: number = 2) => {
     return num.toFixed(decimals);
@@ -180,6 +199,44 @@ export const MyProfilePage = () => {
               </a>
             )}
           </motion.div>
+
+          {/* Default Clan Selector */}
+          <motion.div
+            className="default-clan-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+          >
+            <h3 className="section-subtitle">Default Clan</h3>
+            <p className="section-description">
+              Select a default clan to filter rankings and games. You can manage clans on the{' '}
+              <Link to="/clan-management" className="inline-link">Clan Management</Link> page.
+            </p>
+            <div className="clan-selector-wrapper">
+              <select
+                className="default-clan-select"
+                value={user.defaultClanId || ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  handleDefaultClanChange(value === '' ? null : parseInt(value));
+                }}
+                disabled={updatingClan || clans.length === 0}
+              >
+                <option value="">No Default Clan</option>
+                {clans.map((clan) => (
+                  <option key={clan.id} value={clan.id}>
+                    {clan.name || `Clan #${clan.id}`} {clan.adminUserId === user.id ? '👑' : ''}
+                  </option>
+                ))}
+              </select>
+              {clans.length === 0 && (
+                <p className="no-clans-hint">
+                  You don't have any clans yet.{' '}
+                  <Link to="/clan-management" className="inline-link">Create one</Link> to get started.
+                </p>
+              )}
+            </div>
+          </motion.div>
         </>
       ) : (
         <div className="no-stats-message">
@@ -188,6 +245,46 @@ export const MyProfilePage = () => {
             View Rankings →
           </Link>
         </div>
+      )}
+
+      {/* Default Clan Selector (shown even without stats) */}
+      {!profile && (
+        <motion.div
+          className="default-clan-section"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <h3 className="section-subtitle">Default Clan</h3>
+          <p className="section-description">
+            Select a default clan to filter rankings and games. You can manage clans on the{' '}
+            <Link to="/clan-management" className="inline-link">Clan Management</Link> page.
+          </p>
+          <div className="clan-selector-wrapper">
+            <select
+              className="default-clan-select"
+              value={user.defaultClanId || ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                handleDefaultClanChange(value === '' ? null : parseInt(value));
+              }}
+              disabled={updatingClan || clans.length === 0}
+            >
+              <option value="">No Default Clan</option>
+              {clans.map((clan) => (
+                <option key={clan.id} value={clan.id}>
+                  {clan.name || `Clan #${clan.id}`} {clan.adminUserId === user.id ? '👑' : ''}
+                </option>
+              ))}
+            </select>
+            {clans.length === 0 && (
+              <p className="no-clans-hint">
+                You don't have any clans yet.{' '}
+                <Link to="/clan-management" className="inline-link">Create one</Link> to get started.
+              </p>
+            )}
+          </div>
+        </motion.div>
       )}
     </PageContainer>
   );

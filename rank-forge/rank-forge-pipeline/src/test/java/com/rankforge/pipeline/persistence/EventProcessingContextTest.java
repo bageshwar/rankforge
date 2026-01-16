@@ -704,6 +704,7 @@ class EventProcessingContextTest {
      */
     private GameEntity createTestGame() {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setMap("de_dust2");
         game.setMode("competitive");
         game.setTeam1Score(16);

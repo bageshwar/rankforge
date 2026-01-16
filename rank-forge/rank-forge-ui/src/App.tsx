@@ -10,6 +10,7 @@ import { GameDetailsPage } from './pages/GameDetailsPage';
 import { RoundDetailsPage } from './pages/RoundDetailsPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { MyProfilePage } from './pages/MyProfilePage';
+import { ClanManagementPage } from './pages/ClanManagementPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { WeaponSpriteTest } from './pages/WeaponSpriteTest';
 import { SpecialIconsTest } from './pages/SpecialIconsTest';
@@ -36,6 +37,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MyProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/clan-management"
+                element={
+                  <ProtectedRoute>
+                    <ClanManagementPage />
                   </ProtectedRoute>
                 }
               />

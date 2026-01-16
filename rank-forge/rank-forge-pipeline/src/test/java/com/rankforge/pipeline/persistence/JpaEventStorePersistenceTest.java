@@ -376,6 +376,7 @@ class JpaEventStorePersistenceTest {
 
     private GameEntity createTestGame() {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setGameOverTimestamp(Instant.now());
         game.setMap("de_dust2");
         game.setMode("competitive");

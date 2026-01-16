@@ -31,6 +31,7 @@ import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.LeaderboardResponseDTO;
 import com.rankforge.server.dto.PlayerRankingDTO;
+import com.rankforge.server.entity.Clan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,27 +61,31 @@ public class PlayerRankingService {
     private final GameEventRepository gameEventRepository;
     private final ObjectMapper objectMapper;
     private final RankingAlgorithm rankingAlgorithm;
+    private final ClanService clanService;
     
     @Autowired
     public PlayerRankingService(PlayerStatsRepository playerStatsRepository, 
                                GameRepository gameRepository,
                                GameEventRepository gameEventRepository,
                                ObjectMapper objectMapper,
-                               RankingAlgorithm rankingAlgorithm) {
+                               RankingAlgorithm rankingAlgorithm,
+                               ClanService clanService) {
         this.playerStatsRepository = playerStatsRepository;
         this.gameRepository = gameRepository;
         this.gameEventRepository = gameEventRepository;
         this.objectMapper = objectMapper;
         this.rankingAlgorithm = rankingAlgorithm;
+        this.clanService = clanService;
     }
 
     /**
      * Get all player rankings sorted by existing rank field
      * Fetches real data from the persistence layer and sorts by rank
+     * @param clanId Required clan ID to filter rankings by appServerId
      */
-    public List<PlayerRankingDTO> getAllPlayerRankings() {
+    public List<PlayerRankingDTO> getAllPlayerRankings(Long clanId) {
         try {
-            List<PlayerStats> playerStats = getAllPlayerStatsFromDatabase();
+            List<PlayerStats> playerStats = getAllPlayerStatsFromDatabase(clanId);
             
             // Sort by existing rank field (descending order - rank 1 is best)
             playerStats.sort((p1, p2) -> Integer.compare(p2.getRank(), p1.getRank()));
@@ -98,9 +103,11 @@ public class PlayerRankingService {
 
     /**
      * Get top N player rankings
+     * @param limit Number of top players
+     * @param clanId Required clan ID to filter rankings
      */
-    public List<PlayerRankingDTO> getTopPlayerRankings(int limit) {
-        return getAllPlayerRankings().stream()
+    public List<PlayerRankingDTO> getTopPlayerRankings(int limit, Long clanId) {
+        return getAllPlayerRankings(clanId).stream()
                 .limit(limit)
                 .collect(Collectors.toList());
     }
@@ -108,29 +115,54 @@ public class PlayerRankingService {
     /**
      * Get all player rankings with summary statistics
      * Cached for 1 minute as data changes when new games are processed
+     * @param clanId Required clan ID to filter rankings
      */
-    @Cacheable(value = "allTimeLeaderboard", key = "'all-time'")
-    public LeaderboardResponseDTO getAllPlayerRankingsWithStats() {
-        List<PlayerRankingDTO> rankings = getAllPlayerRankings();
-        long totalGames = playerStatsRepository.countTotalDistinctGames();
-        // Calculate total rounds from games, not from player stats (to avoid double-counting)
-        long totalRounds = gameRepository.calculateTotalRounds();
+    @Cacheable(value = "allTimeLeaderboard", key = "'clan-' + #clanId")
+    public LeaderboardResponseDTO getAllPlayerRankingsWithStats(Long clanId) {
+        List<PlayerRankingDTO> rankings = getAllPlayerRankings(clanId);
+        
+        // Filter by clan's appServerId (required)
+        Optional<Clan> clanOpt = clanService.getClanById(clanId);
+        if (clanOpt.isEmpty()) {
+            LOGGER.warn("Clan not found: {}", clanId);
+            return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+        }
+        Long appServerId = clanOpt.get().getAppServerId();
+        List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+        long totalGames = clanGames.size();
+        long totalRounds = clanGames.stream()
+            .mapToLong(g -> (g.getTeam1Score() + g.getTeam2Score()))
+            .sum();
+        
         return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, rankings.size());
     }
     
     /**
      * Get top N player rankings with summary statistics
      * Cached for 1 minute as data changes when new games are processed
+     * @param limit Number of top players
+     * @param clanId Required clan ID to filter rankings
      */
-    @Cacheable(value = "topLeaderboard", key = "#limit")
-    public LeaderboardResponseDTO getTopPlayerRankingsWithStats(int limit) {
-        List<PlayerRankingDTO> rankings = getTopPlayerRankings(limit);
-        long totalGames = playerStatsRepository.countTotalDistinctGames();
-        // For top N, we still show total games and rounds across all players
-        List<PlayerRankingDTO> allRankings = getAllPlayerRankings();
-        // Calculate total rounds from games, not from player stats (to avoid double-counting)
-        long totalRounds = gameRepository.calculateTotalRounds();
-        return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, allRankings.size());
+    @Cacheable(value = "topLeaderboard", key = "#limit + '-' + #clanId")
+    public LeaderboardResponseDTO getTopPlayerRankingsWithStats(int limit, Long clanId) {
+        List<PlayerRankingDTO> rankings = getTopPlayerRankings(limit, clanId);
+        
+        // Filter by clan's appServerId (required)
+        Optional<Clan> clanOpt = clanService.getClanById(clanId);
+        if (clanOpt.isEmpty()) {
+            LOGGER.warn("Clan not found: {}", clanId);
+            return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+        }
+        Long appServerId = clanOpt.get().getAppServerId();
+        List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+        long totalGames = clanGames.size();
+        long totalRounds = clanGames.stream()
+            .mapToLong(g -> (g.getTeam1Score() + g.getTeam2Score()))
+            .sum();
+        List<PlayerRankingDTO> allRankings = getAllPlayerRankings(clanId);
+        int totalPlayers = allRankings.size();
+        
+        return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, totalPlayers);
     }
 
     /**
@@ -196,14 +228,31 @@ public class PlayerRankingService {
      * Retrieves all player statistics from the database
      * Gets the latest stats for each player (most recent gameTimestamp)
      */
-    private List<PlayerStats> getAllPlayerStatsFromDatabase() {
+    private List<PlayerStats> getAllPlayerStatsFromDatabase(Long clanId) {
         List<PlayerStats> playerStatsList = new ArrayList<>();
         
         try {
+            // Get clan's appServerId and find all games (required)
+            Optional<Clan> clanOpt = clanService.getClanById(clanId);
+            if (clanOpt.isEmpty()) {
+                LOGGER.warn("Clan not found: {}", clanId);
+                return new ArrayList<>();
+            }
+            Long appServerId = clanOpt.get().getAppServerId();
+            List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+            Set<Long> clanGameIds = clanGames.stream()
+                .map(GameEntity::getId)
+                .collect(Collectors.toSet());
+            
             // Get latest stats for all players (one record per player)
             List<PlayerStatsEntity> entities = playerStatsRepository.findLatestStatsForAllPlayers();
             
             for (PlayerStatsEntity entity : entities) {
+                // Only include stats from games in this clan
+                if (entity.getGame() == null || !clanGameIds.contains(entity.getGame().getId())) {
+                    continue;
+                }
+                
                 PlayerStats stats = convertToDomain(entity);
                 playerStatsList.add(stats);
             }
@@ -211,7 +260,8 @@ public class PlayerRankingService {
             LOGGER.error("Failed to retrieve player statistics", e);
         }
 
-        LOGGER.info("Retrieved {} player statistics from database (latest stats per player)", playerStatsList.size());
+        LOGGER.info("Retrieved {} player statistics from database (latest stats per player, clanId: {})", 
+            playerStatsList.size(), clanId);
         return playerStatsList;
     }
     
@@ -231,8 +281,8 @@ public class PlayerRankingService {
      * @param offset Number of results to skip for pagination
      * @return List of player rankings for the specified month
      */
-    public List<PlayerRankingDTO> getMonthlyPlayerRankings(int year, int month, int limit, int offset) {
-        LeaderboardResponseDTO response = getMonthlyPlayerRankingsWithStats(year, month, limit, offset);
+    public List<PlayerRankingDTO> getMonthlyPlayerRankings(int year, int month, int limit, int offset, Long clanId) {
+        LeaderboardResponseDTO response = getMonthlyPlayerRankingsWithStats(year, month, limit, offset, clanId);
         return response.getRankings();
     }
     
@@ -247,13 +297,22 @@ public class PlayerRankingService {
      * @param month The month (1-12)
      * @param limit Maximum number of results to return
      * @param offset Number of results to skip for pagination
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      */
     @Cacheable(value = "monthlyLeaderboard", 
-               key = "#year + '-' + #month + '-' + #limit + '-' + #offset",
+               key = "#year + '-' + #month + '-' + #limit + '-' + #offset + '-' + #clanId",
                condition = "T(java.time.LocalDate).of(#year, #month, 1).isBefore(T(java.time.LocalDate).now().withDayOfMonth(1))")
-    public LeaderboardResponseDTO getMonthlyPlayerRankingsWithStats(int year, int month, int limit, int offset) {
+    public LeaderboardResponseDTO getMonthlyPlayerRankingsWithStats(int year, int month, int limit, int offset, Long clanId) {
         try {
+            // Get clan's appServerId
+            Optional<Clan> clanOpt = clanService.getClanById(clanId);
+            if (clanOpt.isEmpty()) {
+                LOGGER.warn("Clan not found: {}", clanId);
+                return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+            }
+            Long appServerId = clanOpt.get().getAppServerId();
+            
             // Calculate month boundaries in UTC
             LocalDateTime startOfMonth = LocalDateTime.of(year, month, 1, 0, 0, 0);
             LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1); // Last second of the month
@@ -261,10 +320,12 @@ public class PlayerRankingService {
             Instant startInstant = startOfMonth.toInstant(ZoneOffset.UTC);
             Instant endInstant = endOfMonth.toInstant(ZoneOffset.UTC);
             
-            LOGGER.info("Querying monthly leaderboard for {}-{} ({} to {})", year, month, startInstant, endInstant);
+            LOGGER.info("Querying monthly leaderboard for {}-{} ({} to {}) for clan {}", year, month, startInstant, endInstant, clanId);
             
-            // Get all games in the month
-            List<GameEntity> gamesInMonth = gameRepository.findGamesByMonthRange(startInstant, endInstant);
+            // Get all games in the month, filtered by clan's appServerId
+            List<GameEntity> gamesInMonth = gameRepository.findGamesByMonthRange(startInstant, endInstant).stream()
+                    .filter(game -> game.getAppServerId().equals(appServerId))
+                    .collect(Collectors.toList());
             if (gamesInMonth.isEmpty()) {
                 LOGGER.info("No games found for month {}-{}", year, month);
                 return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);

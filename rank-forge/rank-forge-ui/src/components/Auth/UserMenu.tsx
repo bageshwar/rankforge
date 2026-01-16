@@ -65,6 +65,14 @@ export const UserMenu = () => {
             <span className="menu-icon">👤</span>
             <span>My Profile</span>
           </Link>
+          <Link
+            to="/clan-management"
+            className="user-menu-item"
+            onClick={() => setIsOpen(false)}
+          >
+            <span className="menu-icon">👥</span>
+            <span>Clan Management</span>
+          </Link>
           <a
             href={user.profileUrl}
             target="_blank"

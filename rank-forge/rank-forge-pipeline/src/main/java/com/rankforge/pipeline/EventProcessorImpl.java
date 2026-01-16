@@ -249,6 +249,25 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
             gameEntity.setStartTime(event.getTimestamp().minusSeconds(1800));
         }
         
+        // CRITICAL: appServerId MUST be set before creating GameEntity
+        // Fail fast if it's missing - this indicates ResetBreakpadAppId was not found in log file
+        Long appServerId = context.getAppServerId();
+        if (appServerId == null) {
+            String errorMsg = String.format(
+                    "DATA_INGESTION_FAILED: appServerId is NULL when creating GameEntity. " +
+                    "ResetBreakpadAppId log line must appear before game events. " +
+                    "Game map: %s, timestamp: %s",
+                    event.getMap(), event.getTimestamp());
+            logger.error("❌ {}", errorMsg);
+            logger.error("❌ Context state - appServerId: {}, currentGame: {}", 
+                    context.getAppServerId(), context.getCurrentGame());
+            throw new IllegalStateException(errorMsg);
+        }
+        
+        gameEntity.setAppServerId(appServerId);
+        logger.info("✅ APP_SERVER_ID: Set appServerId={} on GameEntity for map={}, timestamp={}", 
+                appServerId, event.getMap(), event.getTimestamp());
+        
         // Set the current game in context (this is transient, not yet persisted)
         // JPA will persist it when we call saveAll on pending entities due to cascade
         context.setCurrentGame(gameEntity);

@@ -55,29 +55,38 @@ public class PlayerRankingApiController {
 
     /**
      * Get all player rankings with summary statistics
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      * @deprecated Use /api/rankings/stats for consistency. This endpoint is kept for backward compatibility.
      */
     @GetMapping
     @Deprecated
-    public ResponseEntity<LeaderboardResponseDTO> getAllRankings() {
-        LeaderboardResponseDTO response = playerRankingService.getAllPlayerRankingsWithStats();
+    public ResponseEntity<LeaderboardResponseDTO> getAllRankings(@RequestParam(value = "clanId", required = true) Long clanId) {
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        LeaderboardResponseDTO response = playerRankingService.getAllPlayerRankingsWithStats(clanId);
         return ResponseEntity.ok(response);
     }
     
     /**
      * Get all player rankings with summary statistics
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      */
     @GetMapping("/stats")
-    public ResponseEntity<LeaderboardResponseDTO> getAllRankingsWithStats() {
-        LeaderboardResponseDTO response = playerRankingService.getAllPlayerRankingsWithStats();
+    public ResponseEntity<LeaderboardResponseDTO> getAllRankingsWithStats(@RequestParam(value = "clanId", required = true) Long clanId) {
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        LeaderboardResponseDTO response = playerRankingService.getAllPlayerRankingsWithStats(clanId);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Get top N player rankings with summary statistics
      * @param limit Number of top players to return (default: 10, max: 100)
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      */
     @GetMapping("/top")
@@ -85,15 +94,20 @@ public class PlayerRankingApiController {
             @RequestParam(value = "limit", defaultValue = "10") 
             @Min(value = 1, message = "Limit must be >= 1") 
             @Max(value = 100, message = "Limit must be <= 100") 
-            int limit) {
+            int limit,
+            @RequestParam(value = "clanId", required = true) Long clanId) {
         
-        LeaderboardResponseDTO response = playerRankingService.getTopPlayerRankingsWithStats(limit);
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        LeaderboardResponseDTO response = playerRankingService.getTopPlayerRankingsWithStats(limit, clanId);
         return ResponseEntity.ok(response);
     }
     
     /**
      * Get top N player rankings with summary statistics
      * @param limit Number of top players to return (default: 10, max: 100)
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      * @deprecated Use /api/rankings/top for consistency. This endpoint is kept for backward compatibility.
      */
@@ -103,9 +117,13 @@ public class PlayerRankingApiController {
             @RequestParam(value = "limit", defaultValue = "10") 
             @Min(value = 1, message = "Limit must be >= 1") 
             @Max(value = 100, message = "Limit must be <= 100") 
-            int limit) {
+            int limit,
+            @RequestParam(value = "clanId", required = true) Long clanId) {
         
-        LeaderboardResponseDTO response = playerRankingService.getTopPlayerRankingsWithStats(limit);
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        LeaderboardResponseDTO response = playerRankingService.getTopPlayerRankingsWithStats(limit, clanId);
         return ResponseEntity.ok(response);
     }
 
@@ -131,6 +149,7 @@ public class PlayerRankingApiController {
      * @param month The month (1-12). If not provided, defaults to current month.
      * @param limit Maximum number of results to return (default: 100, max: 1000)
      * @param offset Number of results to skip for pagination (default: 0, max: 10000)
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats for the month
      */
     @GetMapping("/leaderboard/monthly")
@@ -150,7 +169,12 @@ public class PlayerRankingApiController {
             @RequestParam(value = "offset", defaultValue = "0") 
             @Min(value = 0, message = "Offset must be >= 0") 
             @Max(value = 10000, message = "Offset must be <= 10000") 
-            int offset) {
+            int offset,
+            @RequestParam(value = "clanId") Long clanId) {
+        
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         
         // Default to current month if not provided
         LocalDate now = LocalDate.now();
@@ -166,7 +190,7 @@ public class PlayerRankingApiController {
         }
         
         LeaderboardResponseDTO response = playerRankingService.getMonthlyPlayerRankingsWithStats(
-                queryYear, queryMonth, limit, offset);
+                queryYear, queryMonth, limit, offset, clanId);
         return ResponseEntity.ok(response);
     }
 

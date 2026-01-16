@@ -56,23 +56,30 @@ class GameServiceEmptyDatabaseTest {
     @Mock
     private AccoladeRepository accoladeRepository;
 
+    @Mock
+    private ClanService clanService;
+
     private GameService gameService;
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         objectMapper = ObjectMapperFactory.createObjectMapper();
-        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, gameRepository, accoladeRepository);
+        gameService = new GameService(objectMapper, gameEventRepository, playerStatsRepository, gameRepository, accoladeRepository, clanService);
     }
 
     @Test
     void testGetAllGames_WhenGameEventTableDoesNotExist_ReturnsEmptyList() {
-        // Mock empty repository result (simulating empty database)
-        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
+        // Mock clan and empty repository result (simulating empty database)
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
-            var result = gameService.getAllGames();
+            var result = gameService.getAllGames(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
@@ -80,13 +87,19 @@ class GameServiceEmptyDatabaseTest {
 
     @Test
     void testGetAllGames_WhenRepositoryThrowsException_ReturnsEmptyList() {
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(Optional.of(mockClan));
+        
         // Mock repository throwing exception
-        when(gameRepository.findAll())
+        when(gameRepository.findByAppServerId(100L))
                 .thenThrow(new RuntimeException("Database connection error"));
 
         // Should catch exception and return empty list
         assertDoesNotThrow(() -> {
-            var result = gameService.getAllGames();
+            var result = gameService.getAllGames(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list on any exception");
         });
@@ -94,12 +107,18 @@ class GameServiceEmptyDatabaseTest {
 
     @Test
     void testGetRecentGames_WhenDatabaseIsEmpty_ReturnsEmptyList() {
-        // Mock empty repository result
-        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(Optional.of(mockClan));
+        
+        // Mock empty repository result for games with that appServerId
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
-            var result = gameService.getRecentGames(10);
+            var result = gameService.getRecentGames(10, 1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
@@ -132,14 +151,20 @@ class GameServiceEmptyDatabaseTest {
 
     @Test
     void testGetAllGames_WhenPlayerStatsRepositoryThrowsException_StillReturnsGames() {
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(Optional.of(mockClan));
+        
         // Mock successful GameRepository query returning empty list
         // Note: When gameRepository returns empty list, playerStatsRepository is not called
         // because there are no games to process players for
-        when(gameRepository.findAll()).thenReturn(Collections.emptyList());
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
 
         // Should return empty list (no games) but not fail
         assertDoesNotThrow(() -> {
-            var result = gameService.getAllGames();
+            var result = gameService.getAllGames(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty());
         });

@@ -18,6 +18,7 @@
 
 package com.rankforge.pipeline;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.GameActionEvent;
 import com.rankforge.core.interfaces.EventProcessor;
 import com.rankforge.core.interfaces.LogParser;
@@ -72,22 +73,32 @@ public class GameRankingSystem {
     private final EventStore eventStore;
     private final ScheduledExecutorService scheduler;
     private final EntityManager entityManager;
+    private final ObjectMapper objectMapper;
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler) {
-        this(logParser, eventProcessor, eventStore, scheduler, null);
+        this(logParser, eventProcessor, eventStore, scheduler, null, new ObjectMapper());
     }
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler,
                            EntityManager entityManager) {
+        this(logParser, eventProcessor, eventStore, scheduler, entityManager, new ObjectMapper());
+    }
+    
+    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler,
+                           EntityManager entityManager,
+                           ObjectMapper objectMapper) {
         this.logParser = logParser;
         this.eventProcessor = eventProcessor;
         this.eventStore = eventStore;
         this.scheduler = scheduler;
         this.entityManager = entityManager;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     public void startProcessing(String logFile) throws IOException {
@@ -122,6 +133,7 @@ public class GameRankingSystem {
      */
     public void processLines(List<String> lines) {
         logger.info("Starting batch processing of {} log lines", lines.size());
+        // appServerId extraction is handled by CS2LogParser.parseLine() - it will be extracted when ResetBreakpadAppId line is encountered
 
         for (int i = 0; i < lines.size(); i++) {
             Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(lines.get(i), lines, i);

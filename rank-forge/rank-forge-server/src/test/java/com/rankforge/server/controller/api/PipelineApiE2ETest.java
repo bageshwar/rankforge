@@ -394,6 +394,8 @@ class PipelineApiE2ETest {
                 assertNotNull(game.getTeam1Score(), "Game should have team1Score");
                 assertNotNull(game.getTeam2Score(), "Game should have team2Score");
                 assertNotNull(game.getMode(), "Game should have a mode");
+                assertNotNull(game.getAppServerId(), "Game should have appServerId (required for clan filtering)");
+                assertTrue(game.getAppServerId() > 0, "Game appServerId should be positive, but was: " + game.getAppServerId());
                 
                 // Validate expected maps from test data
                 assertTrue(game.getMap().equals("de_ancient") || game.getMap().equals("de_anubis"),

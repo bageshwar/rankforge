@@ -114,4 +114,13 @@ public interface GameRepository extends JpaRepository<GameEntity, Long> {
      */
     @Query("SELECT g FROM GameEntity g WHERE g.gameOverTimestamp >= :startOfMonth AND g.gameOverTimestamp <= :endOfMonth ORDER BY g.gameOverTimestamp ASC")
     List<GameEntity> findGamesByMonthRange(@Param("startOfMonth") Instant startOfMonth, @Param("endOfMonth") Instant endOfMonth);
+    
+    /**
+     * Find all games for a specific appServerId
+     * Used for retroactive clan association
+     * @param appServerId The app server ID
+     * @return List of GameEntity records with matching appServerId
+     */
+    @Query("SELECT g FROM GameEntity g WHERE g.appServerId = :appServerId ORDER BY g.gameOverTimestamp ASC")
+    List<GameEntity> findByAppServerId(@Param("appServerId") Long appServerId);
 }

@@ -47,28 +47,38 @@ public class GameApiController {
 
     /**
      * Get all processed games
+     * @param clanId Required clan ID to filter games
      * @return List of all processed games sorted by date
      */
     @GetMapping
-    public ResponseEntity<List<GameDTO>> getAllGames() {
-        List<GameDTO> games = gameService.getAllGames();
+    public ResponseEntity<List<GameDTO>> getAllGames(@RequestParam(value = "clanId", required = true) Long clanId) {
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<GameDTO> games = gameService.getAllGames(clanId);
         return ResponseEntity.ok(games);
     }
 
     /**
      * Get recent N processed games
      * @param limit Number of recent games to return (default: 10)
+     * @param clanId Required clan ID to filter games
      * @return List of recent N games
      */
     @GetMapping("/recent")
     public ResponseEntity<List<GameDTO>> getRecentGames(
-            @RequestParam(value = "limit", defaultValue = "10") int limit) {
+            @RequestParam(value = "limit", defaultValue = "10") int limit,
+            @RequestParam(value = "clanId", required = true) Long clanId) {
         
         if (limit <= 0 || limit > 100) {
             limit = 10; // Default to 10 if invalid
         }
         
-        List<GameDTO> games = gameService.getRecentGames(limit);
+        if (clanId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        List<GameDTO> games = gameService.getRecentGames(limit, clanId);
         return ResponseEntity.ok(games);
     }
 

@@ -62,6 +62,9 @@ public class EventProcessingContext {
     private final List<GameEventEntity> pendingEntities = new ArrayList<>();
     private final List<AccoladeEntity> pendingAccolades = new ArrayList<>();
     
+    // App Server ID extracted from ResetBreakpadAppId log line
+    private Long appServerId;
+    
     // Tracking for debugging round linking
     private int roundNumber = 0;
     private int eventsInCurrentRound = 0;
@@ -72,18 +75,40 @@ public class EventProcessingContext {
     private final Map<String, String> playerNameToSteamId = new HashMap<>();
     
     /**
+     * Set the app server ID extracted from ResetBreakpadAppId log line.
+     * This should be called once at the beginning of log processing.
+     */
+    public void setAppServerId(Long appServerId) {
+        this.appServerId = appServerId;
+        logger.info("✅ GAME_CONTEXT: Set appServerId: {} in EventProcessingContext", appServerId);
+        logger.debug("✅ GAME_CONTEXT: Verified appServerId is now: {}", this.appServerId);
+    }
+    
+    /**
+     * Get the app server ID for the current log file.
+     */
+    public Long getAppServerId() {
+        return appServerId;
+    }
+    
+    /**
      * Called when GAME_OVER is processed (happens FIRST due to parser rewind).
      * Sets the current game context that all subsequent events will reference.
      */
     public void setCurrentGame(GameEntity game) {
         this.currentGame = game;
+        // Set appServerId on the game if we have it
+        if (game != null && appServerId != null) {
+            game.setAppServerId(appServerId);
+        }
         // Reset round tracking for new game
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
         lastRoundEndTimestamp = null;
         roundEventCounts.clear();
-        logger.info("GAME_CONTEXT: Set current game - map: {}", game != null ? game.getMap() : "null");
+        logger.info("GAME_CONTEXT: Set current game - map: {}, appServerId: {}", 
+                game != null ? game.getMap() : "null", appServerId);
     }
     
     /**
@@ -287,6 +312,7 @@ public class EventProcessingContext {
     /**
      * Clears all context after GAME_PROCESSED is received.
      * Called after batch persisting all pending entities.
+     * Note: appServerId is NOT cleared as it applies to the entire log file.
      */
     public void clear() {
         // Log summary before clearing
@@ -301,6 +327,7 @@ public class EventProcessingContext {
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
+        // Note: appServerId is NOT cleared - it persists for the entire log file
     }
     
     /**

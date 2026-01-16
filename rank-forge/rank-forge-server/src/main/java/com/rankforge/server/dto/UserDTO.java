@@ -40,6 +40,7 @@ public class UserDTO {
     private String country;
     private Long createdAt; // Unix timestamp
     private Long lastLogin; // Unix timestamp
+    private Long defaultClanId; // Default clan ID for filtering
     
     public UserDTO() {}
     
@@ -60,6 +61,7 @@ public class UserDTO {
             user.getCreatedAt().getEpochSecond() : null;
         this.lastLogin = user.getLastLogin() != null ? 
             user.getLastLogin().getEpochSecond() : null;
+        this.defaultClanId = user.getDefaultClanId();
     }
     
     // Getters and setters
@@ -165,5 +167,13 @@ public class UserDTO {
     
     public void setLastLogin(Long lastLogin) {
         this.lastLogin = lastLogin;
+    }
+    
+    public Long getDefaultClanId() {
+        return defaultClanId;
+    }
+    
+    public void setDefaultClanId(Long defaultClanId) {
+        this.defaultClanId = defaultClanId;
     }
 }

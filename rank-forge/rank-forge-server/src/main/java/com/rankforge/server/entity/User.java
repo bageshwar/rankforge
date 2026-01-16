@@ -74,6 +74,9 @@ public class User {
     @Column(name = "lastLogin", nullable = false)
     private Instant lastLogin;
     
+    @Column(name = "defaultClanId", nullable = true)
+    private Long defaultClanId; // Default clan for filtering rankings/games
+    
     // Default constructor
     public User() {
         this.createdAt = Instant.now();
@@ -183,5 +186,13 @@ public class User {
     
     public void setLastLogin(Instant lastLogin) {
         this.lastLogin = lastLogin;
+    }
+    
+    public Long getDefaultClanId() {
+        return defaultClanId;
+    }
+    
+    public void setDefaultClanId(Long defaultClanId) {
+        this.defaultClanId = defaultClanId;
     }
 }

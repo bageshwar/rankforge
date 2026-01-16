@@ -89,6 +89,7 @@ public class PersistenceConfig {
         properties.setProperty("hibernate.jdbc.batch_size", "50");
         properties.setProperty("hibernate.order_inserts", "true");
         properties.setProperty("hibernate.order_updates", "true");
+        
         em.setJpaProperties(properties);
         
         return em;

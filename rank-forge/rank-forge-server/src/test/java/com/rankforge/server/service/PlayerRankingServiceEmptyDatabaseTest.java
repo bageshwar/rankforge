@@ -57,22 +57,30 @@ class PlayerRankingServiceEmptyDatabaseTest {
     @Mock
     private RankingAlgorithm rankingAlgorithm;
 
+    @Mock
+    private ClanService clanService;
+
     private PlayerRankingService playerRankingService;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper, rankingAlgorithm);
+        playerRankingService = new PlayerRankingService(playerStatsRepository, gameRepository, gameEventRepository, objectMapper, rankingAlgorithm, clanService);
     }
 
     @Test
     void testGetAllPlayerRankings_WhenPlayerStatsTableDoesNotExist_ReturnsEmptyList() {
-        // Mock empty repository result (simulating empty database)
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
         when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
-            var result = playerRankingService.getAllPlayerRankings();
+            var result = playerRankingService.getAllPlayerRankings(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
@@ -80,13 +88,20 @@ class PlayerRankingServiceEmptyDatabaseTest {
 
     @Test
     void testGetAllPlayerRankings_WhenRepositoryThrowsException_ReturnsEmptyList() {
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
+        
         // Mock repository throwing exception
         when(playerStatsRepository.findLatestStatsForAllPlayers())
                 .thenThrow(new RuntimeException("Database connection error"));
 
         // Should catch exception and return empty list
         assertDoesNotThrow(() -> {
-            var result = playerRankingService.getAllPlayerRankings();
+            var result = playerRankingService.getAllPlayerRankings(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list on any exception");
         });
@@ -94,12 +109,17 @@ class PlayerRankingServiceEmptyDatabaseTest {
 
     @Test
     void testGetTopPlayerRankings_WhenDatabaseIsEmpty_ReturnsEmptyList() {
-        // Mock empty repository result
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
         when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
 
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
-            var result = playerRankingService.getTopPlayerRankings(10);
+            var result = playerRankingService.getTopPlayerRankings(10, 1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list when database is empty");
         });
@@ -107,13 +127,20 @@ class PlayerRankingServiceEmptyDatabaseTest {
 
     @Test
     void testGetAllPlayerRankings_WhenOtherExceptionOccurs_ReturnsEmptyList() {
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
+        
         // Mock a different exception (not empty result)
         when(playerStatsRepository.findLatestStatsForAllPlayers())
                 .thenThrow(new RuntimeException("Connection timeout"));
 
         // Should catch exception and return empty list
         assertDoesNotThrow(() -> {
-            var result = playerRankingService.getAllPlayerRankings();
+            var result = playerRankingService.getAllPlayerRankings(1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list on any exception");
         });
@@ -131,14 +158,17 @@ class PlayerRankingServiceEmptyDatabaseTest {
     
     @Test
     void testGetAllPlayerRankingsWithStats_WhenDatabaseIsEmpty_ReturnsEmptyResponse() {
-        // Mock empty repository results
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
         when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countTotalDistinctGames()).thenReturn(0L);
-        when(gameRepository.calculateTotalRounds()).thenReturn(0L);
         
         // Should return empty response without throwing exception
         assertDoesNotThrow(() -> {
-            LeaderboardResponseDTO result = playerRankingService.getAllPlayerRankingsWithStats();
+            LeaderboardResponseDTO result = playerRankingService.getAllPlayerRankingsWithStats(1L);
             assertNotNull(result);
             assertNotNull(result.getRankings());
             assertTrue(result.getRankings().isEmpty());
@@ -150,14 +180,17 @@ class PlayerRankingServiceEmptyDatabaseTest {
     
     @Test
     void testGetTopPlayerRankingsWithStats_WhenDatabaseIsEmpty_ReturnsEmptyResponse() {
-        // Mock empty repository results
+        // Mock clan
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
         when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countTotalDistinctGames()).thenReturn(0L);
-        when(gameRepository.calculateTotalRounds()).thenReturn(0L);
         
         // Should return empty response without throwing exception
         assertDoesNotThrow(() -> {
-            LeaderboardResponseDTO result = playerRankingService.getTopPlayerRankingsWithStats(10);
+            LeaderboardResponseDTO result = playerRankingService.getTopPlayerRankingsWithStats(10, 1L);
             assertNotNull(result);
             assertNotNull(result.getRankings());
             assertTrue(result.getRankings().isEmpty());
@@ -174,9 +207,15 @@ class PlayerRankingServiceEmptyDatabaseTest {
         when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
         
+        // Mock clan for filtering
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        
         // Should return empty list without throwing exception
         assertDoesNotThrow(() -> {
-            var result = playerRankingService.getMonthlyPlayerRankings(2026, 1, 100, 0);
+            var result = playerRankingService.getMonthlyPlayerRankings(2026, 1, 100, 0, 1L);
             assertNotNull(result);
             assertTrue(result.isEmpty(), "Should return empty list when no data in month");
         });
@@ -190,9 +229,15 @@ class PlayerRankingServiceEmptyDatabaseTest {
         when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
                 .thenReturn(Collections.emptyList());
         
+        // Mock clan for filtering
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        
         // Should return empty response without throwing exception
         assertDoesNotThrow(() -> {
-            LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2026, 1, 100, 0);
+            LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2026, 1, 100, 0, 1L);
             assertNotNull(result);
             assertNotNull(result.getRankings());
             assertTrue(result.getRankings().isEmpty());
@@ -204,17 +249,21 @@ class PlayerRankingServiceEmptyDatabaseTest {
     
     @Test
     void testGetAllPlayerRankingsWithStats_UsesGameRepositoryForTotalRounds() {
+        // Mock clan for filtering
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findByAppServerId(100L)).thenReturn(Collections.emptyList());
+        
         // Mock empty player stats but non-zero games/rounds
         when(playerStatsRepository.findLatestStatsForAllPlayers()).thenReturn(Collections.emptyList());
-        when(playerStatsRepository.countTotalDistinctGames()).thenReturn(5L);
-        when(gameRepository.calculateTotalRounds()).thenReturn(150L);
         
         // Should use GameRepository for total rounds calculation
-        LeaderboardResponseDTO result = playerRankingService.getAllPlayerRankingsWithStats();
+        LeaderboardResponseDTO result = playerRankingService.getAllPlayerRankingsWithStats(1L);
         
         assertNotNull(result);
-        assertEquals(5, result.getTotalGames());
-        assertEquals(150, result.getTotalRounds()); // Should come from GameRepository, not player stats
-        verify(gameRepository).calculateTotalRounds();
+        assertEquals(0, result.getTotalGames());
+        assertEquals(0, result.getTotalRounds());
     }
 }

@@ -116,15 +116,15 @@ public class PipelineService {
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
         eventProcessor.addGameEventListener((GameEventListener) statsRepo);
         
-        // Create log parser with accolade store
-        LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore);
+        // Create log parser with accolade store and event processing context
+        LogParser logParser = new CS2LogParser(objectMapper, eventStore, accoladeStore, eventProcessingContext);
         
         // Create scheduler for async processing
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         
         // Create and return game ranking system with EntityManager for cleanup
         GameRankingSystem rankingSystem = new GameRankingSystem(
-                logParser, eventProcessor, eventStore, scheduler, entityManager);
+                logParser, eventProcessor, eventStore, scheduler, entityManager, objectMapper);
         
         logger.debug("Successfully created GameRankingSystem with all components");
         return rankingSystem;
