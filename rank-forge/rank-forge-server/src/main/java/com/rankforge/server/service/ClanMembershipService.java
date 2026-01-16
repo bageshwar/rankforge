@@ -29,7 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -103,6 +105,7 @@ public class ClanMembershipService {
     
     /**
      * Add users to clan by their Steam ID3 (converts to User ID first)
+     * Automatically creates User records for Steam ID3s that don't have User records yet
      * @param clanId The clan ID
      * @param steamId3List List of Steam ID3 strings
      * @param joinedAt The timestamp when they joined
@@ -110,18 +113,67 @@ public class ClanMembershipService {
      */
     @Transactional
     public int addMembersBySteamId3(Long clanId, List<String> steamId3List, Instant joinedAt) {
-        List<Long> userIds = steamId3List.stream()
-            .map(steamId3 -> userRepository.findBySteamId3(steamId3))
-            .filter(java.util.Optional::isPresent)
-            .map(opt -> opt.get().getId())
-            .collect(Collectors.toList());
+        List<Long> userIds = new ArrayList<>();
+        
+        for (String steamId3 : steamId3List) {
+            // Try to find existing user
+            Optional<User> userOpt = userRepository.findBySteamId3(steamId3);
+            
+            if (userOpt.isPresent()) {
+                // User exists, use their ID
+                userIds.add(userOpt.get().getId());
+            } else {
+                // User doesn't exist, create a minimal User record
+                try {
+                    User newUser = createUserFromSteamId3(steamId3);
+                    User savedUser = userRepository.save(newUser);
+                    userIds.add(savedUser.getId());
+                    logger.info("Created User record for Steam ID3 {} (ID: {}) during clan association", 
+                            steamId3, savedUser.getId());
+                } catch (Exception e) {
+                    logger.warn("Failed to create User record for Steam ID3 {}: {}", steamId3, e.getMessage());
+                    // Continue with other users even if one fails
+                }
+            }
+        }
         
         if (userIds.isEmpty()) {
-            logger.debug("No users found for Steam ID3s: {}", steamId3List);
+            logger.debug("No valid users found or created for Steam ID3s: {}", steamId3List);
             return 0;
         }
         
         return addMembersIfNotExists(clanId, userIds, joinedAt);
+    }
+    
+    /**
+     * Creates a minimal User record from Steam ID3
+     * Converts Steam ID3 to Steam ID64 and creates User with minimal info
+     * Full profile data will be fetched when user logs in
+     */
+    private User createUserFromSteamId3(String steamId3) {
+        // Extract numeric account ID from Steam ID3 format [U:1:accountId]
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\[U:1:(\\d+)\\]");
+        java.util.regex.Matcher matcher = pattern.matcher(steamId3);
+        
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("Invalid Steam ID3 format: " + steamId3);
+        }
+        
+        long accountId = Long.parseLong(matcher.group(1));
+        // Convert to Steam ID64: steamId64 = accountId * 2 + 76561197960265728
+        long steamId64Long = accountId * 2L + 76561197960265728L;
+        String steamId64 = String.valueOf(steamId64Long);
+        
+        // Create minimal User record
+        User user = new User();
+        user.setSteamId64(steamId64);
+        user.setSteamId3(steamId3);
+        user.setPersonaName("Player " + accountId); // Placeholder name, will be updated on login
+        user.setVacBanned(false);
+        user.setCreatedAt(java.time.Instant.now());
+        user.setLastLogin(java.time.Instant.now());
+        
+        return user;
     }
     
     /**

@@ -20,7 +20,9 @@ package com.rankforge.server.controller.api;
 
 import com.rankforge.server.dto.ClanDTO;
 import com.rankforge.server.dto.ClanMembershipDTO;
+import com.rankforge.server.dto.ConfigureAppServerRequest;
 import com.rankforge.server.dto.CreateClanRequest;
+import com.rankforge.server.dto.RegenerateApiKeyResponse;
 import com.rankforge.server.dto.TransferAdminRequest;
 import com.rankforge.server.entity.Clan;
 import com.rankforge.server.entity.ClanMembership;
@@ -38,6 +40,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,7 +71,8 @@ public class ClanController {
     private ClanMembershipRepository clanMembershipRepository;
     
     /**
-     * Create a new clan (requires authentication)
+     * Create a new clan (step 1 of 2-step creation, requires authentication)
+     * Returns API key in response (shown once - frontend must save it)
      */
     @PostMapping
     public ResponseEntity<?> createClan(@Valid @RequestBody CreateClanRequest request, 
@@ -90,21 +94,16 @@ public class ClanController {
             
             User user = userOpt.get();
             
-            // Create clan
-            Clan clan = clanService.createClan(
-                request.getAppServerId(),
+            // Create clan (returns DTO with API key)
+            ClanDTO clanDTO = clanService.createClan(
                 request.getName(),
                 request.getTelegramChannelId(),
                 user.getId()
             );
             
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ClanDTO(clan));
+                    .body(clanDTO);
                     
-        } catch (IllegalStateException e) {
-            logger.warn("Failed to create clan: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             logger.warn("Invalid request to create clan: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -113,6 +112,162 @@ public class ClanController {
             logger.error("Error creating clan: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to create clan"));
+        }
+    }
+    
+    /**
+     * Configure appServerId for a clan (step 2 of 2-step creation, requires authentication)
+     */
+    @PutMapping("/{id}/configure-app-server")
+    public ResponseEntity<?> configureAppServerId(@PathVariable("id") Long id,
+                                                   @Valid @RequestBody ConfigureAppServerRequest request,
+                                                   HttpServletRequest httpRequest) {
+        try {
+            String steamId64 = (String) httpRequest.getAttribute("steamId64");
+            
+            if (steamId64 == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Unauthorized. Missing authentication."));
+            }
+            
+            // Get current user
+            Optional<User> userOpt = userRepository.findBySteamId64(steamId64);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found"));
+            }
+            
+            User user = userOpt.get();
+            
+            // Configure appServerId
+            Clan clan = clanService.configureAppServerId(id, request.getAppServerId(), user.getId());
+            
+            return ResponseEntity.ok(new ClanDTO(clan));
+                    
+        } catch (IllegalStateException e) {
+            logger.warn("Failed to configure appServerId: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid request to configure appServerId: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error configuring appServerId: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to configure appServerId"));
+        }
+    }
+    
+    /**
+     * Regenerate API key for a clan (requires authentication, admin only)
+     * Returns new key (shown once - frontend must save it)
+     */
+    @PostMapping("/{id}/regenerate-api-key")
+    public ResponseEntity<?> regenerateApiKey(@PathVariable("id") Long id,
+                                               HttpServletRequest httpRequest) {
+        try {
+            String steamId64 = (String) httpRequest.getAttribute("steamId64");
+            
+            if (steamId64 == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Unauthorized. Missing authentication."));
+            }
+            
+            // Get current user
+            Optional<User> userOpt = userRepository.findBySteamId64(steamId64);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found"));
+            }
+            
+            User user = userOpt.get();
+            
+            // Regenerate API key
+            String newApiKey = clanService.regenerateApiKey(id, user.getId());
+            
+            // Get clan to get rotatedAt timestamp
+            Optional<Clan> clanOpt = clanService.getClanById(id);
+            if (clanOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Clan not found"));
+            }
+            
+            RegenerateApiKeyResponse response = new RegenerateApiKeyResponse(
+                newApiKey,
+                clanOpt.get().getApiKeyRotatedAt()
+            );
+            
+            return ResponseEntity.ok(response);
+                    
+        } catch (IllegalStateException e) {
+            logger.warn("Failed to regenerate API key: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid request to regenerate API key: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error regenerating API key: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to regenerate API key"));
+        }
+    }
+    
+    /**
+     * Get API key status for a clan (requires authentication, admin only)
+     * Returns status without the actual key
+     */
+    @GetMapping("/{id}/api-key-status")
+    public ResponseEntity<?> getApiKeyStatus(@PathVariable("id") Long id,
+                                             HttpServletRequest httpRequest) {
+        try {
+            String steamId64 = (String) httpRequest.getAttribute("steamId64");
+            
+            if (steamId64 == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Unauthorized. Missing authentication."));
+            }
+            
+            // Get current user
+            Optional<User> userOpt = userRepository.findBySteamId64(steamId64);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found"));
+            }
+            
+            User user = userOpt.get();
+            
+            // Get clan
+            Optional<Clan> clanOpt = clanService.getClanById(id);
+            if (clanOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Clan not found"));
+            }
+            
+            Clan clan = clanOpt.get();
+            
+            // Verify user is admin
+            if (!clan.getAdminUserId().equals(user.getId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Only clan admin can view API key status"));
+            }
+            
+            // Return status without actual key
+            Map<String, Object> status = new HashMap<>();
+            status.put("hasApiKey", clan.getPrimaryApiKeyHash() != null && !clan.getPrimaryApiKeyHash().isEmpty());
+            status.put("apiKeyCreatedAt", clan.getApiKeyCreatedAt() != null ? 
+                clan.getApiKeyCreatedAt().getEpochSecond() : null);
+            status.put("apiKeyRotatedAt", clan.getApiKeyRotatedAt() != null ? 
+                clan.getApiKeyRotatedAt().getEpochSecond() : null);
+            
+            return ResponseEntity.ok(status);
+                    
+        } catch (Exception e) {
+            logger.error("Error fetching API key status: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to fetch API key status"));
         }
     }
     

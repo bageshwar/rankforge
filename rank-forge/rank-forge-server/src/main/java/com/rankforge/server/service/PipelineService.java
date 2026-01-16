@@ -24,10 +24,12 @@ import com.rankforge.core.stores.EventStore;
 import com.rankforge.core.stores.PlayerStatsStore;
 import com.rankforge.pipeline.*;
 import com.rankforge.pipeline.persistence.*;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
+import com.rankforge.server.entity.Clan;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceUnit;
@@ -57,6 +59,7 @@ public class PipelineService {
     private final GameRepository gameRepository;
     private final ObjectMapper objectMapper;
     private final EventProcessingContext eventProcessingContext;
+    private final ClanService clanService;
     
     @PersistenceUnit
     private EntityManagerFactory entityManagerFactory;
@@ -70,22 +73,36 @@ public class PipelineService {
                           AccoladeRepository accoladeRepository,
                           GameRepository gameRepository,
                           ObjectMapper objectMapper,
-                          EventProcessingContext eventProcessingContext) {
+                          EventProcessingContext eventProcessingContext,
+                          ClanService clanService) {
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.accoladeRepository = accoladeRepository;
         this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
         this.eventProcessingContext = eventProcessingContext;
+        this.clanService = clanService;
     }
 
     /**
      * Creates a new GameRankingSystem instance with all required components
      * Components are wired together using the server's JPA repositories
+     * Backward-compatible overload (uses null for clan)
      * 
      * @return Configured GameRankingSystem instance
      */
     public GameRankingSystem createGameRankingSystem() {
+        return createGameRankingSystem(null);
+    }
+    
+    /**
+     * Creates a new GameRankingSystem instance with all required components
+     * Components are wired together using the server's JPA repositories
+     * 
+     * @param clan Clan associated with the API key (null if global key was used)
+     * @return Configured GameRankingSystem instance
+     */
+    public GameRankingSystem createGameRankingSystem(Clan clan) {
         logger.debug("Creating pipeline components with server JPA configuration");
         
         // Create a new EntityManager for this processing job
@@ -99,6 +116,22 @@ public class PipelineService {
                 gameRepository, objectMapper, eventProcessingContext);
         // Inject EntityManager for direct persistence operations
         jpaEventStore.setEntityManager(entityManager);
+        
+        // Set player association callback if clan is provided
+        if (clan != null && clan.isActive()) {
+            jpaEventStore.setPlayerAssociationCallback(() -> {
+                try {
+                    GameEntity game = eventProcessingContext.getCurrentGame();
+                    if (game != null && game.getId() != null) {
+                        // Associate players from this game with the clan
+                        clanService.associatePlayersFromGame(game);
+                    }
+                } catch (Exception e) {
+                    logger.error("Error in player association callback: {}", e.getMessage(), e);
+                }
+            });
+        }
+        
         EventStore eventStore = jpaEventStore;
         
         PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext);
@@ -109,8 +142,10 @@ public class PipelineService {
         RankingService rankingService = new RankingServiceImpl(statsRepo, rankingAlgo);
         
         // Create event processor with shared context for direct entity reference linking
+        // Pass clan's appServerId for validation (null if global key was used)
+        Long expectedAppServerId = (clan != null && clan.isActive()) ? clan.getAppServerId() : null;
         EventProcessor eventProcessor = new EventProcessorImpl(statsRepo, rankingService, 
-                eventProcessingContext, gameRepository);
+                eventProcessingContext, gameRepository, expectedAppServerId);
         
         // Wire event listeners
         eventProcessor.addGameEventListener((GameEventListener) eventStore);
@@ -123,8 +158,9 @@ public class PipelineService {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
         
         // Create and return game ranking system with EntityManager for cleanup
+        // Pass clan for appServerId validation during processing
         GameRankingSystem rankingSystem = new GameRankingSystem(
-                logParser, eventProcessor, eventStore, scheduler, entityManager, objectMapper);
+                logParser, eventProcessor, eventStore, scheduler, entityManager, objectMapper, clan);
         
         logger.debug("Successfully created GameRankingSystem with all components");
         return rankingSystem;

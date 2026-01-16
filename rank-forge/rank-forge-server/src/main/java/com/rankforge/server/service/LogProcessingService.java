@@ -19,6 +19,7 @@
 package com.rankforge.server.service;
 
 import com.rankforge.pipeline.GameRankingSystem;
+import com.rankforge.server.entity.Clan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,15 +52,29 @@ public class LogProcessingService {
 
     /**
      * Processes a log file from S3 asynchronously
+     * Backward-compatible overload (uses null for clan)
      * 
      * @param s3Path S3 path to the log file
      * @return CompletableFuture containing the job ID for tracking the processing
      */
     @Async
     public CompletableFuture<String> processLogFileAsync(String s3Path) {
+        return processLogFileAsync(s3Path, null);
+    }
+    
+    /**
+     * Processes a log file from S3 asynchronously
+     * 
+     * @param s3Path S3 path to the log file
+     * @param clan Clan associated with the API key (null if global key was used)
+     * @return CompletableFuture containing the job ID for tracking the processing
+     */
+    @Async
+    public CompletableFuture<String> processLogFileAsync(String s3Path, Clan clan) {
         // Generate job ID immediately so it can be returned to the caller
         String jobId = UUID.randomUUID().toString();
-        logger.info("Starting async log processing job {} for S3 path: {}", jobId, s3Path);
+        logger.info("Starting async log processing job {} for S3 path: {} (clan: {})", 
+                jobId, s3Path, clan != null ? clan.getId() : "global-key");
         
         // Process asynchronously but return jobId immediately
         CompletableFuture.runAsync(() -> {
@@ -69,11 +84,13 @@ public class LogProcessingService {
                 List<String> lines = s3Service.downloadFileAsLines(s3Path);
                 logger.info("Downloaded {} lines from S3 for job {}", lines.size(), jobId);
                 
-                // Create pipeline components for this job
-                rankingSystem = pipelineService.createGameRankingSystem();
+                // If per-clan key was used, validate appServerId during processing
+                // This validation happens in the pipeline when appServerId is extracted
+                // Pass clan info to pipeline service
+                rankingSystem = pipelineService.createGameRankingSystem(clan);
                 
                 // Process lines using pipeline
-                processLogLines(rankingSystem, lines, s3Path);
+                processLogLines(rankingSystem, lines, s3Path, clan);
                 
                 logger.info("Successfully completed log processing job {} for S3 path: {}", jobId, s3Path);
                 
@@ -99,11 +116,13 @@ public class LogProcessingService {
 
     /**
      * Processes log lines using the GameRankingSystem
+     * If clan is provided, validates appServerId matches during processing
      */
-    private void processLogLines(GameRankingSystem rankingSystem, List<String> lines, String source) {
-        logger.info("Processing {} log lines from {}", lines.size(), source);
+    private void processLogLines(GameRankingSystem rankingSystem, List<String> lines, String source, Clan clan) {
+        logger.info("Processing {} log lines from {} (clan: {})", 
+                lines.size(), source, clan != null ? clan.getId() : "global-key");
         try {
-            rankingSystem.processLines(lines);
+            rankingSystem.processLines(lines, clan);
             logger.info("Completed processing {} log lines from {}", lines.size(), source);
         } catch (Exception e) {
             logger.error("Exception during processLines for {} lines from {}", lines.size(), source, e);

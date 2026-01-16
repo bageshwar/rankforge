@@ -29,6 +29,7 @@ import com.rankforge.pipeline.persistence.repository.AccoladeRepository;
 import com.rankforge.pipeline.persistence.repository.GameEventRepository;
 import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
+import com.rankforge.server.dto.ClanDTO;
 import com.rankforge.server.dto.ProcessLogRequest;
 import com.rankforge.server.dto.ProcessLogResponse;
 import org.junit.jupiter.api.BeforeAll;
@@ -1419,6 +1420,229 @@ class PipelineApiE2ETest {
                 System.out.println("  ⚠ This might indicate an issue with accolade parsing or insertion.");
             }
             
+            return false;
+        }
+    }
+    
+    // ========================================================================
+    // E2E Clan Creation and Ingestion Tests
+    // ========================================================================
+    
+    @Nested
+    @DisplayName("E2E Clan Creation and Ingestion Tests")
+    @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+    class ClanCreationAndIngestionTests {
+        
+        @Autowired
+        private com.rankforge.server.repository.ClanRepository clanRepository;
+        
+        @Autowired
+        private com.rankforge.server.repository.UserRepository userRepository;
+        
+        @Autowired
+        private com.rankforge.server.repository.ClanMembershipRepository clanMembershipRepository;
+        
+        @Autowired
+        private com.rankforge.server.service.ClanService clanService;
+        
+        private static final Long TEST_APP_SERVER_ID = 2347773L; // From log file
+        private static final String TEST_CLAN_NAME = "Test Clan E2E";
+        
+        /**
+         * Tests the complete 2-step clan creation workflow and data ingestion
+         */
+        @Test
+        @DisplayName("E2E: Two-step clan creation, ingestion, and validation")
+        void testTwoStepClanCreationWithIngestion() throws Exception {
+            // Setup: Create a test user
+            com.rankforge.server.entity.User testUser = createTestUser();
+            
+            try {
+                // Step 1: Create clan (get API key)
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 1: Creating clan...");
+                System.out.println("=".repeat(70));
+                
+                ClanDTO clanDTO = clanService.createClan(
+                    TEST_CLAN_NAME, null, testUser.getId());
+                
+                assertNotNull(clanDTO, "Clan DTO should not be null");
+                assertNotNull(clanDTO.getApiKey(), "API key should be returned on creation");
+                assertTrue(clanDTO.getApiKey().length() >= 32, "API key should be at least 32 characters");
+                assertEquals("PENDING", clanDTO.getStatus(), "Clan should be PENDING before appServerId is configured");
+                assertNull(clanDTO.getAppServerId(), "appServerId should be null initially");
+                
+                String apiKey = clanDTO.getApiKey();
+                Long clanId = clanDTO.getId();
+                System.out.println("✓ Created clan ID: " + clanId);
+                System.out.println("✓ API key: " + apiKey.substring(0, 8) + "...");
+                
+                // Step 2: Configure appServerId
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 2: Configuring appServerId...");
+                System.out.println("=".repeat(70));
+                
+                com.rankforge.server.entity.Clan configuredClan = clanService.configureAppServerId(
+                    clanId, TEST_APP_SERVER_ID, testUser.getId());
+                
+                assertNotNull(configuredClan, "Configured clan should not be null");
+                assertEquals(TEST_APP_SERVER_ID, configuredClan.getAppServerId(), 
+                    "appServerId should be set");
+                assertTrue(configuredClan.isActive(), "Clan should be active after appServerId is configured");
+                System.out.println("✓ Configured appServerId: " + TEST_APP_SERVER_ID);
+                
+                // Step 3: Ingest logs using per-clan API key
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 3: Ingesting logs with per-clan API key...");
+                System.out.println("=".repeat(70));
+                
+                ProcessLogRequest request = new ProcessLogRequest(TEST_S3_PATH);
+                String responseContent = mockMvc.perform(post("/api/pipeline/process")
+                                .header("X-API-Key", apiKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                        .andExpect(status().isAccepted())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+                
+                ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
+                System.out.println("✓ Started log processing job: " + response.getJobId());
+                
+                // Wait for processing to complete
+                boolean processingComplete = waitForClanProcessingComplete(20, TimeUnit.SECONDS);
+                assertTrue(processingComplete, "Processing should complete within timeout");
+                System.out.println("✓ Log processing completed");
+                
+                // Step 4: Validate association
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 4: Validating game and player association...");
+                System.out.println("=".repeat(70));
+                
+                validateGamesAssociatedWithClan(clanId, TEST_APP_SERVER_ID);
+                validatePlayersInClan(clanId);
+                
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("✓ All validations passed!");
+                System.out.println("=".repeat(70) + "\n");
+                
+            } finally {
+                // Cleanup: Delete test user and clan
+                cleanupTestData(testUser);
+            }
+        }
+        
+        /**
+         * Creates a test user for the E2E test
+         */
+        private com.rankforge.server.entity.User createTestUser() {
+            com.rankforge.server.entity.User user = new com.rankforge.server.entity.User();
+            // Generate a valid 17-digit Steam ID64 (format: 7656119XXXXXXXXXX)
+            long timestamp = System.currentTimeMillis() % 1000000000L; // 9 digits max
+            user.setSteamId64("7656119" + String.format("%010d", timestamp));
+            user.setSteamId3("[U:1:1000000]");
+            user.setPersonaName("TestUserE2E");
+            return userRepository.save(user);
+        }
+        
+        /**
+         * Validates that games are associated with the clan
+         */
+        private void validateGamesAssociatedWithClan(Long clanId, Long expectedAppServerId) {
+            System.out.println("🔍 Validating games for clan " + clanId + " (appServerId: " + expectedAppServerId + ")...");
+            
+            List<GameEntity> games = gameRepository.findByAppServerId(expectedAppServerId);
+            assertFalse(games.isEmpty(), "Should have at least one game with appServerId " + expectedAppServerId);
+            
+            for (GameEntity game : games) {
+                assertEquals(expectedAppServerId, game.getAppServerId(), 
+                    "Game " + game.getId() + " should have correct appServerId");
+                assertNotNull(game.getAppServerId(), "Game should have appServerId");
+            }
+            
+            System.out.println("  ✓ Found " + games.size() + " games with appServerId " + expectedAppServerId);
+        }
+        
+        /**
+         * Validates that players from games are in the clan
+         * Players should be automatically added to the clan when games are processed
+         */
+        private void validatePlayersInClan(Long clanId) {
+            System.out.println("🔍 Validating players in clan " + clanId + "...");
+            
+            List<com.rankforge.server.entity.ClanMembership> memberships = 
+                clanMembershipRepository.findByClanId(clanId);
+            
+            // Players should be automatically associated when games are processed
+            assertTrue(!memberships.isEmpty(), 
+                "Clan should have at least one member - players should be auto-added from games");
+            
+            System.out.println("  ✓ Found " + memberships.size() + " players in clan");
+            
+            // Verify memberships have correct clan ID
+            for (com.rankforge.server.entity.ClanMembership membership : memberships) {
+                assertEquals(clanId, membership.getClanId(), 
+                    "Membership should belong to correct clan");
+                assertNotNull(membership.getUserId(), "Membership should have user ID");
+                assertNotNull(membership.getJoinedAt(), "Membership should have joinedAt timestamp");
+            }
+            
+            System.out.println("  ✓ All " + memberships.size() + " memberships validated");
+        }
+        
+        /**
+         * Cleans up test data
+         */
+        private void cleanupTestData(com.rankforge.server.entity.User testUser) {
+            try {
+                // Delete clan memberships
+                List<com.rankforge.server.entity.Clan> userClans = clanRepository.findByAdminUserId(testUser.getId());
+                for (com.rankforge.server.entity.Clan clan : userClans) {
+                    List<com.rankforge.server.entity.ClanMembership> memberships = 
+                        clanMembershipRepository.findByClanId(clan.getId());
+                    for (com.rankforge.server.entity.ClanMembership membership : memberships) {
+                        clanMembershipRepository.delete(membership);
+                    }
+                    clanRepository.delete(clan);
+                }
+                
+                // Delete test user
+                userRepository.delete(testUser);
+                System.out.println("✓ Cleaned up test data");
+            } catch (Exception e) {
+                System.out.println("⚠ Error cleaning up test data: " + e.getMessage());
+            }
+        }
+        
+        /**
+         * Waits for log processing to complete by polling the database
+         */
+        private boolean waitForClanProcessingComplete(long timeout, TimeUnit unit) throws InterruptedException {
+            long endTime = System.currentTimeMillis() + unit.toMillis(timeout);
+            int pollCount = 0;
+            long lastGameCount = 0;
+            
+            while (System.currentTimeMillis() < endTime) {
+                pollCount++;
+                long gameCount = gameRepository.count();
+                
+                // Check if we have games (processing is complete)
+                if (gameCount > 0 && gameCount == lastGameCount) {
+                    // No change for a few polls - likely complete
+                    System.out.println("  ✓ Processing complete. Games: " + gameCount);
+                    return true;
+                }
+                
+                lastGameCount = gameCount;
+                
+                // Poll every 500ms
+                Thread.sleep(500);
+            }
+            
+            // Timeout
+            long finalGameCount = gameRepository.count();
+            System.out.println("  ✗ Timeout waiting for processing after " + pollCount + " polls.");
+            System.out.println("  ✗ Final game count: " + finalGameCount);
             return false;
         }
     }

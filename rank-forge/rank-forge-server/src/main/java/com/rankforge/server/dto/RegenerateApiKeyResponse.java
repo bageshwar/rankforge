@@ -18,39 +18,39 @@
 
 package com.rankforge.server.dto;
 
+import java.time.Instant;
+
 /**
- * Request DTO for creating a clan (step 1 of 2-step creation)
- * appServerId is not required - it will be configured in step 2
+ * Response DTO for API key regeneration
+ * Contains the new key (shown once) and rotation timestamp
  * Author bageshwar.pn
  * Date 2026
  */
-public class CreateClanRequest {
+public class RegenerateApiKeyResponse {
     
-    private String name; // Optional
+    private String apiKey; // New key shown once
+    private Long rotatedAt; // Unix timestamp
     
-    private String telegramChannelId; // Optional
+    public RegenerateApiKeyResponse() {}
     
-    public CreateClanRequest() {}
-    
-    public CreateClanRequest(String name, String telegramChannelId) {
-        this.name = name;
-        this.telegramChannelId = telegramChannelId;
+    public RegenerateApiKeyResponse(String apiKey, Instant rotatedAt) {
+        this.apiKey = apiKey;
+        this.rotatedAt = rotatedAt != null ? rotatedAt.getEpochSecond() : null;
     }
     
-    // Getters and setters
-    public String getName() {
-        return name;
+    public String getApiKey() {
+        return apiKey;
     }
     
-    public void setName(String name) {
-        this.name = name;
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
     }
     
-    public String getTelegramChannelId() {
-        return telegramChannelId;
+    public Long getRotatedAt() {
+        return rotatedAt;
     }
     
-    public void setTelegramChannelId(String telegramChannelId) {
-        this.telegramChannelId = telegramChannelId;
+    public void setRotatedAt(Long rotatedAt) {
+        this.rotatedAt = rotatedAt;
     }
 }

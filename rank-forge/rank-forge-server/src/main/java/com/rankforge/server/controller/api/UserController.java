@@ -173,15 +173,12 @@ public class UserController {
             
             User user = userOpt.get();
             
-            // If clanId is provided, verify it exists and user is a member
+            // If clanId is provided, verify it exists (optional validation)
             if (clanId != null) {
-                // Verify clan exists and user is a member
-                List<Clan> userClans = clanService.getClansForUser(user.getId());
-                boolean isMember = userClans.stream().anyMatch(c -> c.getId().equals(clanId));
-                
-                if (!isMember) {
-                    return ResponseEntity.status(403)
-                            .body(Map.of("error", "You are not a member of this clan"));
+                Optional<Clan> clanOpt = clanService.getClanById(clanId);
+                if (clanOpt.isEmpty()) {
+                    return ResponseEntity.status(404)
+                            .body(Map.of("error", "Clan not found"));
                 }
             }
             

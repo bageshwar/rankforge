@@ -134,6 +134,13 @@
             <version>5.2.1</version>
         </dependency>
 
+        <!-- BCrypt for API key hashing -->
+        <dependency>
+            <groupId>org.mindrot</groupId>
+            <artifactId>jbcrypt</artifactId>
+            <version>0.4</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

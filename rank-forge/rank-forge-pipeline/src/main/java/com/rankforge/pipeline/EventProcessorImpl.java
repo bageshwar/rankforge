@@ -59,13 +59,21 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final List<GameEventListener> eventListeners;
     private final EventProcessingContext context;
     private final GameRepository gameRepository;
+    private final Long expectedAppServerId; // For validation when per-clan key is used (null if global key)
 
     public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
                               EventProcessingContext context, GameRepository gameRepository) {
+        this(statsRepo, rankingService, context, gameRepository, null);
+    }
+    
+    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
+                              EventProcessingContext context, GameRepository gameRepository,
+                              Long expectedAppServerId) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
         this.context = context;
         this.gameRepository = gameRepository;
+        this.expectedAppServerId = expectedAppServerId;
         this.eventListeners = new ArrayList<>();
     }
 
@@ -261,6 +269,18 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
             logger.error("❌ {}", errorMsg);
             logger.error("❌ Context state - appServerId: {}, currentGame: {}", 
                     context.getAppServerId(), context.getCurrentGame());
+            throw new IllegalStateException(errorMsg);
+        }
+        
+        // Validate appServerId matches expected value (if per-clan key was used)
+        if (expectedAppServerId != null && !expectedAppServerId.equals(appServerId)) {
+            String errorMsg = String.format(
+                    "DATA_INGESTION_FAILED: appServerId mismatch. " +
+                    "Expected: %d (from clan configuration), but found: %d in log file. " +
+                    "Game map: %s, timestamp: %s. " +
+                    "This log file does not belong to the configured clan.",
+                    expectedAppServerId, appServerId, event.getMap(), event.getTimestamp());
+            logger.error("❌ {}", errorMsg);
             throw new IllegalStateException(errorMsg);
         }
         

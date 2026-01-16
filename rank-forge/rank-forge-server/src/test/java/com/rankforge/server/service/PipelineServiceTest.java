@@ -35,6 +35,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -71,7 +72,8 @@ class PipelineServiceTest {
         objectMapper = ObjectMapperFactory.createObjectMapper();
         eventProcessingContext = new EventProcessingContext();
         pipelineService = new PipelineService(gameEventRepository, playerStatsRepository, 
-                accoladeRepository, gameRepository, objectMapper, eventProcessingContext);
+                accoladeRepository, gameRepository, objectMapper, eventProcessingContext,
+                mock(ClanService.class));
         
         // Mock EntityManagerFactory to return EntityManager
         when(entityManagerFactory.createEntityManager()).thenReturn(entityManager);

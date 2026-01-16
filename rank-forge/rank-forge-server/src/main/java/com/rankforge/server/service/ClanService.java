@@ -37,6 +37,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.mindrot.jbcrypt.BCrypt;
+
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -74,36 +77,170 @@ public class ClanService {
     }
     
     /**
-     * Create a new clan with appServerId claim validation
-     * After creation, retroactively associates existing games and players
+     * Create a new clan (step 1 of 2-step creation)
+     * Generates API key and returns it in DTO (shown once)
+     * appServerId will be configured in step 2
      */
     @Transactional
-    public Clan createClan(Long appServerId, String name, String telegramChannelId, Long adminUserId) {
+    public ClanDTO createClan(String name, String telegramChannelId, Long adminUserId) {
         // Validate admin user exists
         Optional<User> adminUserOpt = userRepository.findById(adminUserId);
         if (adminUserOpt.isEmpty()) {
             throw new IllegalArgumentException("Admin user not found: " + adminUserId);
         }
         
-        // Check if appServerId is already claimed
-        if (clanRepository.existsByAppServerId(appServerId)) {
-            throw new IllegalStateException("App server ID already claimed: " + appServerId);
+        // Generate secure API key
+        String apiKey = generateSecureApiKey();
+        
+        // Hash the key using BCrypt
+        String apiKeyHash = BCrypt.hashpw(apiKey, BCrypt.gensalt(12));
+        
+        // Create clan without appServerId (PENDING status)
+        Clan clan = new Clan(name, telegramChannelId, adminUserId);
+        clan.setPrimaryApiKeyHash(apiKeyHash);
+        clan.setApiKeyCreatedAt(Instant.now());
+        
+        Clan savedClan = clanRepository.save(clan);
+        logger.info("Created clan {} (PENDING) by admin {} with API key", savedClan.getId(), adminUserId);
+        
+        // Return DTO with plain API key (only time it's shown)
+        ClanDTO dto = new ClanDTO(savedClan);
+        dto.setApiKey(apiKey);
+        return dto;
+    }
+    
+    /**
+     * Configure appServerId for a clan (step 2 of 2-step creation)
+     * After configuration, retroactively associates existing games and players
+     */
+    @Transactional
+    public Clan configureAppServerId(Long clanId, Long appServerId, Long adminUserId) {
+        // Verify user is admin of clan
+        Optional<Clan> clanOpt = clanRepository.findById(clanId);
+        if (clanOpt.isEmpty()) {
+            throw new IllegalArgumentException("Clan not found: " + clanId);
         }
         
-        // Create clan
-        Clan clan = new Clan(appServerId, name, telegramChannelId, adminUserId);
+        Clan clan = clanOpt.get();
+        if (!clan.getAdminUserId().equals(adminUserId)) {
+            throw new IllegalStateException("Only clan admin can configure appServerId");
+        }
+        
+        // Check if appServerId is already claimed by another clan
+        Optional<Clan> existingClanOpt = clanRepository.findByAppServerId(appServerId);
+        if (existingClanOpt.isPresent() && !existingClanOpt.get().getId().equals(clanId)) {
+            throw new IllegalStateException("App server ID already claimed by another clan: " + appServerId);
+        }
+        
+        // Update clan with appServerId
+        clan.setAppServerId(appServerId);
         Clan savedClan = clanRepository.save(clan);
-        logger.info("Created clan {} for appServerId {} by admin {}", savedClan.getId(), appServerId, adminUserId);
+        logger.info("Configured appServerId {} for clan {} by admin {}", appServerId, clanId, adminUserId);
         
         // Retroactively associate existing games and players
         try {
             associateExistingGamesAndPlayers(savedClan.getId(), appServerId);
         } catch (Exception e) {
             logger.error("Failed to associate existing games and players for clan {}: {}", savedClan.getId(), e.getMessage(), e);
-            // Don't fail clan creation if association fails - it can be retried later
+            // Don't fail configuration if association fails - it can be retried later
         }
         
         return savedClan;
+    }
+    
+    /**
+     * Regenerate API key for a clan (key rotation)
+     * Moves current primary key to secondary, generates new primary key
+     * Returns new key (shown once)
+     */
+    @Transactional
+    public String regenerateApiKey(Long clanId, Long adminUserId) {
+        // Verify user is admin of clan
+        Optional<Clan> clanOpt = clanRepository.findById(clanId);
+        if (clanOpt.isEmpty()) {
+            throw new IllegalArgumentException("Clan not found: " + clanId);
+        }
+        
+        Clan clan = clanOpt.get();
+        if (!clan.getAdminUserId().equals(adminUserId)) {
+            throw new IllegalStateException("Only clan admin can regenerate API key");
+        }
+        
+        // Move current primary to secondary (for rotation support)
+        if (clan.getPrimaryApiKeyHash() != null) {
+            clan.setSecondaryApiKeyHash(clan.getPrimaryApiKeyHash());
+        }
+        
+        // Generate new primary key
+        String newApiKey = generateSecureApiKey();
+        String newApiKeyHash = BCrypt.hashpw(newApiKey, BCrypt.gensalt(12));
+        clan.setPrimaryApiKeyHash(newApiKeyHash);
+        clan.setApiKeyRotatedAt(Instant.now());
+        
+        clanRepository.save(clan);
+        logger.info("Regenerated API key for clan {} by admin {}", clanId, adminUserId);
+        
+        return newApiKey;
+    }
+    
+    /**
+     * Validate API key and return associated clan
+     * Checks both primary and secondary keys (for rotation support)
+     */
+    public Optional<Clan> validateApiKey(String apiKey) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            return Optional.empty();
+        }
+        
+        // Find all clans with API keys (both primary and secondary)
+        List<Clan> allClans = clanRepository.findAll();
+        
+        for (Clan clan : allClans) {
+            // Check primary key
+            if (clan.getPrimaryApiKeyHash() != null) {
+                try {
+                    if (BCrypt.checkpw(apiKey, clan.getPrimaryApiKeyHash())) {
+                        logger.debug("API key validated for clan {} (primary key)", clan.getId());
+                        return Optional.of(clan);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Error checking primary API key for clan {}: {}", clan.getId(), e.getMessage());
+                }
+            }
+            
+            // Check secondary key (for rotation support)
+            if (clan.getSecondaryApiKeyHash() != null) {
+                try {
+                    if (BCrypt.checkpw(apiKey, clan.getSecondaryApiKeyHash())) {
+                        logger.debug("API key validated for clan {} (secondary key)", clan.getId());
+                        return Optional.of(clan);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Error checking secondary API key for clan {}: {}", clan.getId(), e.getMessage());
+                }
+            }
+        }
+        
+        return Optional.empty();
+    }
+    
+    /**
+     * Generate a secure random API key
+     * Uses UUID + SecureRandom for uniqueness and security
+     */
+    private String generateSecureApiKey() {
+        SecureRandom random = new SecureRandom();
+        StringBuilder key = new StringBuilder();
+        
+        // Generate 32-character key using alphanumeric characters
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        for (int i = 0; i < 32; i++) {
+            key.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        
+        // Add UUID for additional uniqueness
+        String uuid = UUID.randomUUID().toString().replace("-", "");
+        return key.toString() + uuid.substring(0, 8); // Total 40 chars
     }
     
     /**
@@ -168,8 +305,12 @@ public class ClanService {
     
     /**
      * Check if appServerId is already claimed
+     * Handles nullable appServerId (returns false if null)
      */
     public boolean isAppServerClaimed(Long appServerId) {
+        if (appServerId == null) {
+            return false;
+        }
         return clanRepository.existsByAppServerId(appServerId);
     }
     

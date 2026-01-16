@@ -34,6 +34,9 @@ public class ClanDTO {
     private Long adminUserId;
     private Long createdAt; // Unix timestamp
     private Long updatedAt; // Unix timestamp
+    private String apiKey; // Only populated when creating new clan (shown once)
+    private Boolean hasApiKey; // Indicates if key exists (but not the value)
+    private String status; // PENDING or ACTIVE
     
     public ClanDTO() {}
     
@@ -47,6 +50,8 @@ public class ClanDTO {
             clan.getCreatedAt().getEpochSecond() : null;
         this.updatedAt = clan.getUpdatedAt() != null ? 
             clan.getUpdatedAt().getEpochSecond() : null;
+        this.hasApiKey = clan.getPrimaryApiKeyHash() != null && !clan.getPrimaryApiKeyHash().isEmpty();
+        this.status = clan.isActive() ? "ACTIVE" : "PENDING";
     }
     
     // Getters and setters
@@ -104,5 +109,29 @@ public class ClanDTO {
     
     public void setUpdatedAt(Long updatedAt) {
         this.updatedAt = updatedAt;
+    }
+    
+    public String getApiKey() {
+        return apiKey;
+    }
+    
+    public void setApiKey(String apiKey) {
+        this.apiKey = apiKey;
+    }
+    
+    public Boolean getHasApiKey() {
+        return hasApiKey;
+    }
+    
+    public void setHasApiKey(Boolean hasApiKey) {
+        this.hasApiKey = hasApiKey;
+    }
+    
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
     }
 }
