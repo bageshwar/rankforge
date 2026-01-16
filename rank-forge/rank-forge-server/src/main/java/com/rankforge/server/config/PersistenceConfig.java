@@ -53,7 +53,7 @@ import java.util.Properties;
  */
 @Configuration
 @EnableTransactionManagement
-@EnableJpaRepositories(basePackages = "com.rankforge.pipeline.persistence.repository")
+@EnableJpaRepositories(basePackages = {"com.rankforge.pipeline.persistence.repository", "com.rankforge.server.repository"})
 public class PersistenceConfig {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(PersistenceConfig.class);
@@ -74,7 +74,7 @@ public class PersistenceConfig {
     public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
         LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
         em.setDataSource(dataSource);
-        em.setPackagesToScan("com.rankforge.pipeline.persistence.entity");
+        em.setPackagesToScan("com.rankforge.pipeline.persistence.entity", "com.rankforge.server.entity");
         em.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
         
         Properties properties = new Properties();

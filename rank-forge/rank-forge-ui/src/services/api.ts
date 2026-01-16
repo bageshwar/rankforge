@@ -9,6 +9,35 @@ const apiClient = axios.create({
   },
 });
 
+// Add JWT token to requests if available
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle 401 errors (unauthorized) - clear token and redirect to login
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      // Clear token and trigger auth state update
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('authUser');
+      // Dispatch custom event for AuthContext to handle
+      window.dispatchEvent(new Event('auth:logout'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Types
 export interface PlayerRankingDTO {
   rank: number;
@@ -288,6 +317,76 @@ export const playersApi = {
   health: async (): Promise<string> => {
     const response = await apiClient.get<string>('/players/health');
     return response.data;
+  },
+};
+
+// Auth API Types
+export interface UserDTO {
+  id: number;
+  steamId64: string;
+  steamId3: string;
+  personaName: string;
+  avatarUrl?: string;
+  avatarMediumUrl?: string;
+  avatarSmallUrl?: string;
+  profileUrl?: string;
+  accountCreated?: number;
+  vacBanned: boolean;
+  country?: string;
+  createdAt?: number;
+  lastLogin?: number;
+}
+
+export interface AuthResponseDTO {
+  token: string;
+  user: UserDTO;
+  expiresAt: number;
+}
+
+export interface CurrentUserResponse {
+  user: UserDTO;
+  stats?: {
+    currentRank: number;
+    totalKills: number;
+    totalDeaths: number;
+    totalAssists: number;
+    killDeathRatio: number;
+    totalGamesPlayed: number;
+    totalRoundsPlayed: number;
+  };
+}
+
+// Auth API
+export const authApi = {
+  getLoginUrl: async (): Promise<string> => {
+    const response = await apiClient.get<{ loginUrl: string }>('/auth/login');
+    return response.data.loginUrl;
+  },
+
+  getMe: async (): Promise<CurrentUserResponse> => {
+    const response = await apiClient.get<CurrentUserResponse>('/users/me');
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await apiClient.post('/auth/logout');
+  },
+
+  refreshToken: async (): Promise<AuthResponseDTO> => {
+    const response = await apiClient.post<AuthResponseDTO>('/auth/refresh');
+    return response.data;
+  },
+};
+
+// Users API
+export const usersApi = {
+  getAvatar: async (steamId: string): Promise<string> => {
+    try {
+      const response = await apiClient.get<{ avatarUrl: string }>(`/users/${steamId}/avatar`);
+      return response.data.avatarUrl;
+    } catch (error) {
+      return '/default-avatar.png';
+    }
   },
 };
 

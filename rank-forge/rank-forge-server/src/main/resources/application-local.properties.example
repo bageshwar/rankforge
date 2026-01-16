@@ -87,3 +87,15 @@ rankforge.api.key=your_api_key_here
 rankforge.s3.accessKey=AKIAIOSFODNN7EXAMPLE
 rankforge.s3.secretKey=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 rankforge.s3.region=us-east-1
+
+# Steam Authentication Configuration
+# Get Steam API key from: https://steamcommunity.com/dev/apikey
+steam.api.key=your_steam_api_key_here
+steam.openid.realm=http://localhost:8080
+steam.openid.return-url=http://localhost:8080/api/auth/callback
+steam.openid.frontend-callback=http://localhost:5173/auth/callback
+
+# JWT Configuration
+# Generate a secure random secret: openssl rand -base64 32
+jwt.secret=your_jwt_secret_here
+jwt.expiration=604800000

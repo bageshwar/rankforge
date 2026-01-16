@@ -1,8 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { LoginButton } from '../Auth/LoginButton';
+import { UserMenu } from '../Auth/UserMenu';
 import './NavigationBar.css';
 
 export const NavigationBar = () => {
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -35,6 +39,10 @@ export const NavigationBar = () => {
           >
             🎮 Games
           </Link>
+        </div>
+
+        <div className="navbar-auth">
+          {isAuthenticated ? <UserMenu /> : <LoginButton />}
         </div>
       </div>
     </nav>
