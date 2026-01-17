@@ -27,9 +27,9 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration tests for the simplified event linking flow.
+ * Unit tests for the simplified event linking flow.
  * 
- * These tests validate the end-to-end behavior described in the plan:
+ * These tests validate the event linking behavior of EventProcessingContext:
  * 
  * Event Processing Order (from Parser):
  * 1. GAME_OVER received (FIRST!) → Create GameEntity, store in context
@@ -39,16 +39,21 @@ import static org.junit.jupiter.api.Assertions.*;
  * 5. (More rounds: repeat 2-4)
  * 6. GAME_PROCESSED received → Batch save all pending entities
  * 
+ * Note: These are unit tests that test EventProcessingContext in isolation,
+ * without database or Spring context dependencies.
+ * 
  * Author bageshwar.pn
  * Date 2026
  */
-class EventLinkingIntegrationTest {
+class EventLinkingTest {
 
     private EventProcessingContext context;
 
     @BeforeEach
     void setUp() {
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds)
+        context.setAppServerId(100L);
     }
 
     @Nested
