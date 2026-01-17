@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './GamesPage.css';
 
 export const GamesPage = () => {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const [games, setGames] = useState<GameDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState<number | null>(null);
@@ -27,7 +27,14 @@ export const GamesPage = () => {
       setLoading(true);
       setError(null);
       
-      // Require default clan - show error if not set
+      // Check if user is authenticated
+      if (!user) {
+        setError('Please log in to view games.');
+        setGames([]);
+        return;
+      }
+      
+      // Require default clan if user is logged in
       if (!defaultClanId) {
         setError('Please select a default clan in your profile to view games.');
         setGames([]);
@@ -87,7 +94,12 @@ export const GamesPage = () => {
         </div>
       </div>
 
-      {!defaultClanId && (
+      {!user && (
+        <div className="clan-required-message">
+          <p>🔐 Please <button onClick={login} className="inline-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'inherit' }}>log in</button> to view games.</p>
+        </div>
+      )}
+      {user && !defaultClanId && (
         <div className="clan-required-message">
           <p>⚠️ Please select a default clan in your <Link to="/my-profile" className="inline-link">profile</Link> to view games.</p>
         </div>

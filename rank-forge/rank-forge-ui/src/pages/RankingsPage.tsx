@@ -12,7 +12,7 @@ import './RankingsPage.css';
 type TabType = 'all-time' | 'monthly';
 
 export const RankingsPage = () => {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Read URL parameters with defaults
@@ -132,17 +132,27 @@ export const RankingsPage = () => {
       }
       setError(null);
       
+      // Check if user is authenticated
+      if (!user) {
+        setError('Please log in to view rankings.');
+        setRankings([]);
+        setTotalGames(0);
+        setTotalRounds(0);
+        setTotalPlayers(0);
+        return;
+      }
+      
+      // Require default clan if user is logged in
+      if (!defaultClanId) {
+        setError('Please select a default clan in your profile to view rankings.');
+        setRankings([]);
+        setTotalGames(0);
+        setTotalRounds(0);
+        setTotalPlayers(0);
+        return;
+      }
+      
         if (activeTab === 'monthly') {
-          // Require default clan - show error if not set
-          if (!defaultClanId) {
-            setError('Please select a default clan in your profile to view rankings.');
-            setRankings([]);
-            setTotalGames(0);
-            setTotalRounds(0);
-            setTotalPlayers(0);
-            return;
-          }
-          
           const response = await rankingsApi.getMonthlyLeaderboard(
             defaultClanId,
             selectedYear,
@@ -155,16 +165,6 @@ export const RankingsPage = () => {
         setTotalRounds(response.totalRounds);
         setTotalPlayers(response.totalPlayers);
       } else {
-        // Require default clan - show error if not set
-        if (!defaultClanId) {
-          setError('Please select a default clan in your profile to view rankings.');
-          setRankings([]);
-          setTotalGames(0);
-          setTotalRounds(0);
-          setTotalPlayers(0);
-          return;
-        }
-        
         let response: LeaderboardResponseDTO;
         if (limit) {
           response = await rankingsApi.getTopWithStats(limit, defaultClanId);
@@ -367,7 +367,12 @@ export const RankingsPage = () => {
         )}
       </div>
 
-      {!defaultClanId && (
+      {!user && (
+        <div className="clan-required-message">
+          <p>🔐 Please <button onClick={login} className="inline-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'inherit' }}>log in</button> to view rankings.</p>
+        </div>
+      )}
+      {user && !defaultClanId && (
         <div className="clan-required-message">
           <p>⚠️ Please select a default clan in your <Link to="/my-profile" className="inline-link">profile</Link> to view rankings.</p>
         </div>

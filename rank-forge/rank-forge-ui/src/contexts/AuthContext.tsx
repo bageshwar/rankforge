@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { authApi } from '../services/api';
+import { authApi, clansApi, usersApi } from '../services/api';
 import type { UserDTO } from '../services/api';
 
 interface AuthContextType {
@@ -45,6 +45,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const currentUser = await authApi.getMe();
           setUser(currentUser.user);
           localStorage.setItem('authUser', JSON.stringify(currentUser.user));
+          
+          // Auto-select default clan if user has exactly 1 clan and no default set
+          if (!currentUser.user.defaultClanId) {
+            try {
+              const userClans = await clansApi.getMyClans();
+              if (userClans.length === 1) {
+                // User has exactly 1 clan, set it as default
+                await usersApi.updateDefaultClan(userClans[0].id);
+                // Refresh user to get updated defaultClanId
+                const updatedUser = await authApi.getMe();
+                setUser(updatedUser.user);
+                localStorage.setItem('authUser', JSON.stringify(updatedUser.user));
+              }
+            } catch (error) {
+              // Silently fail - not critical if auto-selection fails
+              console.debug('Could not auto-select default clan:', error);
+            }
+          }
         } catch (error) {
           // Token invalid or expired, clear storage
           localStorage.removeItem('authToken');
@@ -71,6 +89,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const currentUser = await authApi.getMe();
           setUser(currentUser.user);
           localStorage.setItem('authUser', JSON.stringify(currentUser.user));
+          
+          // Auto-select default clan if user has exactly 1 clan and no default set
+          if (!currentUser.user.defaultClanId) {
+            try {
+              const userClans = await clansApi.getMyClans();
+              if (userClans.length === 1) {
+                // User has exactly 1 clan, set it as default
+                await usersApi.updateDefaultClan(userClans[0].id);
+                // Refresh user to get updated defaultClanId
+                const updatedUser = await authApi.getMe();
+                setUser(updatedUser.user);
+                localStorage.setItem('authUser', JSON.stringify(updatedUser.user));
+              }
+            } catch (error) {
+              // Silently fail - not critical if auto-selection fails
+              console.debug('Could not auto-select default clan:', error);
+            }
+          }
         } catch (error) {
           console.error('Failed to load user after login:', error);
         }
@@ -108,6 +144,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const currentUser = await authApi.getMe();
       setUser(currentUser.user);
       localStorage.setItem('authUser', JSON.stringify(currentUser.user));
+      
+      // Auto-select default clan if user has exactly 1 clan and no default set
+      if (!currentUser.user.defaultClanId) {
+        try {
+          const userClans = await clansApi.getMyClans();
+          if (userClans.length === 1) {
+            // User has exactly 1 clan, set it as default
+            await usersApi.updateDefaultClan(userClans[0].id);
+            // Refresh user to get updated defaultClanId
+            const updatedUser = await authApi.getMe();
+            setUser(updatedUser.user);
+            localStorage.setItem('authUser', JSON.stringify(updatedUser.user));
+          }
+        } catch (error) {
+          // Silently fail - not critical if auto-selection fails
+          console.debug('Could not auto-select default clan:', error);
+        }
+      }
     } catch (error) {
       console.error('Failed to refresh user:', error);
       // If refresh fails, user might be logged out
