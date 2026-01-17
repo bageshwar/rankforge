@@ -54,7 +54,6 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -225,7 +224,10 @@ class PipelineApiE2ETest {
             "PlayerStats",      // References Game
             "Accolade",         // References Game  
             "GameEvent",        // References Game and itself (roundStartEventId)
-            "Game"              // Parent table
+            "Game",             // Parent table
+            "ClanMembership",   // References Clan and Users
+            "Clan",             // References Users
+            "Users"             // User table
         };
         
         for (String table : tablesToClear) {
@@ -259,6 +261,17 @@ class PipelineApiE2ETest {
     @DisplayName("E2E Database Validation Tests")
     @TestInstance(TestInstance.Lifecycle.PER_CLASS)
     class DatabaseValidationTests {
+        
+        @Autowired
+        private com.rankforge.server.repository.ClanRepository clanRepository;
+        
+        @Autowired
+        private com.rankforge.server.repository.UserRepository userRepository;
+        
+        @Autowired
+        private com.rankforge.server.service.ClanService clanService;
+        
+        private static final Long TEST_APP_SERVER_ID = 2347773L; // From log file (same as ClanCreationAndIngestionTests)
         
         /**
          * Runs before all tests in this nested class.
@@ -337,47 +350,117 @@ class PipelineApiE2ETest {
          * - 39 distinct round references across all events
          * - 2 games with 21 accolades
          * - All entity references are correctly set
+         * 
+         * Now creates a clan before ingesting data to match the per-clan API key workflow.
          */
         @Test
         @DisplayName("E2E: Process log file and validate all database records")
         void processLogFileAndValidateDatabaseRecords() throws Exception {
-            String apiKey = getApiKey();
-            assumeTrue(apiKey != null && !apiKey.isEmpty() && !apiKey.equals("your_api_key_here"),
-                    "API key must be configured in application-local.properties");
+            // Setup: Create a test user and clan before ingesting data
+            System.out.println("\n" + "=".repeat(70));
+            System.out.println("Step 1: Creating test user and clan...");
+            System.out.println("=".repeat(70));
             
-            // Verify we're on staging (redundant but safe)
-            assertStagingDatabase();
+            com.rankforge.server.entity.User testUser = createTestUser();
+            Long clanId = null;
+            String apiKey = null;
             
-            // Trigger log processing
-            ProcessLogRequest request = new ProcessLogRequest(TEST_S3_PATH);
-            String responseContent = mockMvc.perform(post("/api/pipeline/process")
-                            .header("X-API-Key", apiKey)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(request)))
-                    .andExpect(status().isAccepted())
-                    .andReturn()
-                    .getResponse()
-                    .getContentAsString();
-            
-            ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
-            System.out.println("🚀 Started log processing job: " + response.getJobId());
-            
-            // Wait for async processing to complete (poll database)
-            // Using 20 seconds timeout - should be more than enough for H2 inserts
-            boolean processingComplete = waitForProcessingComplete(20, TimeUnit.SECONDS);
-            assertTrue(processingComplete, "Processing should complete within timeout");
-            
-            // Now run all validations
-            validateGameCount();
-            validateRoundStartEventCount();
-            validateAccoladeCount();
-            validateAllGameReferences();
-            validateAllRoundStartReferences();
-            validateDistinctRoundReferences();
-            validatePlayerRoundsPlayed();
-            validateGameEventTypes();
-            
-            System.out.println("✅ All E2E database validations passed!");
+            try {
+                // Step 1: Create clan (get API key)
+                ClanDTO clanDTO = clanService.createClan(
+                    "Test Clan DatabaseValidation", null, testUser.getId());
+                
+                assertNotNull(clanDTO, "Clan DTO should not be null");
+                assertNotNull(clanDTO.getApiKey(), "API key should be returned on creation");
+                apiKey = clanDTO.getApiKey();
+                clanId = clanDTO.getId();
+                System.out.println("✓ Created clan ID: " + clanId);
+                System.out.println("✓ API key: " + apiKey.substring(0, 8) + "...");
+                
+                // Step 2: Configure appServerId
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 2: Configuring appServerId...");
+                System.out.println("=".repeat(70));
+                
+                com.rankforge.server.entity.Clan configuredClan = clanService.configureAppServerId(
+                    clanId, TEST_APP_SERVER_ID, testUser.getId());
+                
+                assertNotNull(configuredClan, "Configured clan should not be null");
+                assertEquals(TEST_APP_SERVER_ID, configuredClan.getAppServerId(), 
+                    "appServerId should be set");
+                System.out.println("✓ Configured appServerId: " + TEST_APP_SERVER_ID);
+                
+                // Step 3: Ingest logs using per-clan API key
+                System.out.println("\n" + "=".repeat(70));
+                System.out.println("Step 3: Ingesting logs with per-clan API key...");
+                System.out.println("=".repeat(70));
+                
+                // Verify we're on staging (redundant but safe)
+                assertStagingDatabase();
+                
+                // Trigger log processing
+                ProcessLogRequest request = new ProcessLogRequest(TEST_S3_PATH);
+                String responseContent = mockMvc.perform(post("/api/pipeline/process")
+                                .header("X-API-Key", apiKey)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                        .andExpect(status().isAccepted())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+                
+                ProcessLogResponse response = objectMapper.readValue(responseContent, ProcessLogResponse.class);
+                System.out.println("🚀 Started log processing job: " + response.getJobId());
+                
+                // Wait for async processing to complete (poll database)
+                // Using 20 seconds timeout - should be more than enough for H2 inserts
+                boolean processingComplete = waitForProcessingComplete(20, TimeUnit.SECONDS);
+                assertTrue(processingComplete, "Processing should complete within timeout");
+                
+                // Now run all validations
+                validateGameCount();
+                validateRoundStartEventCount();
+                validateAccoladeCount();
+                validateAllGameReferences();
+                validateAllRoundStartReferences();
+                validateDistinctRoundReferences();
+                validatePlayerRoundsPlayed();
+                validateGameEventTypes();
+                
+                System.out.println("✅ All E2E database validations passed!");
+                
+            } finally {
+                // Cleanup: Delete test user and clan
+                if (clanId != null) {
+                    try {
+                        clanRepository.deleteById(clanId);
+                        System.out.println("✓ Cleaned up test clan: " + clanId);
+                    } catch (Exception e) {
+                        System.out.println("⚠ Could not clean up clan: " + e.getMessage());
+                    }
+                }
+                if (testUser != null && testUser.getId() != null) {
+                    try {
+                        userRepository.deleteById(testUser.getId());
+                        System.out.println("✓ Cleaned up test user: " + testUser.getId());
+                    } catch (Exception e) {
+                        System.out.println("⚠ Could not clean up user: " + e.getMessage());
+                    }
+                }
+            }
+        }
+        
+        /**
+         * Creates a test user for the E2E test
+         */
+        private com.rankforge.server.entity.User createTestUser() {
+            com.rankforge.server.entity.User user = new com.rankforge.server.entity.User();
+            // Generate a valid 17-digit Steam ID64 (format: 7656119XXXXXXXXXX)
+            long timestamp = System.currentTimeMillis() % 1000000000L; // 9 digits max
+            user.setSteamId64("7656119" + String.format("%010d", timestamp));
+            user.setSteamId3("[U:1:1000000]");
+            user.setPersonaName("TestUserDatabaseValidation");
+            return userRepository.save(user);
         }
         
         // Helper method called from processLogFileAndValidateDatabaseRecords

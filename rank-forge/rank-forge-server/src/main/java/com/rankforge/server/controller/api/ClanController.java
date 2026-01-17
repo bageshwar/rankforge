@@ -53,7 +53,7 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/clans")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class ClanController {
     
     private static final Logger logger = LoggerFactory.getLogger(ClanController.class);

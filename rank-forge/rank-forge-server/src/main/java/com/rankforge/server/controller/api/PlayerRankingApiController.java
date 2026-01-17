@@ -42,7 +42,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/rankings")
-@CrossOrigin(origins = "*") // Allow CORS for frontend development
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 @Validated
 public class PlayerRankingApiController {
 

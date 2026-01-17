@@ -52,13 +52,35 @@ public class JwtService {
     @Value("${jwt.expiration:604800000}") // Default 7 days in milliseconds
     private Long expiration;
     
+    @Value("${spring.profiles.active:}")
+    private String activeProfiles;
+    
+    @Value("${jwt.secret.min-length:32}")
+    private int minSecretLength;
+    
     @PostConstruct
     public void validateConfiguration() {
         if (secret == null || secret.isEmpty()) {
             throw new IllegalStateException("JWT secret is not configured. Please set jwt.secret property.");
         }
-        if (secret.length() < 32) {
-            logger.warn("JWT secret is too short ({} chars). For production, use at least 32 characters.", secret.length());
+        
+        // In production, enforce minimum secret length for security
+        boolean isProduction = activeProfiles != null && 
+                               (activeProfiles.contains("prod") || 
+                                activeProfiles.contains("production") || 
+                                activeProfiles.contains("azure"));
+        
+        if (secret.length() < minSecretLength) {
+            String errorMessage = String.format(
+                "JWT secret is too short (%d chars). Minimum required: %d characters. " +
+                "Generate with: openssl rand -base64 32", 
+                secret.length(), minSecretLength);
+            
+            if (isProduction) {
+                throw new IllegalStateException(errorMessage);
+            } else {
+                logger.warn(errorMessage);
+            }
         }
     }
     

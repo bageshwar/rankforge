@@ -35,7 +35,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/games")
-@CrossOrigin(origins = "*") // Allow CORS for frontend development
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class GameApiController {
 
     private final GameService gameService;

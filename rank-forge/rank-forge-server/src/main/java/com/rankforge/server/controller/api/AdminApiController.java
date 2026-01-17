@@ -37,7 +37,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin(origins = "*") // Allow CORS for frontend development
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class AdminApiController {
     
     private static final Logger logger = LoggerFactory.getLogger(AdminApiController.class);

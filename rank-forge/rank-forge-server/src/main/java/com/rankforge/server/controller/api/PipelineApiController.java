@@ -40,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
  */
 @RestController
 @RequestMapping("/api/pipeline")
-@CrossOrigin(origins = "*") // Allow CORS for frontend development
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class PipelineApiController {
 
     private static final Logger logger = LoggerFactory.getLogger(PipelineApiController.class);

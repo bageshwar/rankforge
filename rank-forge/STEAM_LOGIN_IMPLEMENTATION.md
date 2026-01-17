@@ -69,6 +69,7 @@ See `STEAM_LOGIN_TESTING.md` for complete testing guide.
 
 ## Known Limitations
 - JWT stored in localStorage (standard for SPAs, but not httpOnly)
+  - See `rank-forge-ui/SECURITY.md` for detailed security documentation and XSS mitigation strategies
 - JWT token passed in URL query parameter during OAuth callback (can appear in logs/referrers)
   - Mitigation: Tokens are short-lived (7 days), HTTPS required in production
   - Future: Implement code exchange pattern for better security
