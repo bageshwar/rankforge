@@ -134,7 +134,7 @@ public class PipelineService {
         
         EventStore eventStore = jpaEventStore;
         
-        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext);
+        PlayerStatsStore statsRepo = new JpaPlayerStatsStore(playerStatsRepository, eventProcessingContext, gameRepository);
         AccoladeStore accoladeStore = new AccoladeStore(accoladeRepository, eventProcessingContext);
         
         // Create ranking algorithm and service

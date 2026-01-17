@@ -461,6 +461,16 @@ public class JpaEventStore implements EventStore, GameEventListener {
         GameEntity game = context.getCurrentGame();
         
         if (game != null) {
+            // Validate appServerId is set before persisting
+            if (game.getAppServerId() == null) {
+                logger.error("GameEntity has NULL appServerId when attempting to persist! Map: {}, Timestamp: {}, ID: {}", 
+                        game.getMap(), game.getGameOverTimestamp(), game.getId());
+                throw new IllegalStateException(
+                        "GameEntity must have appServerId set before persistence. " +
+                        "Map: " + game.getMap() + ", Timestamp: " + game.getGameOverTimestamp());
+            }
+            logger.debug("Persisting GameEntity with appServerId: {}, map: {}", game.getAppServerId(), game.getMap());
+            
             long gameStartTime = System.currentTimeMillis();
             // Use merge instead of persist to handle both new and detached entities
             // If game.id is null, merge behaves like persist
@@ -471,11 +481,20 @@ public class JpaEventStore implements EventStore, GameEventListener {
                 game = entityManager.merge(game);
             }
             
+            // Verify appServerId is still set after merge
+            if (game.getAppServerId() == null) {
+                logger.error("GameEntity appServerId became NULL after merge! Map: {}, ID: {}", 
+                        game.getMap(), game.getId());
+                throw new IllegalStateException(
+                        "GameEntity appServerId was lost during merge. " +
+                        "Map: " + game.getMap() + ", ID: " + game.getId());
+            }
+            
             try {
                 entityManager.flush(); // Flush to get the generated ID
             } catch (Exception e) {
-                logger.error("Failed to flush GameEntity. Game map: {}, Game ID: {}", 
-                        game.getMap(), game.getId(), e);
+                logger.error("Failed to flush GameEntity. Game map: {}, Game ID: {}, appServerId: {}", 
+                        game.getMap(), game.getId(), game.getAppServerId(), e);
                 throw new RuntimeException("Failed to flush GameEntity", e);
             }
             

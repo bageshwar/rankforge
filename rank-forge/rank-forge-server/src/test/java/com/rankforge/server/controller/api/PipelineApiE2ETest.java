@@ -426,6 +426,7 @@ class PipelineApiE2ETest {
                 validateDistinctRoundReferences();
                 validatePlayerRoundsPlayed();
                 validateGameEventTypes();
+                validateAppServerId();
                 
                 System.out.println("✅ All E2E database validations passed!");
                 
@@ -470,7 +471,7 @@ class PipelineApiE2ETest {
             assertEquals(EXPECTED_GAMES, games.size(), 
                     "Should have exactly " + EXPECTED_GAMES + " games in database");
             
-            // Validate game fields are populated with specific expected values
+                // Validate game fields are populated with specific expected values
             for (GameEntity game : games) {
                 assertNotNull(game.getId(), "Game should have an ID");
                 assertNotNull(game.getMap(), "Game should have a map");
@@ -480,6 +481,12 @@ class PipelineApiE2ETest {
                 assertNotNull(game.getMode(), "Game should have a mode");
                 assertNotNull(game.getAppServerId(), "Game should have appServerId (required for clan filtering)");
                 assertTrue(game.getAppServerId() > 0, "Game appServerId should be positive, but was: " + game.getAppServerId());
+                
+                // Validate appServerId is present (extracted from ResetBreakpadAppId log line)
+                assertNotNull(game.getAppServerId(), 
+                        "Game ID " + game.getId() + " must have appServerId set (extracted from ResetBreakpadAppId log line)");
+                assertTrue(game.getAppServerId() > 0, 
+                        "Game ID " + game.getId() + " appServerId must be positive. Found: " + game.getAppServerId());
                 
                 // Validate expected maps from test data
                 assertTrue(game.getMap().equals("de_ancient") || game.getMap().equals("de_anubis"),
@@ -579,6 +586,23 @@ class PipelineApiE2ETest {
                     System.out.println("  ✗ Event ID " + event.getId() + " (" + 
                             event.getGameEventType() + ") has no game reference!");
                 }
+                
+                // Validate appServerId is present and matches game
+                assertNotNull(event.getGame(), "Event ID " + event.getId() + " must have a game reference");
+                assertNotNull(event.getAppServerId(), 
+                        "Event ID " + event.getId() + " must have appServerId set");
+                
+                // Access game properties to avoid lazy loading issues - get game ID first
+                Long gameId = event.getGame() != null ? event.getGame().getId() : null;
+                assertNotNull(gameId, "Event ID " + event.getId() + " must have a valid game ID");
+                
+                // Fetch game entity separately to avoid lazy loading
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist");
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "Event ID " + event.getId() + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), event.getAppServerId(),
+                        "Event ID " + event.getId() + " appServerId must match its game's appServerId");
             }
             
             assertEquals(0, eventsWithoutGame, 
@@ -736,6 +760,23 @@ class PipelineApiE2ETest {
                 assertTrue(accolade.getValue() >= 0, "Accolade value should be non-negative");
                 assertTrue(accolade.getPosition() > 0, "Accolade position should be positive");
                 assertTrue(accolade.getPosition() <= 3, "Accolade position should be 1-3 (top 3 players)");
+                
+                // Validate appServerId is present and matches game
+                assertNotNull(accolade.getGame(), "Accolade ID " + accolade.getId() + " must have a game reference");
+                assertNotNull(accolade.getAppServerId(), 
+                        "Accolade ID " + accolade.getId() + " must have appServerId set");
+                
+                // Access game properties to avoid lazy loading issues - get game ID first
+                Long gameId = accolade.getGame() != null ? accolade.getGame().getId() : null;
+                assertNotNull(gameId, "Accolade ID " + accolade.getId() + " must have a valid game ID");
+                
+                // Fetch game entity separately to avoid lazy loading
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist");
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "Accolade ID " + accolade.getId() + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), accolade.getAppServerId(),
+                        "Accolade ID " + accolade.getId() + " appServerId must match its game's appServerId");
             }
             
             assertEquals(0, accoladesWithoutGame,
@@ -1081,6 +1122,23 @@ class PipelineApiE2ETest {
                 assertTrue(stats.getDamageDealt() >= 0,
                         "Player " + playerName + " damage dealt should be non-negative");
                 
+                // Validate appServerId is present and matches game
+                assertNotNull(stats.getGame(), "PlayerStats for " + playerName + " must have a game reference");
+                assertNotNull(stats.getAppServerId(), 
+                        "PlayerStats for " + playerName + " must have appServerId set");
+                
+                // Access game properties to avoid lazy loading issues - get game ID first
+                Long gameId = stats.getGame() != null ? stats.getGame().getId() : null;
+                assertNotNull(gameId, "PlayerStats for " + playerName + " must have a valid game ID");
+                
+                // Fetch game entity separately to avoid lazy loading
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist for PlayerStats " + playerName);
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "PlayerStats for " + playerName + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), stats.getAppServerId(),
+                        "PlayerStats for " + playerName + " appServerId must match its game's appServerId");
+                
                 playersWithValidStats++;
                 System.out.println("    ✓ " + playerName + ": " +
                         stats.getKills() + "K/" + stats.getDeaths() + "D/" + stats.getAssists() + "A, " +
@@ -1177,6 +1235,143 @@ class PipelineApiE2ETest {
             }
             
             System.out.println("  ✓ All events have valid types and timestamps");
+        }
+        
+        /**
+         * Validates that appServerId is present and consistent across all entities.
+         * This ensures multi-tenant isolation is working correctly - all entities from the same
+         * log file should have the same appServerId.
+         * 
+         * Fails if appServerId is missing on any entity - this is a required field for multi-tenant isolation.
+         */
+        @Test
+        @DisplayName("Validate: appServerId is present and consistent across all entities")
+        void validateAppServerId() {
+            // Get all entities
+            List<GameEntity> games = gameRepository.findAll();
+            List<GameEventEntity> events = gameEventRepository.findAll();
+            List<AccoladeEntity> accolades = accoladeRepository.findAll();
+            List<PlayerStatsEntity> playerStats = playerStatsRepository.findAll();
+            
+            assumeTrue(!games.isEmpty(), "Need at least one game to validate appServerId");
+            
+            // Extract appServerId from first game (all should be the same)
+            Long expectedAppServerId = games.get(0).getAppServerId();
+            
+            // Fail if appServerId is missing - this is required for multi-tenant isolation
+            assertNotNull(expectedAppServerId, 
+                    "appServerId must be present on all games. Missing ResetBreakpadAppId log line or parsing failed.");
+            assertTrue(expectedAppServerId > 0, 
+                    "appServerId must be positive. Found: " + expectedAppServerId);
+            
+            System.out.println("  📊 Validating appServerId consistency (expected: " + expectedAppServerId + "):");
+            
+            // Validate all games have the same appServerId
+            int gamesWithMismatch = 0;
+            for (GameEntity game : games) {
+                assertNotNull(game.getAppServerId(), 
+                        "Game ID " + game.getId() + " must have appServerId set");
+                assertTrue(game.getAppServerId() > 0, 
+                        "Game ID " + game.getId() + " appServerId must be positive. Found: " + game.getAppServerId());
+                if (!game.getAppServerId().equals(expectedAppServerId)) {
+                    gamesWithMismatch++;
+                    System.out.println("    ✗ Game ID " + game.getId() + " has appServerId " + 
+                            game.getAppServerId() + " (expected: " + expectedAppServerId + ")");
+                }
+            }
+            assertEquals(0, gamesWithMismatch,
+                    "All games should have the same appServerId. Found " + gamesWithMismatch + " mismatches.");
+            System.out.println("    ✓ All " + games.size() + " games have appServerId: " + expectedAppServerId);
+            
+            // Validate all game events have the same appServerId
+            int eventsWithMismatch = 0;
+            for (GameEventEntity event : events) {
+                assertNotNull(event.getAppServerId(), 
+                        "Event ID " + event.getId() + " (" + event.getGameEventType() + ") must have appServerId set");
+                assertTrue(event.getAppServerId() > 0, 
+                        "Event ID " + event.getId() + " appServerId must be positive. Found: " + event.getAppServerId());
+                if (!event.getAppServerId().equals(expectedAppServerId)) {
+                    eventsWithMismatch++;
+                    System.out.println("    ✗ Event ID " + event.getId() + " (" + event.getGameEventType() + 
+                            ") has appServerId " + event.getAppServerId() + " (expected: " + expectedAppServerId + ")");
+                }
+            }
+            assertEquals(0, eventsWithMismatch,
+                    "All game events should have the same appServerId. Found " + eventsWithMismatch + " mismatches.");
+            System.out.println("    ✓ All " + events.size() + " game events have appServerId: " + expectedAppServerId);
+            
+            // Validate all accolades have the same appServerId
+            int accoladesWithMismatch = 0;
+            for (AccoladeEntity accolade : accolades) {
+                assertNotNull(accolade.getAppServerId(), 
+                        "Accolade ID " + accolade.getId() + " (" + accolade.getType() + ") must have appServerId set");
+                assertTrue(accolade.getAppServerId() > 0, 
+                        "Accolade ID " + accolade.getId() + " appServerId must be positive. Found: " + accolade.getAppServerId());
+                if (!accolade.getAppServerId().equals(expectedAppServerId)) {
+                    accoladesWithMismatch++;
+                    System.out.println("    ✗ Accolade ID " + accolade.getId() + " (" + accolade.getType() + 
+                            ") has appServerId " + accolade.getAppServerId() + " (expected: " + expectedAppServerId + ")");
+                }
+            }
+            assertEquals(0, accoladesWithMismatch,
+                    "All accolades should have the same appServerId. Found " + accoladesWithMismatch + " mismatches.");
+            System.out.println("    ✓ All " + accolades.size() + " accolades have appServerId: " + expectedAppServerId);
+            
+            // Validate all player stats have the same appServerId
+            int playerStatsWithMismatch = 0;
+            for (PlayerStatsEntity stat : playerStats) {
+                assertNotNull(stat.getAppServerId(), 
+                        "PlayerStats ID " + stat.getId() + " (player: " + stat.getPlayerId() + ") must have appServerId set");
+                assertTrue(stat.getAppServerId() > 0, 
+                        "PlayerStats ID " + stat.getId() + " appServerId must be positive. Found: " + stat.getAppServerId());
+                if (!stat.getAppServerId().equals(expectedAppServerId)) {
+                    playerStatsWithMismatch++;
+                    System.out.println("    ✗ PlayerStats ID " + stat.getId() + " (player: " + stat.getPlayerId() + 
+                            ") has appServerId " + stat.getAppServerId() + " (expected: " + expectedAppServerId + ")");
+                }
+            }
+            assertEquals(0, playerStatsWithMismatch,
+                    "All player stats should have the same appServerId. Found " + playerStatsWithMismatch + " mismatches.");
+            System.out.println("    ✓ All " + playerStats.size() + " player stats have appServerId: " + expectedAppServerId);
+            
+            // Cross-entity consistency check: verify entities reference games with matching appServerId
+            // Use repository to fetch games to avoid lazy loading issues
+            int inconsistentGameReferences = 0;
+            for (GameEventEntity event : events) {
+                assertNotNull(event.getGame(), "Event ID " + event.getId() + " must have a game reference");
+                Long gameId = event.getGame().getId();
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist");
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "Event ID " + event.getId() + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), event.getAppServerId(),
+                        "Event ID " + event.getId() + " appServerId must match its game's appServerId");
+            }
+            
+            for (AccoladeEntity accolade : accolades) {
+                assertNotNull(accolade.getGame(), "Accolade ID " + accolade.getId() + " must have a game reference");
+                Long gameId = accolade.getGame().getId();
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist");
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "Accolade ID " + accolade.getId() + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), accolade.getAppServerId(),
+                        "Accolade ID " + accolade.getId() + " appServerId must match its game's appServerId");
+            }
+            
+            for (PlayerStatsEntity stat : playerStats) {
+                assertNotNull(stat.getGame(), "PlayerStats ID " + stat.getId() + " must have a game reference");
+                Long gameId = stat.getGame().getId();
+                GameEntity gameEntity = gameRepository.findById(gameId).orElse(null);
+                assertNotNull(gameEntity, "Game entity with ID " + gameId + " must exist for PlayerStats ID " + stat.getId());
+                assertNotNull(gameEntity.getAppServerId(), 
+                        "PlayerStats ID " + stat.getId() + " game must have appServerId set");
+                assertEquals(gameEntity.getAppServerId(), stat.getAppServerId(),
+                        "PlayerStats ID " + stat.getId() + " appServerId must match its game's appServerId");
+            }
+            
+            System.out.println("  ✓ appServerId is consistent across all entities (Games, Events, Accolades, PlayerStats)");
+            System.out.println("  ✓ Multi-tenant isolation verified: all entities from this log file share appServerId: " + expectedAppServerId);
         }
         
         @Test

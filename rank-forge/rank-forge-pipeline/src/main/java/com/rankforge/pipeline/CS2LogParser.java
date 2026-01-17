@@ -211,13 +211,14 @@ public class CS2LogParser implements LogParser {
             "L \\d{2}/\\d{2}/\\d{4} - \\d{2}:\\d{2}:\\d{2}: " +
                     "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
     );
-
+    
     // Pattern to extract appServerId from ResetBreakpadAppId log line
     // Actual format from Docker logs: "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
     // This is NOT a CS2 log line (no "L MM/DD/YYYY - HH:MM:SS:" prefix)
+    // This appears at the beginning of log files, before any games start
     // Example: ResetBreakpadAppId: Setting dedicated server app id: 2347773
     private static final Pattern RESET_BREAKPAD_APP_ID_PATTERN = Pattern.compile(
-            "ResetBreakpadAppId:\\s*Setting\\s+dedicated\\s+server\\s+app\\s+id:\\s*(?<appId>\\d+)",
+            "ResetBreakpadAppId:\\s*Setting\\s+dedicated\\s+server\\s+app\\s+id:\\s*(?<appServerId>\\d+)",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -238,7 +239,8 @@ public class CS2LogParser implements LogParser {
     /**
      * Constructor with EventProcessingContext (preferred for production use).
      */
-    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore, EventProcessingContext eventProcessingContext) {
+    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore, 
+                       EventProcessingContext eventProcessingContext) {
         this.objectMapper = objectMapper;
         this.eventStore = eventStore;
         this.accoladeStore = accoladeStore;
@@ -272,26 +274,25 @@ public class CS2LogParser implements LogParser {
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
             String logContent = jsonNode.get("log").asText();
             
-            // Extract appServerId from ResetBreakpadAppId log line
+            // Parse ResetBreakpadAppId log line early (before any games start)
+            // This identifies which dedicated server the logs came from
+            // Format: "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
             // This MUST be extracted before any game events are processed
-            // Debug: Log if we see a potential ResetBreakpadAppId line (case-insensitive check)
-            if (logContent.toLowerCase().contains("resetbreakpadappid")) {
-                logger.debug("🔍 APP_SERVER_ID: Found potential ResetBreakpadAppId line at index={}, logContent='{}'", 
-                        currentIndex, logContent);
-            }
-            
-            // Use find() instead of matches() because the line may have newlines or other content
             Matcher resetBreakpadMatcher = RESET_BREAKPAD_APP_ID_PATTERN.matcher(logContent);
             if (resetBreakpadMatcher.find()) {
-                String appIdStr = resetBreakpadMatcher.group("appId");
-                Long appServerId = Long.parseLong(appIdStr);
-                eventProcessingContext.setAppServerId(appServerId);
-                logger.info("✅ APP_SERVER_ID: Extracted appServerId={} from ResetBreakpadAppId log line at index={}", 
-                        appServerId, currentIndex);
-                logger.debug("✅ APP_SERVER_ID: Full logContent='{}'", logContent);
-                logger.debug("✅ APP_SERVER_ID: Context now has appServerId={}, verified: {}", 
-                        appServerId, eventProcessingContext.getAppServerId());
-                return Optional.empty(); // Don't create an event for this line
+                try {
+                    Long appServerId = Long.parseLong(resetBreakpadMatcher.group("appServerId"));
+                    eventProcessingContext.setAppServerId(appServerId);
+                    logger.info("✅ APP_SERVER_ID: Extracted appServerId={} from ResetBreakpadAppId log line at index={}", 
+                            appServerId, currentIndex);
+                    logger.debug("✅ APP_SERVER_ID: Full logContent='{}'", logContent);
+                    logger.debug("✅ APP_SERVER_ID: Context now has appServerId={}, verified: {}", 
+                            appServerId, eventProcessingContext.getAppServerId());
+                } catch (NumberFormatException e) {
+                    logger.warn("Failed to parse appServerId from line: {}", logContent, e);
+                }
+                // Return empty - this is just metadata, not a game event
+                return Optional.empty();
             }
             
             // Debug: Log if we're about to process a game event and appServerId is not set
