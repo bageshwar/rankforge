@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
-import { clansApi, type ClanDTO, type CreateClanRequest } from '../services/api';
+import { clansApi, type ClanDTO, type CreateClanRequest, type UpdateClanRequest } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './ClanManagementPage.css';
 
@@ -288,9 +288,17 @@ const ClanCard = ({
   const [showRegenerateKey, setShowRegenerateKey] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showApiKey, setShowApiKey] = useState(!!apiKey); // Show by default if API key is available
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(clan.name || '');
+  const [updatingName, setUpdatingName] = useState(false);
 
   const isPending = !clan.appServerId || clan.status === 'PENDING';
   const isAdmin = clan.adminUserId === user.id;
+
+  // Sync editedName when clan prop changes
+  useEffect(() => {
+    setEditedName(clan.name || '');
+  }, [clan.name]);
 
   const checkServer = async () => {
     const serverId = parseInt(appServerId);
@@ -369,11 +377,85 @@ const ClanCard = ({
     }
   };
 
+  const handleUpdateName = async () => {
+    if (editedName.trim() === (clan.name || '').trim()) {
+      setIsEditingName(false);
+      return;
+    }
+
+    try {
+      setUpdatingName(true);
+      const updateData: UpdateClanRequest = {
+        name: editedName.trim() || undefined,
+      };
+      await clansApi.update(clan.id, updateData);
+      setIsEditingName(false);
+      onClanUpdated();
+    } catch (err: any) {
+      console.error('Error updating clan name:', err);
+      alert(err.response?.data?.error || 'Failed to update clan name');
+      setEditedName(clan.name || '');
+    } finally {
+      setUpdatingName(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditedName(clan.name || '');
+    setIsEditingName(false);
+  };
+
   return (
     <div className="clan-card">
       <div className="clan-header">
         <div className="clan-info">
-          <h4>{clan.name || `Clan #${clan.id}`}</h4>
+          {isEditingName && isAdmin ? (
+            <div className="edit-name-form">
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleUpdateName();
+                  } else if (e.key === 'Escape') {
+                    handleCancelEdit();
+                  }
+                }}
+                disabled={updatingName}
+                maxLength={255}
+                className="edit-name-input"
+                autoFocus
+              />
+              <button
+                onClick={handleUpdateName}
+                disabled={updatingName}
+                className="save-name-btn"
+              >
+                {updatingName ? 'Saving...' : '✓'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={updatingName}
+                className="cancel-name-btn"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <h4>
+              {clan.name || `Clan #${clan.id}`}
+              {isAdmin && (
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="edit-name-btn"
+                  title="Edit clan name"
+                >
+                  ✏️
+                </button>
+              )}
+            </h4>
+          )}
           <div className="clan-meta">
             <span className={`clan-status ${isPending ? 'pending' : 'active'}`}>
               {isPending ? '⏳ PENDING' : '✅ ACTIVE'}

@@ -355,15 +355,10 @@ export const RankingsPage = () => {
         <p className="rankings-subtitle">
           {activeTab === 'monthly' 
             ? `${getMonthName(selectedMonth)} ${selectedYear} Leaderboard`
-            : selectedClan
-            ? `${selectedClan.name || `Clan #${selectedClan.id}`} Rankings`
             : 'CS2 Competitive Player Statistics'}
         </p>
         {activeTab === 'monthly' && (
           <p className="rankings-note">Shows stats accumulated during this month only</p>
-        )}
-        {selectedClan && (
-          <p className="rankings-note">Showing rankings for {selectedClan.name || `Clan #${selectedClan.id}`} only</p>
         )}
       </div>
 

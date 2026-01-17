@@ -191,6 +191,84 @@
   color: #fff;
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.edit-name-btn {
+  background: none;
+  border: none;
+  color: #b0b0b0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.25rem;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.edit-name-btn:hover {
+  opacity: 1;
+  color: #ffd700;
+}
+
+.edit-name-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.edit-name-input {
+  flex: 1;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.edit-name-input:focus {
+  outline: none;
+  border-color: #ffd700;
+}
+
+.save-name-btn,
+.cancel-name-btn {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.save-name-btn {
+  background: rgba(76, 175, 80, 0.3);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+.save-name-btn:hover:not(:disabled) {
+  background: rgba(76, 175, 80, 0.4);
+}
+
+.cancel-name-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cancel-name-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.save-name-btn:disabled,
+.cancel-name-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .clan-meta {

@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
-import { gamesApi } from '../services/api';
-import type { GameDTO } from '../services/api';
+import { gamesApi, clansApi } from '../services/api';
+import type { GameDTO, ClanDTO } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './GamesPage.css';
 
@@ -14,9 +14,21 @@ export const GamesPage = () => {
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedClan, setSelectedClan] = useState<ClanDTO | null>(null);
   
   // Get default clan ID from user
   const defaultClanId = user?.defaultClanId || null;
+
+  // Load selected clan details when defaultClanId changes
+  useEffect(() => {
+    if (defaultClanId) {
+      clansApi.getClan(defaultClanId)
+        .then(clan => setSelectedClan(clan))
+        .catch(() => setSelectedClan(null));
+    } else {
+      setSelectedClan(null);
+    }
+  }, [defaultClanId]);
 
   useEffect(() => {
     loadGames();
@@ -79,7 +91,17 @@ export const GamesPage = () => {
   return (
     <PageContainer backgroundClass="bg-games">
       <div className="games-header">
-        <h1 className="games-title">🎮 Processed Games</h1>
+        <h1 className="games-title">
+          🎮 Processed Games
+          {selectedClan && (
+            <span className="clan-filter-badge">
+              - {selectedClan.name || `Clan #${selectedClan.id}`}
+            </span>
+          )}
+        </h1>
+        <p className="games-subtitle">
+          CS2 Competitive Match History
+        </p>
         <div className="games-stats">
           <div className="stat-item">
             <span className="stat-number">{games.length}</span>

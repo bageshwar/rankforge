@@ -80,6 +80,8 @@
 .clan-required-message .inline-link:hover {
   color: #ffd700;
 }
+
+.rankings-title {
   color: var(--color-text-primary);
 }
 

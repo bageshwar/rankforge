@@ -24,6 +24,7 @@ import com.rankforge.server.dto.ConfigureAppServerRequest;
 import com.rankforge.server.dto.CreateClanRequest;
 import com.rankforge.server.dto.RegenerateApiKeyResponse;
 import com.rankforge.server.dto.TransferAdminRequest;
+import com.rankforge.server.dto.UpdateClanRequest;
 import com.rankforge.server.entity.Clan;
 import com.rankforge.server.entity.ClanMembership;
 import com.rankforge.server.entity.User;
@@ -364,6 +365,50 @@ public class ClanController {
             logger.error("Error fetching clan members: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to fetch clan members"));
+        }
+    }
+    
+    /**
+     * Update clan information (name and/or telegram channel ID, admin only, requires authentication)
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateClan(@PathVariable("id") Long id,
+                                        @Valid @RequestBody UpdateClanRequest request,
+                                        HttpServletRequest httpRequest) {
+        try {
+            String steamId64 = (String) httpRequest.getAttribute("steamId64");
+            
+            if (steamId64 == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Unauthorized. Missing authentication."));
+            }
+            
+            // Get current user
+            Optional<User> userOpt = userRepository.findBySteamId64(steamId64);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found"));
+            }
+            
+            User user = userOpt.get();
+            
+            // Update clan
+            Clan clan = clanService.updateClan(id, request.getName(), request.getTelegramChannelId(), user.getId());
+            
+            return ResponseEntity.ok(new ClanDTO(clan));
+            
+        } catch (IllegalStateException e) {
+            logger.warn("Failed to update clan: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid request to update clan: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error updating clan: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to update clan"));
         }
     }
     

@@ -273,6 +273,35 @@ public class ClanService {
     }
     
     /**
+     * Update clan information (name and/or telegram channel ID)
+     */
+    @Transactional
+    public Clan updateClan(Long clanId, String name, String telegramChannelId, Long adminUserId) {
+        Optional<Clan> clanOpt = clanRepository.findById(clanId);
+        if (clanOpt.isEmpty()) {
+            throw new IllegalArgumentException("Clan not found: " + clanId);
+        }
+        
+        Clan clan = clanOpt.get();
+        
+        // Verify current user is admin
+        if (!clan.getAdminUserId().equals(adminUserId)) {
+            throw new IllegalStateException("Only clan admin can update clan information");
+        }
+        
+        // Update fields if provided
+        if (name != null) {
+            clan.setName(name.trim().isEmpty() ? null : name.trim());
+        }
+        if (telegramChannelId != null) {
+            clan.setTelegramChannelId(telegramChannelId.trim().isEmpty() ? null : telegramChannelId.trim());
+        }
+        
+        clan.setUpdatedAt(Instant.now());
+        return clanRepository.save(clan);
+    }
+    
+    /**
      * Transfer admin rights to another user
      */
     @Transactional

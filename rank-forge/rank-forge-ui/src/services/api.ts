@@ -447,9 +447,19 @@ export const usersApi = {
 };
 
 // Clans API
+export interface UpdateClanRequest {
+  name?: string;
+  telegramChannelId?: string;
+}
+
 export const clansApi = {
   create: async (clanData: CreateClanRequest): Promise<ClanDTO> => {
     const response = await apiClient.post<ClanDTO>('/clans', clanData);
+    return response.data;
+  },
+
+  update: async (clanId: number, clanData: UpdateClanRequest): Promise<ClanDTO> => {
+    const response = await apiClient.put<ClanDTO>(`/clans/${clanId}`, clanData);
     return response.data;
   },
 
