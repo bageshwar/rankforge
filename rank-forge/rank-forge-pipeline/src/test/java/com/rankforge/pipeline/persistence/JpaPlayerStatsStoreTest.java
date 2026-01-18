@@ -20,6 +20,7 @@ package com.rankforge.pipeline.persistence;
 
 import com.rankforge.core.events.GameProcessedEvent;
 import com.rankforge.core.models.PlayerStats;
+import com.rankforge.pipeline.persistence.entity.GameEntity;
 import com.rankforge.pipeline.persistence.entity.PlayerStatsEntity;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +50,29 @@ class JpaPlayerStatsStoreTest {
     private PlayerStatsRepository repository;
 
     private JpaPlayerStatsStore store;
+    private EventProcessingContext context;
 
     @BeforeEach
     void setUp() {
-        store = new JpaPlayerStatsStore(repository);
+        context = new EventProcessingContext();
+        // Set appServerId for all tests (required before storing player stats)
+        context.setAppServerId(100L);
+        store = new JpaPlayerStatsStore(repository, context);
+    }
+    
+    /**
+     * Helper method to set up a game in the context before calling onGameEnded
+     */
+    private void setupGameInContext(Instant gameTimestamp) {
+        GameEntity game = new GameEntity();
+        game.setAppServerId(100L);
+        game.setGameOverTimestamp(gameTimestamp);
+        game.setMap("de_dust2");
+        game.setMode("competitive");
+        game.setTeam1Score(16);
+        game.setTeam2Score(14);
+        game.setEndTime(gameTimestamp);
+        context.setCurrentGame(game);
     }
 
     @Test
@@ -72,6 +92,7 @@ class JpaPlayerStatsStoreTest {
         });
 
         // Store stats and process first game
+        setupGameInContext(game1Timestamp);
         store.store(stats1, false);
         GameProcessedEvent event1 = new GameProcessedEvent(game1Timestamp, new HashMap<>());
         store.onGameEnded(event1);
@@ -100,6 +121,7 @@ class JpaPlayerStatsStoreTest {
         });
 
         // Store stats and process second game - this should work without throwing
+        setupGameInContext(game2Timestamp);
         store.store(stats2, false);
         
         // This should NOT throw an exception even though the same playerId exists
@@ -134,6 +156,7 @@ class JpaPlayerStatsStoreTest {
         when(repository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Process game end - should deduplicate and only save one record
+        setupGameInContext(gameTimestamp);
         GameProcessedEvent event = new GameProcessedEvent(gameTimestamp, new HashMap<>());
         store.onGameEnded(event);
 
@@ -160,6 +183,7 @@ class JpaPlayerStatsStoreTest {
         );
 
         // This should throw the exception (current behavior)
+        setupGameInContext(gameTimestamp);
         GameProcessedEvent event = new GameProcessedEvent(gameTimestamp, new HashMap<>());
         assertThrows(DataIntegrityViolationException.class, () -> {
             store.onGameEnded(event);
@@ -186,6 +210,7 @@ class JpaPlayerStatsStoreTest {
         });
 
         // First game
+        setupGameInContext(game1Timestamp);
         store.store(stats1, false);
         GameProcessedEvent event1 = new GameProcessedEvent(game1Timestamp, new HashMap<>());
         store.onGameEnded(event1);
@@ -201,6 +226,7 @@ class JpaPlayerStatsStoreTest {
         });
 
         // Second game with same playerId but different gameTimestamp
+        setupGameInContext(game2Timestamp);
         store.store(stats2, false);
         GameProcessedEvent event2 = new GameProcessedEvent(game2Timestamp, new HashMap<>());
         
@@ -236,6 +262,7 @@ class JpaPlayerStatsStoreTest {
         when(repository.saveAll(anyList())).thenThrow(exception);
 
         // This currently throws the exception - we need to fix it
+        setupGameInContext(gameTimestamp);
         GameProcessedEvent event = new GameProcessedEvent(gameTimestamp, new HashMap<>());
         
         // The test should verify that gameTimestamp is set in the entity, even though it's not in the INSERT

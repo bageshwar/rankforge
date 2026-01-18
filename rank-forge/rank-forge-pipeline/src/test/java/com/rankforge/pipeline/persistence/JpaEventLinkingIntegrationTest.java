@@ -49,6 +49,8 @@ class JpaEventLinkingIntegrationTest {
     @BeforeEach
     void setUp() {
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds/events/linking accolades)
+        context.setAppServerId(100L);
     }
 
     @Nested
