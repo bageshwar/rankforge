@@ -46,6 +46,8 @@ class EventProcessingContextTest {
     @BeforeEach
     void setUp() {
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds/events)
+        context.setAppServerId(100L);
         testGame = createTestGame();
     }
 
