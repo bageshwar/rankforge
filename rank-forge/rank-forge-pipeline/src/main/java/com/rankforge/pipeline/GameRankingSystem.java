@@ -18,6 +18,7 @@
 
 package com.rankforge.pipeline;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rankforge.core.events.GameActionEvent;
 import com.rankforge.core.interfaces.EventProcessor;
 import com.rankforge.core.interfaces.LogParser;
@@ -72,22 +73,43 @@ public class GameRankingSystem {
     private final EventStore eventStore;
     private final ScheduledExecutorService scheduler;
     private final EntityManager entityManager;
+    private final ObjectMapper objectMapper;
+    private final Object clan; // Clan object for player association (null if global key)
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler) {
-        this(logParser, eventProcessor, eventStore, scheduler, null);
+        this(logParser, eventProcessor, eventStore, scheduler, null, new ObjectMapper(), null);
     }
     
     public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
                            EventStore eventStore,
                            ScheduledExecutorService scheduler,
                            EntityManager entityManager) {
+        this(logParser, eventProcessor, eventStore, scheduler, entityManager, new ObjectMapper(), null);
+    }
+    
+    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler,
+                           EntityManager entityManager,
+                           ObjectMapper objectMapper) {
+        this(logParser, eventProcessor, eventStore, scheduler, entityManager, objectMapper, null);
+    }
+    
+    public GameRankingSystem(LogParser logParser, EventProcessor eventProcessor, 
+                           EventStore eventStore,
+                           ScheduledExecutorService scheduler,
+                           EntityManager entityManager,
+                           ObjectMapper objectMapper,
+                           Object clan) {
         this.logParser = logParser;
         this.eventProcessor = eventProcessor;
         this.eventStore = eventStore;
         this.scheduler = scheduler;
         this.entityManager = entityManager;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this.clan = clan;
     }
 
     public void startProcessing(String logFile) throws IOException {
@@ -121,7 +143,17 @@ public class GameRankingSystem {
      * @param lines the log lines to process
      */
     public void processLines(List<String> lines) {
+        processLines(lines, null);
+    }
+    
+    /**
+     * Process a list of log lines directly
+     * @param lines the log lines to process
+     * @param clan Clan object for player association (can be null)
+     */
+    public void processLines(List<String> lines, Object clan) {
         logger.info("Starting batch processing of {} log lines", lines.size());
+        // appServerId extraction is handled by CS2LogParser.parseLine() - it will be extracted when ResetBreakpadAppId line is encountered
 
         for (int i = 0; i < lines.size(); i++) {
             Optional<ParseLineResponse> parseLineResponse = logParser.parseLine(lines.get(i), lines, i);

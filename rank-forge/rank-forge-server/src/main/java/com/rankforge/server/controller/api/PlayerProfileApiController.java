@@ -35,7 +35,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/players")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class PlayerProfileApiController {
     
     private final PlayerProfileService playerProfileService;

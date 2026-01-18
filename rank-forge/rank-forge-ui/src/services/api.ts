@@ -9,6 +9,35 @@ const apiClient = axios.create({
   },
 });
 
+// Add JWT token to requests if available
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Handle 401 errors (unauthorized) - clear token and redirect to login
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      // Clear token and trigger auth state update
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('authUser');
+      // Dispatch custom event for AuthContext to handle
+      window.dispatchEvent(new Event('auth:logout'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Types
 export interface PlayerRankingDTO {
   rank: number;
@@ -159,16 +188,64 @@ export interface LeaderboardResponseDTO {
   totalPlayers: number;
 }
 
+// Clan types
+export interface ClanDTO {
+  id: number;
+  appServerId?: number | null; // Nullable - only set after step 2
+  name?: string;
+  telegramChannelId?: string;
+  adminUserId: number;
+  createdAt: number;
+  updatedAt: number;
+  apiKey?: string; // Only populated when creating new clan (shown once)
+  hasApiKey?: boolean; // Indicates if key exists (but not the value)
+  status?: string; // PENDING or ACTIVE
+}
+
+export interface ClanMembershipDTO {
+  id: number;
+  clanId: number;
+  userId: number;
+  joinedAt: number;
+}
+
+export interface CreateClanRequest {
+  name?: string;
+  telegramChannelId?: string;
+  // appServerId is NOT in step 1 - it's configured in step 2
+}
+
+export interface ConfigureAppServerRequest {
+  appServerId: number;
+}
+
+export interface RegenerateApiKeyResponse {
+  apiKey: string;
+  rotatedAt: number;
+}
+
+export interface ApiKeyStatus {
+  hasApiKey: boolean;
+  apiKeyCreatedAt?: number;
+  apiKeyRotatedAt?: number;
+}
+
+export interface TransferAdminRequest {
+  newAdminUserId: number;
+}
+
 // Rankings API
 export const rankingsApi = {
-  getAllWithStats: async (): Promise<LeaderboardResponseDTO> => {
-    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/stats');
+  getAllWithStats: async (clanId: number): Promise<LeaderboardResponseDTO> => {
+    const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/stats', {
+      params: { clanId },
+    });
     return response.data;
   },
 
-  getTopWithStats: async (limit: number = 10): Promise<LeaderboardResponseDTO> => {
+  getTopWithStats: async (limit: number = 10, clanId: number): Promise<LeaderboardResponseDTO> => {
     const response = await apiClient.get<LeaderboardResponseDTO>('/rankings/top/stats', {
-      params: { limit },
+      params: { limit, clanId },
     });
     return response.data;
   },
@@ -191,12 +268,13 @@ export const rankingsApi = {
   },
 
   getMonthlyLeaderboard: async (
+    clanId: number,
     year?: number,
     month?: number,
     limit?: number,
     offset?: number
   ): Promise<LeaderboardResponseDTO> => {
-    const params: Record<string, number> = {};
+    const params: Record<string, number> = { clanId };
     if (year !== undefined) params.year = year;
     if (month !== undefined) params.month = month;
     if (limit !== undefined) params.limit = limit;
@@ -211,14 +289,16 @@ export const rankingsApi = {
 
 // Games API
 export const gamesApi = {
-  getAll: async (): Promise<GameDTO[]> => {
-    const response = await apiClient.get<GameDTO[]>('/games');
+  getAll: async (clanId: number): Promise<GameDTO[]> => {
+    const response = await apiClient.get<GameDTO[]>('/games', {
+      params: { clanId },
+    });
     return response.data;
   },
 
-  getRecent: async (limit: number = 10): Promise<GameDTO[]> => {
+  getRecent: async (limit: number = 10, clanId: number): Promise<GameDTO[]> => {
     const response = await apiClient.get<GameDTO[]>('/games/recent', {
-      params: { limit },
+      params: { limit, clanId },
     });
     return response.data;
   },
@@ -287,6 +367,167 @@ export const playersApi = {
 
   health: async (): Promise<string> => {
     const response = await apiClient.get<string>('/players/health');
+    return response.data;
+  },
+};
+
+// Auth API Types
+export interface UserDTO {
+  id: number;
+  steamId64: string;
+  steamId3: string;
+  personaName: string;
+  avatarUrl?: string;
+  avatarMediumUrl?: string;
+  avatarSmallUrl?: string;
+  profileUrl?: string;
+  accountCreated?: number;
+  vacBanned: boolean;
+  country?: string;
+  createdAt?: number;
+  lastLogin?: number;
+  defaultClanId?: number;
+}
+
+export interface AuthResponseDTO {
+  token: string;
+  user: UserDTO;
+  expiresAt: number;
+}
+
+export interface CurrentUserResponse {
+  user: UserDTO;
+  stats?: {
+    currentRank: number;
+    totalKills: number;
+    totalDeaths: number;
+    totalAssists: number;
+    killDeathRatio: number;
+    totalGamesPlayed: number;
+    totalRoundsPlayed: number;
+  };
+}
+
+// Auth API
+export const authApi = {
+  getLoginUrl: async (): Promise<string> => {
+    const response = await apiClient.get<{ loginUrl: string }>('/auth/login');
+    return response.data.loginUrl;
+  },
+
+  getMe: async (): Promise<CurrentUserResponse> => {
+    const response = await apiClient.get<CurrentUserResponse>('/users/me');
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await apiClient.post('/auth/logout');
+  },
+
+  refreshToken: async (): Promise<AuthResponseDTO> => {
+    const response = await apiClient.post<AuthResponseDTO>('/auth/refresh');
+    return response.data;
+  },
+};
+
+// Users API
+export const usersApi = {
+  getAvatar: async (steamId: string): Promise<string> => {
+    try {
+      const response = await apiClient.get<{ avatarUrl: string }>(`/users/${steamId}/avatar`);
+      return response.data.avatarUrl;
+    } catch (error) {
+      return '/default-avatar.png';
+    }
+  },
+
+  updateDefaultClan: async (clanId: number | null): Promise<void> => {
+    await apiClient.put('/users/me/default-clan', { clanId });
+  },
+};
+
+// Clans API
+export interface UpdateClanRequest {
+  name?: string;
+  telegramChannelId?: string;
+}
+
+export const clansApi = {
+  create: async (clanData: CreateClanRequest): Promise<ClanDTO> => {
+    const response = await apiClient.post<ClanDTO>('/clans', clanData);
+    return response.data;
+  },
+
+  update: async (clanId: number, clanData: UpdateClanRequest): Promise<ClanDTO> => {
+    const response = await apiClient.put<ClanDTO>(`/clans/${clanId}`, clanData);
+    return response.data;
+  },
+
+  configureAppServerId: async (clanId: number, appServerId: number): Promise<ClanDTO> => {
+    const response = await apiClient.put<ClanDTO>(`/clans/${clanId}/configure-app-server`, {
+      appServerId,
+    });
+    return response.data;
+  },
+
+  regenerateApiKey: async (clanId: number): Promise<RegenerateApiKeyResponse> => {
+    const response = await apiClient.post<RegenerateApiKeyResponse>(`/clans/${clanId}/regenerate-api-key`);
+    return response.data;
+  },
+
+  getApiKeyStatus: async (clanId: number): Promise<ApiKeyStatus> => {
+    const response = await apiClient.get<ApiKeyStatus>(`/clans/${clanId}/api-key-status`);
+    return response.data;
+  },
+
+  getMyClans: async (): Promise<ClanDTO[]> => {
+    const response = await apiClient.get<ClanDTO[]>('/clans/my');
+    return response.data;
+  },
+
+  getClan: async (id: number): Promise<ClanDTO | null> => {
+    try {
+      const response = await apiClient.get<ClanDTO>(`/clans/${id}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  getClanMembers: async (id: number): Promise<ClanMembershipDTO[]> => {
+    const response = await apiClient.get<ClanMembershipDTO[]>(`/clans/${id}/members`);
+    return response.data;
+  },
+
+  transferAdmin: async (clanId: number, newAdminId: number): Promise<ClanDTO> => {
+    const response = await apiClient.put<ClanDTO>(`/clans/${clanId}/admin`, {
+      newAdminUserId: newAdminId,
+    });
+    return response.data;
+  },
+
+  checkAppServer: async (appServerId: number): Promise<{ claimed: boolean }> => {
+    const response = await apiClient.get<{ claimed: boolean }>(`/clans/check-app-server/${appServerId}`);
+    return response.data;
+  },
+
+  getClanByAppServerId: async (appServerId: number): Promise<ClanDTO | null> => {
+    try {
+      const response = await apiClient.get<ClanDTO>(`/clans/by-app-server/${appServerId}`);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  health: async (): Promise<string> => {
+    const response = await apiClient.get<string>('/clans/health');
     return response.data;
   },
 };

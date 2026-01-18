@@ -212,11 +212,14 @@ public class CS2LogParser implements LogParser {
                     "Team \"TERRORIST\" triggered \"SFUI_Notice_Target_Bombed\".*\\r?\\n?"
     );
     
-    // Pattern for parsing ResetBreakpadAppId log line
-    // Format: ResetBreakpadAppId: Setting dedicated server app id: 2347773
+    // Pattern to extract appServerId from ResetBreakpadAppId log line
+    // Actual format from Docker logs: "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
+    // This is NOT a CS2 log line (no "L MM/DD/YYYY - HH:MM:SS:" prefix)
     // This appears at the beginning of log files, before any games start
+    // Example: ResetBreakpadAppId: Setting dedicated server app id: 2347773
     private static final Pattern RESET_BREAKPAD_APP_ID_PATTERN = Pattern.compile(
-            "ResetBreakpadAppId: Setting dedicated server app id: (?<appServerId>\\d+)"
+            "ResetBreakpadAppId:\\s*Setting\\s+dedicated\\s+server\\s+app\\s+id:\\s*(?<appServerId>\\d+)",
+            Pattern.CASE_INSENSITIVE
     );
 
     private final ObjectMapper objectMapper;
@@ -233,6 +236,9 @@ public class CS2LogParser implements LogParser {
     private String currentBombsite;         // Bombsite where bomb was planted (A or B)
     private Player currentBombDefuser;      // Player attempting to defuse (most recent)
 
+    /**
+     * Constructor with EventProcessingContext (preferred for production use).
+     */
     public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore, 
                        EventProcessingContext eventProcessingContext) {
         this.objectMapper = objectMapper;
@@ -242,6 +248,16 @@ public class CS2LogParser implements LogParser {
         this.roundStartLineIndices = new ArrayList<>();
         matchStarted = false;
         matchProcessingIndex = 0;
+    }
+    
+    /**
+     * Backward-compatible constructor for tests.
+     * Creates a new EventProcessingContext instance.
+     * @deprecated Use the constructor with EventProcessingContext parameter for production code.
+     */
+    @Deprecated
+    public CS2LogParser(ObjectMapper objectMapper, EventStore eventStore, AccoladeStore accoladeStore) {
+        this(objectMapper, eventStore, accoladeStore, new EventProcessingContext());
     }
 
     @Override
@@ -256,23 +272,43 @@ public class CS2LogParser implements LogParser {
             JsonNode jsonNode = objectMapper.readTree(line);
 
             Instant timestamp = parseTimestamp(jsonNode.get("time").asText());
-            line = jsonNode.get("log").asText();
+            String logContent = jsonNode.get("log").asText();
             
             // Parse ResetBreakpadAppId log line early (before any games start)
             // This identifies which dedicated server the logs came from
             // Format: "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
-            Matcher resetBreakpadMatcher = RESET_BREAKPAD_APP_ID_PATTERN.matcher(line);
+            // This MUST be extracted before any game events are processed
+            Matcher resetBreakpadMatcher = RESET_BREAKPAD_APP_ID_PATTERN.matcher(logContent);
             if (resetBreakpadMatcher.find()) {
                 try {
                     Long appServerId = Long.parseLong(resetBreakpadMatcher.group("appServerId"));
                     eventProcessingContext.setAppServerId(appServerId);
-                    logger.info("Parsed appServerId: {} from log line at index {}", appServerId, currentIndex);
+                    logger.info("✅ APP_SERVER_ID: Extracted appServerId={} from ResetBreakpadAppId log line at index={}", 
+                            appServerId, currentIndex);
+                    logger.debug("✅ APP_SERVER_ID: Full logContent='{}'", logContent);
+                    logger.debug("✅ APP_SERVER_ID: Context now has appServerId={}, verified: {}", 
+                            appServerId, eventProcessingContext.getAppServerId());
                 } catch (NumberFormatException e) {
-                    logger.warn("Failed to parse appServerId from line: {}", line, e);
+                    logger.warn("Failed to parse appServerId from line: {}", logContent, e);
                 }
                 // Return empty - this is just metadata, not a game event
                 return Optional.empty();
             }
+            
+            // Debug: Log if we're about to process a game event and appServerId is not set
+            if (logContent.contains("Game Over") || logContent.contains("GAME_OVER")) {
+                Long currentAppServerId = eventProcessingContext.getAppServerId();
+                if (currentAppServerId == null) {
+                    logger.error("❌ APP_SERVER_ID: About to process GAME_OVER event but appServerId is NULL in context! Line index={}", 
+                            currentIndex);
+                    logger.error("❌ APP_SERVER_ID: LogContent='{}'", logContent);
+                    logger.error("❌ APP_SERVER_ID: Data ingestion will FAIL - ResetBreakpadAppId must appear before game events");
+                } else {
+                    logger.debug("✅ APP_SERVER_ID: GAME_OVER detected, appServerId={} is available in context", currentAppServerId);
+                }
+            }
+            
+            line = logContent;
 
             if (matchProcessingIndex == currentIndex && matchStarted) {
                 logger.debug("Resetting match state at {} after processing all rounds", currentIndex);

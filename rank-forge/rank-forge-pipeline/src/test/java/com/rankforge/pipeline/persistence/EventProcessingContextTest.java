@@ -46,6 +46,8 @@ class EventProcessingContextTest {
     @BeforeEach
     void setUp() {
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds/events)
+        context.setAppServerId(100L);
         testGame = createTestGame();
     }
 
@@ -704,6 +706,7 @@ class EventProcessingContextTest {
      */
     private GameEntity createTestGame() {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setMap("de_dust2");
         game.setMode("competitive");
         game.setTeam1Score(16);

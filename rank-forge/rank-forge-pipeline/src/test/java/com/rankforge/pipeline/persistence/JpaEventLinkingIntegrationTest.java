@@ -572,6 +572,7 @@ class JpaEventLinkingIntegrationTest {
 
     private GameEntity createGame(String map, int team1Score, int team2Score) {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setMap(map);
         game.setMode("competitive");
         game.setTeam1Score(team1Score);

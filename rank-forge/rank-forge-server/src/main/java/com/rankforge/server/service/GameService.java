@@ -43,6 +43,7 @@ import com.rankforge.server.dto.PlayerStatsDTO;
 import com.rankforge.server.dto.RoundDetailsDTO;
 import com.rankforge.server.dto.RoundEventDTO;
 import com.rankforge.server.dto.RoundResultDTO;
+import com.rankforge.server.entity.Clan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,26 +70,37 @@ public class GameService {
     private final PlayerStatsRepository playerStatsRepository;
     private final GameRepository gameRepository;
     private final AccoladeRepository accoladeRepository;
+    private final ClanService clanService;
     
     @Autowired
     public GameService(ObjectMapper objectMapper, 
                        GameEventRepository gameEventRepository,
                        PlayerStatsRepository playerStatsRepository,
                        GameRepository gameRepository,
-                       AccoladeRepository accoladeRepository) {
+                       AccoladeRepository accoladeRepository,
+                       ClanService clanService) {
         this.objectMapper = objectMapper;
         this.gameEventRepository = gameEventRepository;
         this.playerStatsRepository = playerStatsRepository;
         this.gameRepository = gameRepository;
         this.accoladeRepository = accoladeRepository;
+        this.clanService = clanService;
     }
 
     /**
      * Get all processed games from the Game table
+     * @param clanId Required clan ID to filter games by appServerId
      */
-    public List<GameDTO> getAllGames() {
+    public List<GameDTO> getAllGames(Long clanId) {
         try {
-            List<GameEntity> gameEntities = gameRepository.findAll();
+            // Filter by clan's appServerId (required)
+            Optional<Clan> clanOpt = clanService.getClanById(clanId);
+            if (clanOpt.isEmpty()) {
+                LOGGER.warn("Clan not found: {}", clanId);
+                return new ArrayList<>();
+            }
+            Long appServerId = clanOpt.get().getAppServerId();
+            List<GameEntity> gameEntities = gameRepository.findByAppServerId(appServerId);
             Map<String, String> playerIdToNameCache = new HashMap<>();
             
             List<GameDTO> games = new ArrayList<>();
@@ -193,12 +205,15 @@ public class GameService {
 
     /**
      * Get top N most recent games
+     * @param limit Number of games to return
+     * @param clanId Optional clan ID to filter games
      */
-    public List<GameDTO> getRecentGames(int limit) {
-        return getAllGames().stream()
+    public List<GameDTO> getRecentGames(int limit, Long clanId) {
+        return getAllGames(clanId).stream()
                 .limit(limit)
                 .collect(Collectors.toList());
     }
+    
 
     /**
      * Retrieve player name by ID from PlayerStats table

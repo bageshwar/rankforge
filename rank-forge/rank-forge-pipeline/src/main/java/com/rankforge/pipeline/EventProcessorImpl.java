@@ -59,13 +59,21 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
     private final List<GameEventListener> eventListeners;
     private final EventProcessingContext context;
     private final GameRepository gameRepository;
+    private final Long expectedAppServerId; // For validation when per-clan key is used (null if global key)
 
     public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
                               EventProcessingContext context, GameRepository gameRepository) {
+        this(statsRepo, rankingService, context, gameRepository, null);
+    }
+    
+    public EventProcessorImpl(PlayerStatsStore statsRepo, RankingService rankingService,
+                              EventProcessingContext context, GameRepository gameRepository,
+                              Long expectedAppServerId) {
         this.statsRepo = statsRepo;
         this.rankingService = rankingService;
         this.context = context;
         this.gameRepository = gameRepository;
+        this.expectedAppServerId = expectedAppServerId;
         this.eventListeners = new ArrayList<>();
     }
 
@@ -263,6 +271,37 @@ public class EventProcessorImpl implements EventProcessor, GameEventVisitor, Gam
             // Fallback: estimate 30 minutes
             gameEntity.setStartTime(event.getTimestamp().minusSeconds(1800));
         }
+        
+        // CRITICAL: appServerId MUST be set before creating GameEntity
+        // Fail fast if it's missing - this indicates ResetBreakpadAppId was not found in log file
+        // (appServerId already retrieved above, no need to retrieve again)
+        if (appServerId == null) {
+            String errorMsg = String.format(
+                    "DATA_INGESTION_FAILED: appServerId is NULL when creating GameEntity. " +
+                    "ResetBreakpadAppId log line must appear before game events. " +
+                    "Game map: %s, timestamp: %s",
+                    event.getMap(), event.getTimestamp());
+            logger.error("❌ {}", errorMsg);
+            logger.error("❌ Context state - appServerId: {}, currentGame: {}", 
+                    context.getAppServerId(), context.getCurrentGame());
+            throw new IllegalStateException(errorMsg);
+        }
+        
+        // Validate appServerId matches expected value (if per-clan key was used)
+        if (expectedAppServerId != null && !expectedAppServerId.equals(appServerId)) {
+            String errorMsg = String.format(
+                    "DATA_INGESTION_FAILED: appServerId mismatch. " +
+                    "Expected: %d (from clan configuration), but found: %d in log file. " +
+                    "Game map: %s, timestamp: %s. " +
+                    "This log file does not belong to the configured clan.",
+                    expectedAppServerId, appServerId, event.getMap(), event.getTimestamp());
+            logger.error("❌ {}", errorMsg);
+            throw new IllegalStateException(errorMsg);
+        }
+        
+        gameEntity.setAppServerId(appServerId);
+        logger.info("✅ APP_SERVER_ID: Set appServerId={} on GameEntity for map={}, timestamp={}", 
+                appServerId, event.getMap(), event.getTimestamp());
         
         // Set the current game in context (this is transient, not yet persisted)
         // JPA will persist it when we call saveAll on pending entities due to cascade

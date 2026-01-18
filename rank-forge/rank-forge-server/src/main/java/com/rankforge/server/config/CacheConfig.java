@@ -128,9 +128,16 @@ public class CacheConfig extends CachingConfigurerSupport {
         public ValueWrapper get(Object key) {
             ValueWrapper value = delegate.get(key);
             if (value != null) {
-                CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+                Object cachedValue = value.get();
+                if (cachedValue instanceof com.rankforge.server.dto.LeaderboardResponseDTO) {
+                    com.rankforge.server.dto.LeaderboardResponseDTO dto = (com.rankforge.server.dto.LeaderboardResponseDTO) cachedValue;
+                    CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}' -> players: {}, games: {}, rounds: {}", 
+                            getName(), key, dto.getTotalPlayers(), dto.getTotalGames(), dto.getTotalRounds());
+                } else {
+                    CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+                }
             } else {
-                CACHE_LOGGER.debug("Cache MISS: cache='{}', key='{}'", getName(), key);
+                CACHE_LOGGER.info("Cache MISS: cache='{}', key='{}'", getName(), key);
             }
             return value;
         }
@@ -139,9 +146,15 @@ public class CacheConfig extends CachingConfigurerSupport {
         public <T> T get(Object key, Class<T> type) {
             T value = delegate.get(key, type);
             if (value != null) {
-                CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+                if (value instanceof com.rankforge.server.dto.LeaderboardResponseDTO) {
+                    com.rankforge.server.dto.LeaderboardResponseDTO dto = (com.rankforge.server.dto.LeaderboardResponseDTO) value;
+                    CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}' -> players: {}, games: {}, rounds: {}", 
+                            getName(), key, dto.getTotalPlayers(), dto.getTotalGames(), dto.getTotalRounds());
+                } else {
+                    CACHE_LOGGER.info("Cache HIT: cache='{}', key='{}'", getName(), key);
+                }
             } else {
-                CACHE_LOGGER.debug("Cache MISS: cache='{}', key='{}'", getName(), key);
+                CACHE_LOGGER.info("Cache MISS: cache='{}', key='{}'", getName(), key);
             }
             return value;
         }
@@ -149,10 +162,18 @@ public class CacheConfig extends CachingConfigurerSupport {
         @Override
         public <T> T get(Object key, java.util.concurrent.Callable<T> valueLoader) {
             // This method is called when cache miss occurs and value needs to be loaded
-            CACHE_LOGGER.debug("Cache MISS - loading value: cache='{}', key='{}'", getName(), key);
+            CACHE_LOGGER.info("Cache MISS - loading value: cache='{}', key='{}'", getName(), key);
             T value = delegate.get(key, valueLoader);
             if (value != null) {
-                CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+                if (value instanceof com.rankforge.server.dto.LeaderboardResponseDTO) {
+                    com.rankforge.server.dto.LeaderboardResponseDTO dto = (com.rankforge.server.dto.LeaderboardResponseDTO) value;
+                    CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}' -> players: {}, games: {}, rounds: {}", 
+                            getName(), key, dto.getTotalPlayers(), dto.getTotalGames(), dto.getTotalRounds());
+                } else {
+                    CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+                }
+            } else {
+                CACHE_LOGGER.warn("Cache PUT: cache='{}', key='{}' -> NULL value (will not be cached)", getName(), key);
             }
             return value;
         }
@@ -160,7 +181,13 @@ public class CacheConfig extends CachingConfigurerSupport {
         @Override
         public void put(Object key, Object value) {
             delegate.put(key, value);
-            CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+            if (value instanceof com.rankforge.server.dto.LeaderboardResponseDTO) {
+                com.rankforge.server.dto.LeaderboardResponseDTO dto = (com.rankforge.server.dto.LeaderboardResponseDTO) value;
+                CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}' -> players: {}, games: {}, rounds: {}", 
+                        getName(), key, dto.getTotalPlayers(), dto.getTotalGames(), dto.getTotalRounds());
+            } else {
+                CACHE_LOGGER.info("Cache PUT: cache='{}', key='{}'", getName(), key);
+            }
         }
         
         @Override

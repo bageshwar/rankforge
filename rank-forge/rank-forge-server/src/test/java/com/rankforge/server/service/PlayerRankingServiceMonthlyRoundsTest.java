@@ -70,6 +70,12 @@ class PlayerRankingServiceMonthlyRoundsTest {
     @Mock
     private RankingAlgorithm rankingAlgorithm;
     
+    @Mock
+    private ClanService clanService;
+    
+    @Mock
+    private org.springframework.cache.CacheManager cacheManager;
+    
     private PlayerRankingService playerRankingService;
     
     private Instant novemberStart;
@@ -83,7 +89,9 @@ class PlayerRankingServiceMonthlyRoundsTest {
                 gameRepository, 
                 gameEventRepository, 
                 objectMapper,
-                rankingAlgorithm
+                rankingAlgorithm,
+                clanService,
+                cacheManager
         );
         
         // November 2025 boundaries
@@ -103,6 +111,7 @@ class PlayerRankingServiceMonthlyRoundsTest {
         // Create a game in November
         GameEntity game1 = new GameEntity();
         game1.setId(1L);
+        game1.setAppServerId(100L); // Match the mocked clan's appServerId
         game1.setGameOverTimestamp(novemberStart.plusSeconds(3600));
         game1.setTeam1Score(16);
         game1.setTeam2Score(14);
@@ -147,8 +156,16 @@ class PlayerRankingServiceMonthlyRoundsTest {
         when(gameRepository.calculateTotalRoundsInMonth(any(Instant.class), any(Instant.class)))
                 .thenReturn(30L);
         
+        // Mock clan for filtering
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
+                .thenReturn(Arrays.asList(game1));
+        
         // When: Get monthly leaderboard
-        LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2025, 11, 100, 0);
+        LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2025, 11, 100, 0, 1L);
         
         // Then: Player should have 34 rounds (one for each ROUND_END event they appear in)
         assertNotNull(result);
@@ -172,6 +189,7 @@ class PlayerRankingServiceMonthlyRoundsTest {
         
         GameEntity game1 = new GameEntity();
         game1.setId(1L);
+        game1.setAppServerId(100L); // Match the mocked clan's appServerId
         game1.setGameOverTimestamp(novemberStart.plusSeconds(3600));
         
         // ROUND_END event with numeric ID
@@ -208,8 +226,16 @@ class PlayerRankingServiceMonthlyRoundsTest {
         when(gameRepository.calculateTotalRoundsInMonth(any(Instant.class), any(Instant.class)))
                 .thenReturn(1L);
         
+        // Mock clan for filtering
+        com.rankforge.server.entity.Clan mockClan = new com.rankforge.server.entity.Clan();
+        mockClan.setId(1L);
+        mockClan.setAppServerId(100L);
+        when(clanService.getClanById(1L)).thenReturn(java.util.Optional.of(mockClan));
+        when(gameRepository.findGamesByMonthRange(any(Instant.class), any(Instant.class)))
+                .thenReturn(Arrays.asList(game1));
+        
         // When: Get monthly leaderboard
-        LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2025, 11, 100, 0);
+        LeaderboardResponseDTO result = playerRankingService.getMonthlyPlayerRankingsWithStats(2025, 11, 100, 0, 1L);
         
         // Then: Should match player IDs correctly and count rounds
         assertNotNull(result);

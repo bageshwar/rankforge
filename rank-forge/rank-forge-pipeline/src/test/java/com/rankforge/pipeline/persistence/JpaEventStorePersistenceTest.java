@@ -68,6 +68,8 @@ class JpaEventStorePersistenceTest {
         entityManager = mock(EntityManager.class);
         objectMapper = new ObjectMapper();
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds/events/linking accolades)
+        context.setAppServerId(100L);
         
         // Configure EntityManager to be open
         when(entityManager.isOpen()).thenReturn(true);
@@ -376,6 +378,7 @@ class JpaEventStorePersistenceTest {
 
     private GameEntity createTestGame() {
         GameEntity game = new GameEntity();
+        game.setAppServerId(100L); // Required field
         game.setGameOverTimestamp(Instant.now());
         game.setMap("de_dust2");
         game.setMode("competitive");

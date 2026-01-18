@@ -18,9 +18,11 @@
 
 package com.rankforge.server.controller.api;
 
+import com.rankforge.server.entity.Clan;
 import com.rankforge.server.dto.ProcessLogRequest;
 import com.rankforge.server.dto.ProcessLogResponse;
 import com.rankforge.server.service.LogProcessingService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +40,7 @@ import java.util.concurrent.CompletableFuture;
  */
 @RestController
 @RequestMapping("/api/pipeline")
-@CrossOrigin(origins = "*") // Allow CORS for frontend development
+@CrossOrigin(origins = "${cors.allowed.origins:http://localhost:5173}")
 public class PipelineApiController {
 
     private static final Logger logger = LoggerFactory.getLogger(PipelineApiController.class);
@@ -52,13 +54,16 @@ public class PipelineApiController {
 
     /**
      * Process a log file from S3
-     * Requires X-API-Key header for authentication
+     * Requires X-API-Key header for authentication (per-clan or global key)
+     * If per-clan key is used, validates that clan is active and appServerId matches
      * 
      * @param request Request containing S3 path to log file
+     * @param httpRequest HTTP request (to get validated clan from SecurityConfig)
      * @return Response with job ID and status
      */
     @PostMapping("/process")
-    public ResponseEntity<ProcessLogResponse> processLogFile(@Valid @RequestBody ProcessLogRequest request) {
+    public ResponseEntity<ProcessLogResponse> processLogFile(@Valid @RequestBody ProcessLogRequest request,
+                                                              HttpServletRequest httpRequest) {
         logger.info("Received log processing request for S3 path: {}", request.getS3Path());
         
         try {
@@ -72,8 +77,29 @@ public class PipelineApiController {
             // Validate S3 path format synchronously before starting async processing
             validateS3PathFormat(request.getS3Path());
             
+            // Check if per-clan key was used (clan stored in request attribute by SecurityConfig)
+            Clan clan = (Clan) httpRequest.getAttribute("clan");
+            if (clan != null) {
+                // Per-clan key was used - validate clan is active
+                if (!clan.isActive()) {
+                    logger.warn("Clan {} is not active (appServerId not configured). Cannot process logs.", clan.getId());
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new ProcessLogResponse(null, "error", 
+                                    "Clan is not active. Please configure appServerId before ingesting logs."));
+                }
+                
+                // Store clan in request attribute for LogProcessingService to use
+                // The appServerId validation will happen during log processing
+                logger.info("Processing logs for clan {} (appServerId: {})", clan.getId(), clan.getAppServerId());
+            } else {
+                // Global key was used (backward compatibility)
+                logger.info("Processing logs using global API key (deprecated)");
+            }
+            
             // Start async processing and get job ID immediately
-            CompletableFuture<String> futureJobId = logProcessingService.processLogFileAsync(request.getS3Path());
+            // Pass clan info to LogProcessingService
+            CompletableFuture<String> futureJobId = logProcessingService.processLogFileAsync(
+                    request.getS3Path(), clan);
             
             // Get the job ID (it's already completed, so this returns immediately)
             String jobId = futureJobId.join();

@@ -52,6 +52,7 @@ public class JpaEventStore implements EventStore, GameEventListener {
     private final ObjectMapper objectMapper; // Used for reading legacy data and RoundEndEvent players
     private final EventProcessingContext context;
     private EntityManager entityManager;
+    private Runnable playerAssociationCallback; // Callback for player association after game persistence
     
     public JpaEventStore(GameEventRepository repository, AccoladeRepository accoladeRepository,
                          GameRepository gameRepository, ObjectMapper objectMapper, 
@@ -61,6 +62,14 @@ public class JpaEventStore implements EventStore, GameEventListener {
         this.gameRepository = gameRepository;
         this.objectMapper = objectMapper;
         this.context = context;
+    }
+    
+    /**
+     * Sets a callback to be executed after game persistence for player association
+     * Used for associating players with clans after game is persisted
+     */
+    public void setPlayerAssociationCallback(Runnable callback) {
+        this.playerAssociationCallback = callback;
     }
     
     /**
@@ -699,6 +708,17 @@ public class JpaEventStore implements EventStore, GameEventListener {
                     "Accolades to save: {}, Events to save: {}", 
                     accoladesToSave.size(), entitiesToSave.size(), e);
             throw new RuntimeException("Failed to flush entities to database", e);
+        }
+        
+        // Execute player association callback if set (for clan membership)
+        if (playerAssociationCallback != null) {
+            try {
+                playerAssociationCallback.run();
+                logger.debug("Executed player association callback after game persistence");
+            } catch (Exception e) {
+                logger.error("Error executing player association callback: {}", e.getMessage(), e);
+                // Don't fail game persistence if association fails - it can be retried later
+            }
         }
         
         context.clear();

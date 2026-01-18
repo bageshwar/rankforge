@@ -62,6 +62,9 @@ public class EventProcessingContext {
     private final List<GameEventEntity> pendingEntities = new ArrayList<>();
     private final List<AccoladeEntity> pendingAccolades = new ArrayList<>();
     
+    // App Server ID extracted from ResetBreakpadAppId log line
+    private Long appServerId;
+    
     // Tracking for debugging round linking
     private int roundNumber = 0;
     private int eventsInCurrentRound = 0;
@@ -87,7 +90,18 @@ public class EventProcessingContext {
      * The appServerId is extracted from log lines like:
      * "ResetBreakpadAppId: Setting dedicated server app id: 2347773"
      */
-    private Long appServerId;
+    public void setAppServerId(Long appServerId) {
+        this.appServerId = appServerId;
+        logger.info("✅ GAME_CONTEXT: Set appServerId: {} in EventProcessingContext", appServerId);
+        logger.debug("✅ GAME_CONTEXT: Verified appServerId is now: {}", this.appServerId);
+    }
+    
+    /**
+     * Get the app server ID for the current log file.
+     */
+    public Long getAppServerId() {
+        return appServerId;
+    }
     
     /**
      * Called when GAME_OVER is processed (happens FIRST due to parser rewind).
@@ -95,13 +109,18 @@ public class EventProcessingContext {
      */
     public void setCurrentGame(GameEntity game) {
         this.currentGame = game;
+        // Set appServerId on the game if we have it
+        if (game != null && appServerId != null) {
+            game.setAppServerId(appServerId);
+        }
         // Reset round tracking for new game
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
         lastRoundEndTimestamp = null;
         roundEventCounts.clear();
-        logger.info("GAME_CONTEXT: Set current game - map: {}", game != null ? game.getMap() : "null");
+        logger.info("GAME_CONTEXT: Set current game - map: {}, appServerId: {}", 
+                game != null ? game.getMap() : "null", appServerId);
     }
     
     /**
@@ -338,29 +357,6 @@ public class EventProcessingContext {
     }
     
     /**
-     * Sets the app server ID extracted from ResetBreakpadAppId log line.
-     * Should be called once at the beginning of log processing, before any games start.
-     * 
-     * @param appServerId The dedicated server app ID
-     */
-    public void setAppServerId(Long appServerId) {
-        if (this.appServerId != null && !this.appServerId.equals(appServerId)) {
-            logger.warn("AppServerId already set to {}, overwriting with {}", this.appServerId, appServerId);
-        }
-        this.appServerId = appServerId;
-        logger.info("APP_SERVER_CONTEXT: Set appServerId to {}", appServerId);
-    }
-    
-    /**
-     * Gets the app server ID for the current log processing session.
-     * 
-     * @return The app server ID, or null if not yet set
-     */
-    public Long getAppServerId() {
-        return appServerId;
-    }
-    
-    /**
      * Clears all context after GAME_PROCESSED is received.
      * Called after batch persisting all pending entities.
      * 
@@ -382,6 +378,7 @@ public class EventProcessingContext {
         roundNumber = 0;
         eventsInCurrentRound = 0;
         eventsWithoutRound = 0;
+        // Note: appServerId is NOT cleared - it persists for the entire log file
     }
     
     /**

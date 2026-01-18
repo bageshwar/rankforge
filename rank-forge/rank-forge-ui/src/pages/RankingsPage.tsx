@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
-import { rankingsApi } from '../services/api';
-import type { PlayerRankingDTO, LeaderboardResponseDTO } from '../services/api';
+import { rankingsApi, clansApi } from '../services/api';
+import type { PlayerRankingDTO, LeaderboardResponseDTO, ClanDTO } from '../services/api';
 import { getRandomMap } from '../utils/mapImages';
-import './RankingsPage.css';
-
+import { useAuth } from '../contexts/AuthContext';
 import { extractSteamId } from '../utils/steamId';
+import './RankingsPage.css';
 
 type TabType = 'all-time' | 'monthly';
 
 export const RankingsPage = () => {
+  const { user, login } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Read URL parameters with defaults
@@ -42,10 +43,14 @@ export const RankingsPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadingFilter, setLoadingFilter] = useState(false);
   const [limit, setLimit] = useState<number | null>(getLimitFromUrl());
+  const [selectedClan, setSelectedClan] = useState<ClanDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(getTabFromUrl());
   const [selectedYear, setSelectedYear] = useState<number>(getYearFromUrl());
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonthFromUrl());
+  
+  // Get default clan ID from user
+  const defaultClanId = user?.defaultClanId || null;
   
   // Sorting state - default to rank descending (higher rank/ELO is better)
   type SortColumn = 'rank' | 'elo' | 'kd' | 'kills' | 'deaths' | 'assists' | 'hs' | 'rounds' | 'games' | 'clutches' | 'damage' | null;
@@ -55,6 +60,17 @@ export const RankingsPage = () => {
   
   // Random map for background - set once on component mount
   const [backgroundMap] = useState<string>(() => getRandomMap());
+
+  // Load selected clan details when defaultClanId changes
+  useEffect(() => {
+    if (defaultClanId) {
+      clansApi.getClan(defaultClanId)
+        .then(clan => setSelectedClan(clan))
+        .catch(() => setSelectedClan(null));
+    } else {
+      setSelectedClan(null);
+    }
+  }, [defaultClanId]);
 
   // Update URL when state changes
   useEffect(() => {
@@ -105,7 +121,7 @@ export const RankingsPage = () => {
   // Load rankings when dependencies change
   useEffect(() => {
     loadRankings();
-  }, [limit, activeTab, selectedYear, selectedMonth]);
+  }, [limit, activeTab, selectedYear, selectedMonth, defaultClanId]);
 
   const loadRankings = async (isFilterChange = false) => {
     try {
@@ -116,13 +132,34 @@ export const RankingsPage = () => {
       }
       setError(null);
       
-      if (activeTab === 'monthly') {
-        const response = await rankingsApi.getMonthlyLeaderboard(
-          selectedYear,
-          selectedMonth,
-          limit || undefined,
-          0
-        );
+      // Check if user is authenticated
+      if (!user) {
+        setError('Please log in to view rankings.');
+        setRankings([]);
+        setTotalGames(0);
+        setTotalRounds(0);
+        setTotalPlayers(0);
+        return;
+      }
+      
+      // Require default clan if user is logged in
+      if (!defaultClanId) {
+        setError('Please select a default clan in your profile to view rankings.');
+        setRankings([]);
+        setTotalGames(0);
+        setTotalRounds(0);
+        setTotalPlayers(0);
+        return;
+      }
+      
+        if (activeTab === 'monthly') {
+          const response = await rankingsApi.getMonthlyLeaderboard(
+            defaultClanId,
+            selectedYear,
+            selectedMonth,
+            limit || undefined,
+            0
+          );
         setRankings(response.rankings);
         setTotalGames(response.totalGames);
         setTotalRounds(response.totalRounds);
@@ -130,9 +167,9 @@ export const RankingsPage = () => {
       } else {
         let response: LeaderboardResponseDTO;
         if (limit) {
-          response = await rankingsApi.getTopWithStats(limit);
+          response = await rankingsApi.getTopWithStats(limit, defaultClanId);
         } else {
-          response = await rankingsApi.getAllWithStats();
+          response = await rankingsApi.getAllWithStats(defaultClanId);
         }
         setRankings(response.rankings);
         setTotalGames(response.totalGames);
@@ -307,7 +344,14 @@ export const RankingsPage = () => {
   return (
     <PageContainer mapName={backgroundMap}>
       <div className="rankings-header">
-        <h1 className="rankings-title">🏆 RankForge Player Rankings</h1>
+        <h1 className="rankings-title">
+          🏆 RankForge Player Rankings
+          {selectedClan && (
+            <span className="clan-filter-badge">
+              - {selectedClan.name || `Clan #${selectedClan.id}`}
+            </span>
+          )}
+        </h1>
         <p className="rankings-subtitle">
           {activeTab === 'monthly' 
             ? `${getMonthName(selectedMonth)} ${selectedYear} Leaderboard`
@@ -317,6 +361,17 @@ export const RankingsPage = () => {
           <p className="rankings-note">Shows stats accumulated during this month only</p>
         )}
       </div>
+
+      {!user && (
+        <div className="clan-required-message">
+          <p>🔐 Please <button onClick={login} className="inline-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'inherit' }}>log in</button> to view rankings.</p>
+        </div>
+      )}
+      {user && !defaultClanId && (
+        <div className="clan-required-message">
+          <p>⚠️ Please select a default clan in your <Link to="/my-profile" className="inline-link">profile</Link> to view rankings.</p>
+        </div>
+      )}
 
       <div className="rankings-tabs">
         <Link

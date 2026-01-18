@@ -31,10 +31,15 @@ import com.rankforge.pipeline.persistence.repository.GameRepository;
 import com.rankforge.pipeline.persistence.repository.PlayerStatsRepository;
 import com.rankforge.server.dto.LeaderboardResponseDTO;
 import com.rankforge.server.dto.PlayerRankingDTO;
+import com.rankforge.server.entity.Clan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.Cache;
+import org.springframework.cache.Cache;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -60,37 +65,55 @@ public class PlayerRankingService {
     private final GameEventRepository gameEventRepository;
     private final ObjectMapper objectMapper;
     private final RankingAlgorithm rankingAlgorithm;
+    private final ClanService clanService;
+    private final CacheManager cacheManager;
     
     @Autowired
     public PlayerRankingService(PlayerStatsRepository playerStatsRepository, 
                                GameRepository gameRepository,
                                GameEventRepository gameEventRepository,
                                ObjectMapper objectMapper,
-                               RankingAlgorithm rankingAlgorithm) {
+                               RankingAlgorithm rankingAlgorithm,
+                               ClanService clanService,
+                               CacheManager cacheManager) {
         this.playerStatsRepository = playerStatsRepository;
         this.gameRepository = gameRepository;
         this.gameEventRepository = gameEventRepository;
         this.objectMapper = objectMapper;
         this.rankingAlgorithm = rankingAlgorithm;
+        this.clanService = clanService;
+        this.cacheManager = cacheManager;
     }
 
     /**
      * Get all player rankings sorted by existing rank field
      * Fetches real data from the persistence layer and sorts by rank
+     * @param clanId Required clan ID to filter rankings by appServerId
      */
-    public List<PlayerRankingDTO> getAllPlayerRankings() {
+    public List<PlayerRankingDTO> getAllPlayerRankings(Long clanId) {
+        LOGGER.info("🔍 [ALL-TIME] getAllPlayerRankings called for clanId: {}", clanId);
         try {
-            List<PlayerStats> playerStats = getAllPlayerStatsFromDatabase();
+            List<PlayerStats> playerStats = getAllPlayerStatsFromDatabase(clanId);
+            LOGGER.info("🔍 [ALL-TIME] getAllPlayerStatsFromDatabase returned {} player stats", playerStats.size());
             
             // Sort by existing rank field (descending order - rank 1 is best)
             playerStats.sort((p1, p2) -> Integer.compare(p2.getRank(), p1.getRank()));
             
-            return playerStats.stream()
+            List<PlayerRankingDTO> rankings = playerStats.stream()
                     .map(this::convertToDTO)
                     .collect(Collectors.toList());
+            
+            LOGGER.info("🔍 [ALL-TIME] Converted to {} PlayerRankingDTOs", rankings.size());
+            if (!rankings.isEmpty()) {
+                LOGGER.info("🔍 [ALL-TIME] Sample ranking - Player: {}, Rank: {}, Kills: {}, Deaths: {}", 
+                        rankings.get(0).getPlayerName(), rankings.get(0).getRank(), 
+                        rankings.get(0).getKills(), rankings.get(0).getDeaths());
+            }
+            
+            return rankings;
                     
         } catch (Exception e) {
-            LOGGER.error("Failed to retrieve player rankings", e);
+            LOGGER.error("🔍 [ALL-TIME] Failed to retrieve player rankings for clanId: {}", clanId, e);
             // Return empty list on error instead of crashing
             return new ArrayList<>();
         }
@@ -98,9 +121,11 @@ public class PlayerRankingService {
 
     /**
      * Get top N player rankings
+     * @param limit Number of top players
+     * @param clanId Required clan ID to filter rankings
      */
-    public List<PlayerRankingDTO> getTopPlayerRankings(int limit) {
-        return getAllPlayerRankings().stream()
+    public List<PlayerRankingDTO> getTopPlayerRankings(int limit, Long clanId) {
+        return getAllPlayerRankings(clanId).stream()
                 .limit(limit)
                 .collect(Collectors.toList());
     }
@@ -108,29 +133,105 @@ public class PlayerRankingService {
     /**
      * Get all player rankings with summary statistics
      * Cached for 1 minute as data changes when new games are processed
+     * @param clanId Required clan ID to filter rankings
      */
-    @Cacheable(value = "allTimeLeaderboard", key = "'all-time'")
-    public LeaderboardResponseDTO getAllPlayerRankingsWithStats() {
-        List<PlayerRankingDTO> rankings = getAllPlayerRankings();
-        long totalGames = playerStatsRepository.countTotalDistinctGames();
-        // Calculate total rounds from games, not from player stats (to avoid double-counting)
-        long totalRounds = gameRepository.calculateTotalRounds();
-        return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, rankings.size());
+    @Cacheable(value = "allTimeLeaderboard", 
+               key = "'clan-' + #clanId",
+               condition = "#result != null && #result.totalPlayers > 0")
+    public LeaderboardResponseDTO getAllPlayerRankingsWithStats(Long clanId) {
+        LOGGER.info("🔍 [ALL-TIME] Starting getAllPlayerRankingsWithStats for clanId: {}", clanId);
+        
+        // Check cache first (logging will happen in CacheConfig)
+        Cache cache = cacheManager.getCache("allTimeLeaderboard");
+        if (cache != null) {
+            String cacheKey = "clan-" + clanId;
+            Cache.ValueWrapper cachedValue = cache.get(cacheKey);
+            if (cachedValue != null) {
+                LOGGER.info("🔍 [ALL-TIME] Cache HIT for key: {}", cacheKey);
+                LeaderboardResponseDTO cached = (LeaderboardResponseDTO) cachedValue.get();
+                LOGGER.info("🔍 [ALL-TIME] Cached result - players: {}, games: {}, rounds: {}", 
+                        cached.getTotalPlayers(), cached.getTotalGames(), cached.getTotalRounds());
+                return cached;
+            } else {
+                LOGGER.info("🔍 [ALL-TIME] Cache MISS for key: {}", cacheKey);
+            }
+        } else {
+            LOGGER.warn("🔍 [ALL-TIME] Cache 'allTimeLeaderboard' not found!");
+        }
+        
+        LOGGER.info("🔍 [ALL-TIME] Querying database for clanId: {}", clanId);
+        List<PlayerRankingDTO> rankings = getAllPlayerRankings(clanId);
+        LOGGER.info("🔍 [ALL-TIME] Retrieved {} rankings from getAllPlayerRankings", rankings.size());
+        
+        // Filter by clan's appServerId (required)
+        Optional<Clan> clanOpt = clanService.getClanById(clanId);
+        if (clanOpt.isEmpty()) {
+            LOGGER.warn("🔍 [ALL-TIME] Clan not found: {}", clanId);
+            return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+        }
+        
+        Clan clan = clanOpt.get();
+        Long appServerId = clan.getAppServerId();
+        LOGGER.info("🔍 [ALL-TIME] Clan found - ID: {}, name: {}, appServerId: {}", 
+                clan.getId(), clan.getName(), appServerId);
+        
+        if (appServerId == null) {
+            LOGGER.warn("🔍 [ALL-TIME] Clan {} has null appServerId - cannot query games", clanId);
+            return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+        }
+        
+        List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+        LOGGER.info("🔍 [ALL-TIME] Found {} games for appServerId: {}", clanGames.size(), appServerId);
+        
+        long totalGames = clanGames.size();
+        long totalRounds = clanGames.stream()
+            .mapToLong(g -> (g.getTeam1Score() + g.getTeam2Score()))
+            .sum();
+        
+        int totalPlayers = rankings.size();
+        LOGGER.info("🔍 [ALL-TIME] Building response - rankings: {}, totalGames: {}, totalRounds: {}, totalPlayers: {}", 
+                rankings.size(), totalGames, totalRounds, totalPlayers);
+        
+        LeaderboardResponseDTO response = new LeaderboardResponseDTO(rankings, totalGames, totalRounds, totalPlayers);
+        
+        // Log if result will be cached
+        if (totalPlayers > 0) {
+            LOGGER.info("🔍 [ALL-TIME] Result will be CACHED (totalPlayers > 0)");
+        } else {
+            LOGGER.info("🔍 [ALL-TIME] Result will NOT be cached (totalPlayers = 0)");
+        }
+        
+        return response;
     }
     
     /**
      * Get top N player rankings with summary statistics
      * Cached for 1 minute as data changes when new games are processed
+     * @param limit Number of top players
+     * @param clanId Required clan ID to filter rankings
      */
-    @Cacheable(value = "topLeaderboard", key = "#limit")
-    public LeaderboardResponseDTO getTopPlayerRankingsWithStats(int limit) {
-        List<PlayerRankingDTO> rankings = getTopPlayerRankings(limit);
-        long totalGames = playerStatsRepository.countTotalDistinctGames();
-        // For top N, we still show total games and rounds across all players
-        List<PlayerRankingDTO> allRankings = getAllPlayerRankings();
-        // Calculate total rounds from games, not from player stats (to avoid double-counting)
-        long totalRounds = gameRepository.calculateTotalRounds();
-        return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, allRankings.size());
+    @Cacheable(value = "topLeaderboard", 
+               key = "#limit + '-' + #clanId",
+               condition = "#result != null && #result.totalPlayers > 0")
+    public LeaderboardResponseDTO getTopPlayerRankingsWithStats(int limit, Long clanId) {
+        List<PlayerRankingDTO> rankings = getTopPlayerRankings(limit, clanId);
+        
+        // Filter by clan's appServerId (required)
+        Optional<Clan> clanOpt = clanService.getClanById(clanId);
+        if (clanOpt.isEmpty()) {
+            LOGGER.warn("Clan not found: {}", clanId);
+            return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+        }
+        Long appServerId = clanOpt.get().getAppServerId();
+        List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+        long totalGames = clanGames.size();
+        long totalRounds = clanGames.stream()
+            .mapToLong(g -> (g.getTeam1Score() + g.getTeam2Score()))
+            .sum();
+        List<PlayerRankingDTO> allRankings = getAllPlayerRankings(clanId);
+        int totalPlayers = allRankings.size();
+        
+        return new LeaderboardResponseDTO(rankings, totalGames, totalRounds, totalPlayers);
     }
 
     /**
@@ -196,22 +297,106 @@ public class PlayerRankingService {
      * Retrieves all player statistics from the database
      * Gets the latest stats for each player (most recent gameTimestamp)
      */
-    private List<PlayerStats> getAllPlayerStatsFromDatabase() {
+    private List<PlayerStats> getAllPlayerStatsFromDatabase(Long clanId) {
+        LOGGER.info("🔍 [ALL-TIME] getAllPlayerStatsFromDatabase called for clanId: {}", clanId);
         List<PlayerStats> playerStatsList = new ArrayList<>();
         
         try {
-            // Get latest stats for all players (one record per player)
-            List<PlayerStatsEntity> entities = playerStatsRepository.findLatestStatsForAllPlayers();
+            // Get clan's appServerId and find all games (required)
+            Optional<Clan> clanOpt = clanService.getClanById(clanId);
+            if (clanOpt.isEmpty()) {
+                LOGGER.warn("🔍 [ALL-TIME] Clan not found: {}", clanId);
+                return new ArrayList<>();
+            }
             
+            Clan clan = clanOpt.get();
+            Long appServerId = clan.getAppServerId();
+            LOGGER.info("🔍 [ALL-TIME] Clan lookup - ID: {}, appServerId: {}", clanId, appServerId);
+            
+            if (appServerId == null) {
+                LOGGER.warn("🔍 [ALL-TIME] Clan {} has null appServerId - cannot query games", clanId);
+                return new ArrayList<>();
+            }
+            
+            List<GameEntity> clanGames = gameRepository.findByAppServerId(appServerId);
+            LOGGER.info("🔍 [ALL-TIME] Found {} games for appServerId: {}", clanGames.size(), appServerId);
+            
+            List<Long> clanGameIds = clanGames.stream()
+                .map(GameEntity::getId)
+                .collect(Collectors.toList());
+            LOGGER.info("🔍 [ALL-TIME] Clan game IDs list size: {} (IDs: {})", clanGameIds.size(), clanGameIds);
+            
+            if (clanGameIds.isEmpty()) {
+                LOGGER.warn("🔍 [ALL-TIME] No games found for clan {} - returning empty list", clanId);
+                return new ArrayList<>();
+            }
+            
+            // Use the same approach as monthly rankings: query all latest stats, then filter by game's appServerId
+            // This works because monthly rankings use this pattern successfully
+            LOGGER.info("🔍 [ALL-TIME] Querying all latest stats (same pattern as monthly rankings)");
+            List<PlayerStatsEntity> allLatestStats = playerStatsRepository.findLatestStatsForAllPlayers();
+            LOGGER.info("🔍 [ALL-TIME] Retrieved {} total latest stats from database", allLatestStats.size());
+            
+            // Get game timestamps for the clan's games to match by timestamp (like monthly does)
+            Set<Instant> clanGameTimestamps = clanGames.stream()
+                .map(GameEntity::getGameOverTimestamp)
+                .filter(ts -> ts != null)
+                .collect(Collectors.toSet());
+            LOGGER.info("🔍 [ALL-TIME] Clan games have {} unique timestamps: {}", clanGameTimestamps.size(), clanGameTimestamps);
+            
+            // Filter stats by checking if game's appServerId matches (like monthly rankings do)
+            List<PlayerStatsEntity> entities = new ArrayList<>();
+            int matchedByAppServerId = 0;
+            int matchedByTimestamp = 0;
+            int skippedNullGame = 0;
+            int skippedWrongAppServerId = 0;
+            
+            for (PlayerStatsEntity entity : allLatestStats) {
+                if (entity.getGame() == null) {
+                    skippedNullGame++;
+                    // Try matching by timestamp as fallback
+                    if (clanGameTimestamps.contains(entity.getGameTimestamp())) {
+                        entities.add(entity);
+                        matchedByTimestamp++;
+                        LOGGER.debug("🔍 [ALL-TIME] Matched by timestamp: playerId={}, gameTimestamp={}", 
+                                entity.getPlayerId(), entity.getGameTimestamp());
+                    }
+                    continue;
+                }
+                
+                Long gameAppServerId = entity.getGame().getAppServerId();
+                if (appServerId.equals(gameAppServerId)) {
+                    entities.add(entity);
+                    matchedByAppServerId++;
+                    LOGGER.debug("🔍 [ALL-TIME] Matched by appServerId: playerId={}, gameId={}, appServerId={}", 
+                            entity.getPlayerId(), entity.getGame().getId(), gameAppServerId);
+                } else {
+                    skippedWrongAppServerId++;
+                    LOGGER.debug("🔍 [ALL-TIME] Skipped - wrong appServerId: playerId={}, gameAppServerId={}, expected={}", 
+                            entity.getPlayerId(), gameAppServerId, appServerId);
+                }
+            }
+            
+            LOGGER.info("🔍 [ALL-TIME] Filtered stats - total: {}, matched by appServerId: {}, matched by timestamp: {}, skipped (null game): {}, skipped (wrong appServerId): {}", 
+                    entities.size(), matchedByAppServerId, matchedByTimestamp, skippedNullGame, skippedWrongAppServerId);
+            
+            // Convert to domain objects
             for (PlayerStatsEntity entity : entities) {
+                if (entity.getGame() != null) {
+                    LOGGER.debug("🔍 [ALL-TIME] Including player: {}, gameId: {}", entity.getPlayerId(), entity.getGame().getId());
+                } else {
+                    LOGGER.warn("🔍 [ALL-TIME] Entity has null game despite query filter - player: {}", entity.getPlayerId());
+                }
                 PlayerStats stats = convertToDomain(entity);
                 playerStatsList.add(stats);
             }
+            
+            LOGGER.info("🔍 [ALL-TIME] Converted {} entities to PlayerStats", playerStatsList.size());
         } catch (Exception e) {
-            LOGGER.error("Failed to retrieve player statistics", e);
+            LOGGER.error("🔍 [ALL-TIME] Failed to retrieve player statistics for clanId: {}", clanId, e);
         }
 
-        LOGGER.info("Retrieved {} player statistics from database (latest stats per player)", playerStatsList.size());
+        LOGGER.info("🔍 [ALL-TIME] Returning {} player statistics for clanId: {}", playerStatsList.size(), clanId);
         return playerStatsList;
     }
     
@@ -231,8 +416,8 @@ public class PlayerRankingService {
      * @param offset Number of results to skip for pagination
      * @return List of player rankings for the specified month
      */
-    public List<PlayerRankingDTO> getMonthlyPlayerRankings(int year, int month, int limit, int offset) {
-        LeaderboardResponseDTO response = getMonthlyPlayerRankingsWithStats(year, month, limit, offset);
+    public List<PlayerRankingDTO> getMonthlyPlayerRankings(int year, int month, int limit, int offset, Long clanId) {
+        LeaderboardResponseDTO response = getMonthlyPlayerRankingsWithStats(year, month, limit, offset, clanId);
         return response.getRankings();
     }
     
@@ -247,13 +432,22 @@ public class PlayerRankingService {
      * @param month The month (1-12)
      * @param limit Maximum number of results to return
      * @param offset Number of results to skip for pagination
+     * @param clanId Required clan ID to filter rankings
      * @return LeaderboardResponseDTO with rankings and summary stats
      */
     @Cacheable(value = "monthlyLeaderboard", 
-               key = "#year + '-' + #month + '-' + #limit + '-' + #offset",
-               condition = "T(java.time.LocalDate).of(#year, #month, 1).isBefore(T(java.time.LocalDate).now().withDayOfMonth(1))")
-    public LeaderboardResponseDTO getMonthlyPlayerRankingsWithStats(int year, int month, int limit, int offset) {
+               key = "#year + '-' + #month + '-' + #limit + '-' + #offset + '-' + #clanId",
+               condition = "T(java.time.LocalDate).of(#year, #month, 1).isBefore(T(java.time.LocalDate).now().withDayOfMonth(1)) && #result != null && #result.totalPlayers > 0")
+    public LeaderboardResponseDTO getMonthlyPlayerRankingsWithStats(int year, int month, int limit, int offset, Long clanId) {
         try {
+            // Get clan's appServerId
+            Optional<Clan> clanOpt = clanService.getClanById(clanId);
+            if (clanOpt.isEmpty()) {
+                LOGGER.warn("Clan not found: {}", clanId);
+                return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
+            }
+            Long appServerId = clanOpt.get().getAppServerId();
+            
             // Calculate month boundaries in UTC
             LocalDateTime startOfMonth = LocalDateTime.of(year, month, 1, 0, 0, 0);
             LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1); // Last second of the month
@@ -261,10 +455,12 @@ public class PlayerRankingService {
             Instant startInstant = startOfMonth.toInstant(ZoneOffset.UTC);
             Instant endInstant = endOfMonth.toInstant(ZoneOffset.UTC);
             
-            LOGGER.info("Querying monthly leaderboard for {}-{} ({} to {})", year, month, startInstant, endInstant);
+            LOGGER.info("Querying monthly leaderboard for {}-{} ({} to {}) for clan {}", year, month, startInstant, endInstant, clanId);
             
-            // Get all games in the month
-            List<GameEntity> gamesInMonth = gameRepository.findGamesByMonthRange(startInstant, endInstant);
+            // Get all games in the month, filtered by clan's appServerId
+            List<GameEntity> gamesInMonth = gameRepository.findGamesByMonthRange(startInstant, endInstant).stream()
+                    .filter(game -> game.getAppServerId().equals(appServerId))
+                    .collect(Collectors.toList());
             if (gamesInMonth.isEmpty()) {
                 LOGGER.info("No games found for month {}-{}", year, month);
                 return new LeaderboardResponseDTO(new ArrayList<>(), 0, 0, 0);
@@ -570,5 +766,82 @@ public class PlayerRankingService {
         // If it doesn't match expected format, return as-is (might be a name or other format)
         LOGGER.warn("Unexpected player ID format: {}", playerId);
         return trimmed;
+    }
+    
+    /**
+     * Evicts all cache entries for a specific clan after new games are processed.
+     * This ensures that leaderboard data is refreshed when new games are added.
+     * 
+     * @param clanId The clan ID whose cache should be evicted
+     */
+    public void evictCacheForClan(Long clanId) {
+        if (clanId == null) {
+            LOGGER.warn("🗑️ [CACHE] Cannot evict cache: clanId is null");
+            return;
+        }
+        
+        LOGGER.info("🗑️ [CACHE] Starting cache eviction for clan {}", clanId);
+        
+        // Evict all-time leaderboard cache
+        Cache allTimeCache = cacheManager.getCache("allTimeLeaderboard");
+        if (allTimeCache != null) {
+            String cacheKey = "clan-" + clanId;
+            Cache.ValueWrapper beforeEvict = allTimeCache.get(cacheKey);
+            if (beforeEvict != null) {
+                LOGGER.info("🗑️ [CACHE] Found cached entry for key: {} - evicting", cacheKey);
+            } else {
+                LOGGER.info("🗑️ [CACHE] No cached entry found for key: {}", cacheKey);
+            }
+            allTimeCache.evict(cacheKey);
+            Cache.ValueWrapper afterEvict = allTimeCache.get(cacheKey);
+            if (afterEvict == null) {
+                LOGGER.info("🗑️ [CACHE] Successfully evicted all-time leaderboard cache for clan {} (key: {})", clanId, cacheKey);
+            } else {
+                LOGGER.warn("🗑️ [CACHE] Cache eviction may have failed - entry still exists for key: {}", cacheKey);
+            }
+        } else {
+            LOGGER.warn("🗑️ [CACHE] Cache 'allTimeLeaderboard' not found!");
+        }
+        
+        // Evict top N leaderboard cache for common limits (1-100)
+        Cache topCache = cacheManager.getCache("topLeaderboard");
+        if (topCache != null) {
+            for (int limit = 1; limit <= 100; limit++) {
+                topCache.evict(limit + "-" + clanId);
+            }
+            LOGGER.debug("Evicted top N leaderboard cache for clan {} (limits 1-100)", clanId);
+        }
+        
+        // Evict monthly leaderboard cache for current month and recent months
+        // We evict current month and past 3 months to be safe
+        Cache monthlyCache = cacheManager.getCache("monthlyLeaderboard");
+        if (monthlyCache != null) {
+            LocalDate now = LocalDate.now();
+            for (int monthOffset = 0; monthOffset <= 3; monthOffset++) {
+                LocalDate targetDate = now.minusMonths(monthOffset);
+                int year = targetDate.getYear();
+                int month = targetDate.getMonthValue();
+                
+                // Evict for common limit/offset combinations
+                for (int limit = 10; limit <= 1000; limit *= 10) {
+                    for (int offset = 0; offset <= 1000; offset += 100) {
+                        String key = year + "-" + month + "-" + limit + "-" + offset + "-" + clanId;
+                        monthlyCache.evict(key);
+                    }
+                }
+            }
+            LOGGER.debug("Evicted monthly leaderboard cache for clan {} (current month and past 3 months)", clanId);
+        }
+        
+        LOGGER.info("Completed evicting leaderboard cache for clan {}", clanId);
+    }
+    
+    /**
+     * Evicts all cache entries for all clans.
+     * Use with caution - this clears all leaderboard caches.
+     */
+    @CacheEvict(value = {"allTimeLeaderboard", "topLeaderboard", "monthlyLeaderboard"}, allEntries = true)
+    public void evictAllLeaderboardCache() {
+        LOGGER.info("Evicting all leaderboard caches");
     }
 }

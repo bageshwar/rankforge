@@ -1,24 +1,86 @@
 .games-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  text-align: center;
   margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 1rem;
+  padding: 2rem;
+  background: linear-gradient(
+    135deg, 
+    rgba(26, 26, 26, 0.92) 0%, 
+    rgba(45, 45, 45, 0.88) 50%, 
+    rgba(26, 26, 26, 0.92) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 16px;
+  border: 2px solid rgba(168, 85, 247, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(168, 85, 247, 0.25),
+    0 0 40px rgba(168, 85, 247, 0.15),
+    inset 0 2px 0 rgba(168, 85, 247, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.games-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 60%);
+  animation: rotate-gradient 15s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes rotate-gradient {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.games-header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .games-title {
   font-size: 2.5rem;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin: 0;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.games-subtitle {
+  font-size: 1.2rem;
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0;
+}
+
+.games-note {
+  font-size: 0.9rem;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.clan-filter-badge {
+  font-size: 1.5rem;
+  color: #ffd700;
+  font-weight: 500;
 }
 
 .games-stats {
   display: flex;
   gap: 2rem;
   align-items: center;
+  justify-content: center;
   flex-wrap: wrap;
+  margin-top: 1rem;
 }
 
 .stat-item {
@@ -173,6 +235,26 @@
   border: 1px solid var(--color-error);
   border-radius: 8px;
   margin: 2rem 0;
+}
+
+.clan-required-message {
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  color: #ffc107;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.clan-required-message .inline-link {
+  color: #ffc107;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.clan-required-message .inline-link:hover {
+  color: #ffd700;
 }
 
 @media (max-width: 768px) {

@@ -3,25 +3,57 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { PageContainer } from '../components/Layout/PageContainer';
 import { LoadingSpinner } from '../components/Layout/LoadingSpinner';
-import { gamesApi } from '../services/api';
-import type { GameDTO } from '../services/api';
+import { gamesApi, clansApi } from '../services/api';
+import type { GameDTO, ClanDTO } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import './GamesPage.css';
 
 export const GamesPage = () => {
+  const { user, login } = useAuth();
   const [games, setGames] = useState<GameDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [limit, setLimit] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedClan, setSelectedClan] = useState<ClanDTO | null>(null);
+  
+  // Get default clan ID from user
+  const defaultClanId = user?.defaultClanId || null;
+
+  // Load selected clan details when defaultClanId changes
+  useEffect(() => {
+    if (defaultClanId) {
+      clansApi.getClan(defaultClanId)
+        .then(clan => setSelectedClan(clan))
+        .catch(() => setSelectedClan(null));
+    } else {
+      setSelectedClan(null);
+    }
+  }, [defaultClanId]);
 
   useEffect(() => {
     loadGames();
-  }, [limit]);
+  }, [limit, defaultClanId]);
 
   const loadGames = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = limit ? await gamesApi.getRecent(limit) : await gamesApi.getAll();
+      
+      // Check if user is authenticated
+      if (!user) {
+        setError('Please log in to view games.');
+        setGames([]);
+        return;
+      }
+      
+      // Require default clan if user is logged in
+      if (!defaultClanId) {
+        setError('Please select a default clan in your profile to view games.');
+        setGames([]);
+        return;
+      }
+      
+      const data = limit ? await gamesApi.getRecent(limit, defaultClanId) : await gamesApi.getAll(defaultClanId);
       setGames(data);
     } catch (err) {
       setError('Failed to load games. Please try again later.');
@@ -59,7 +91,17 @@ export const GamesPage = () => {
   return (
     <PageContainer backgroundClass="bg-games">
       <div className="games-header">
-        <h1 className="games-title">🎮 Processed Games</h1>
+        <h1 className="games-title">
+          🎮 Processed Games
+          {selectedClan && (
+            <span className="clan-filter-badge">
+              - {selectedClan.name || `Clan #${selectedClan.id}`}
+            </span>
+          )}
+        </h1>
+        <p className="games-subtitle">
+          CS2 Competitive Match History
+        </p>
         <div className="games-stats">
           <div className="stat-item">
             <span className="stat-number">{games.length}</span>
@@ -74,7 +116,18 @@ export const GamesPage = () => {
         </div>
       </div>
 
-      {games.length === 0 ? (
+      {!user && (
+        <div className="clan-required-message">
+          <p>🔐 Please <button onClick={login} className="inline-link" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', color: 'inherit' }}>log in</button> to view games.</p>
+        </div>
+      )}
+      {user && !defaultClanId && (
+        <div className="clan-required-message">
+          <p>⚠️ Please select a default clan in your <Link to="/my-profile" className="inline-link">profile</Link> to view games.</p>
+        </div>
+      )}
+
+      {games.length === 0 && defaultClanId ? (
         <div className="no-games">
           <h3>No games processed yet</h3>
           <p>Games will appear here once the CS2 log processing pipeline has analyzed completed matches.</p>

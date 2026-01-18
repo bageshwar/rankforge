@@ -48,6 +48,40 @@
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.clan-filter-badge {
+  font-size: 1.5rem;
+  color: #ffd700;
+  font-weight: 500;
+}
+
+.clan-required-message {
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  color: #ffc107;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.clan-required-message .inline-link {
+  color: #ffc107;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.clan-required-message .inline-link:hover {
+  color: #ffd700;
+}
+
+.rankings-title {
   color: var(--color-text-primary);
 }
 
@@ -594,7 +628,7 @@
 }
 
 .player-link {
-  text-decoration: none;
+  text-decoration: none !important;
   display: block;
   padding: 0.5rem;
   margin: -0.5rem;
@@ -604,6 +638,7 @@
 
 .player-link:hover {
   background: rgba(74, 144, 226, 0.15);
+  text-decoration: none !important;
 }
 
 .player-link:hover .player-name {
