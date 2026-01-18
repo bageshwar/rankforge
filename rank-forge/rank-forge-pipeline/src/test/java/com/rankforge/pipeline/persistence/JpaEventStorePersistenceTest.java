@@ -68,6 +68,8 @@ class JpaEventStorePersistenceTest {
         entityManager = mock(EntityManager.class);
         objectMapper = new ObjectMapper();
         context = new EventProcessingContext();
+        // Set appServerId for all tests (required before processing rounds/events/linking accolades)
+        context.setAppServerId(100L);
         
         // Configure EntityManager to be open
         when(entityManager.isOpen()).thenReturn(true);
